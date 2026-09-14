@@ -46,7 +46,12 @@ import {
 	radialGlare,
 	repeatingLinear
 } from './gradients';
+import { FoilV2 } from './FoilV2';
+import type { FoilRecipeId } from './recipes';
 import { facetField, glitterField, hashSeed, starField } from './speckle';
+
+/** Which foil engine to draw. `v2` is the shine+glare experiment in foil-lab. */
+export type FoilEngine = 'legacy' | 'v2';
 
 /** Every layer the stack can draw, in stacking order. */
 export const FOIL_LAYERS = [
@@ -135,6 +140,10 @@ export interface FoilProps {
 	overrides?: Partial<Record<FoilLayerName, FoilOverride>>;
 	/** Thumbnails ask for sparser dot fields. */
 	detail?: 'full' | 'thumb';
+	/** `v2` swaps in the shine+glare recipes. Production leaves this unset. */
+	engine?: FoilEngine;
+	/** Foil-lab override: pick a v2 recipe regardless of `kind`. */
+	recipe?: FoilRecipeId;
 }
 
 export function Foil({
@@ -147,9 +156,27 @@ export function Foil({
 	radius = 0,
 	intensity = 1,
 	overrides,
-	detail = 'full'
+	detail = 'full',
+	engine = 'legacy',
+	recipe
 }: FoilProps) {
 	if (intensity <= 0) return null;
+
+	if (engine === 'v2') {
+		return (
+			<FoilV2
+				kind={kind}
+				width={width}
+				height={height}
+				rx={rx}
+				ry={ry}
+				seed={seed}
+				radius={radius}
+				intensity={intensity}
+				recipe={recipe}
+			/>
+		);
+	}
 
 	return (
 		// `isolation: isolate` is what keeps color-dodge from reaching through the

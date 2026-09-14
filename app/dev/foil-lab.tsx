@@ -1,22 +1,21 @@
 /**
  * The foil lab.
  *
- * Phase 1's actual deliverable. The foils are the product — a Concard is
- * supposed to feel like an object you'd want to screenshot — and they are built
- * from React Native blend modes that have to be verified on real hardware, on
- * both platforms, before anything else gets built on top of them.
+ * Two engines on one real Concard face:
  *
- * So every layer is individually switchable here: toggle it, cycle its blend
- * mode, nudge its opacity, and watch what happens on a card you can tilt. If a
- * blend mode misbehaves on a device, this screen is where that shows up, and the
- * fallback is to rebuild the layer in react-native-svg (also available in Expo
- * Go) rather than reaching for a development build.
+ *  - **legacy** — the production layer stack in `Foil.tsx`. Every named layer
+ *    is toggleable / blend-cycleable / opacity-nudgeable, which is how we find
+ *    blend modes that misbehave on a given device.
+ *  - **v2** — shine + glare recipes from `recipes.ts` (the sampler techniques,
+ *    driven by FlipCard tilt). This is the experiment: pick a kind or force a
+ *    recipe and see whether it reads as foil on a real card face.
  *
- * Not shipped to users; it lives under /dev like the web app's /dev/cards.
+ * Not shipped to users; lives under /dev.
  */
 
 import { useState } from 'react';
 import {
+	Linking,
 	Pressable,
 	ScrollView,
 	StyleSheet,
@@ -25,6 +24,7 @@ import {
 	useWindowDimensions,
 	type ViewStyle
 } from 'react-native';
+import { Link } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CardFace } from '@/card/CardFace';
@@ -32,7 +32,18 @@ import { CardShell } from '@/card/CardShell';
 import { FlipCard } from '@/card/FlipCard';
 import { DEMO_CARD } from '@/card/demo-card';
 import { BG_KEYS, FRAME_KEYS, type BgKey, type FrameKey } from '@/card/card-style';
-import { FOIL_LAYERS, type FoilLayerName, type FoilOverride } from '@/card/foil/Foil';
+import {
+	FOIL_LAYERS,
+	type FoilEngine,
+	type FoilLayerName,
+	type FoilOverride
+} from '@/card/foil/Foil';
+import {
+	FOIL_RECIPES,
+	FOIL_RECIPE_IDS,
+	V2_KIND_RECIPES,
+	type FoilRecipeId
+} from '@/card/foil/recipes';
 import { FOIL_KINDS, type FoilKind } from '@/card/tiers';
 import { palette } from '@/theme/palette';
 import { radius, space, type } from '@/theme/tokens';
@@ -63,7 +74,9 @@ export default function FoilLabScreen() {
 	const insets = useSafeAreaInsets();
 	const cardWidth = Math.min(width - space.xl * 2, 320);
 
+	const [engine, setEngine] = useState<FoilEngine>('v2');
 	const [kind, setKind] = useState<FoilKind>('glitter');
+	const [recipeOverride, setRecipeOverride] = useState<FoilRecipeId | null>(null);
 	const [frame, setFrame] = useState<FrameKey>('silver');
 	const [bg, setBg] = useState<BgKey>('blush');
 	const [intensity, setIntensity] = useState(1);
@@ -73,6 +86,8 @@ export default function FoilLabScreen() {
 		setOverrides((prev) => ({ ...prev, [layer]: { ...prev[layer], ...next } }));
 
 	const view = { ...DEMO_CARD, style: { ...DEMO_CARD.style, frame, bg } };
+	const activeRecipe = recipeOverride ?? V2_KIND_RECIPES[kind];
+	const recipeDef = FOIL_RECIPES[activeRecipe];
 
 	return (
 		<ScrollView contentContainerStyle={[styles.page, { paddingBottom: insets.bottom + space.xxl }]}>
@@ -88,7 +103,9 @@ export default function FoilLabScreen() {
 							rx={rx}
 							ry={ry}
 							intensity={intensity}
-							foilOverrides={overrides}
+							foilOverrides={engine === 'legacy' ? overrides : undefined}
+							foilEngine={engine}
+							foilRecipe={engine === 'v2' ? (recipeOverride ?? undefined) : undefined}
 						>
 							<CardFace view={view} width={cardWidth} />
 						</CardShell>
@@ -97,18 +114,55 @@ export default function FoilLabScreen() {
 			</View>
 			<Text style={styles.hint}>Drag the card to move the light</Text>
 
-			<Section title="Foil">
+			<Section title="Engine">
+				<Chips
+					options={['v2', 'legacy'] as const}
+					value={engine}
+					onChange={(next) => {
+						setEngine(next);
+						setOverrides({});
+						if (next === 'legacy') setRecipeOverride(null);
+					}}
+				/>
+				<Text style={styles.note}>
+					{engine === 'v2'
+						? 'Shine + glare recipes (sampler techniques on a real card). Production still uses legacy.'
+						: 'Production layer stack — toggle layers / blend modes below.'}
+				</Text>
+				<Link href="/dev/foil-sampler" style={styles.link}>
+					Open blank-card sampler →
+				</Link>
+			</Section>
+
+			<Section title="Foil kind">
 				<Chips
 					options={FOIL_KINDS}
 					value={kind}
 					onChange={(k) => {
 						setKind(k);
-						// overrides are per-layer and recipes differ per foil, so a
-						// half-applied set from another foil would just be confusing
 						setOverrides({});
+						// kind change clears a forced recipe so the draft map applies
+						setRecipeOverride(null);
 					}}
 				/>
+				{engine === 'v2' ? (
+					<Text style={styles.note}>
+						Draft map: {kind} → {V2_KIND_RECIPES[kind]}
+					</Text>
+				) : null}
 			</Section>
+
+			{engine === 'v2' ? (
+				<Section title="Recipe override">
+					<Chips
+						options={['auto', ...FOIL_RECIPE_IDS] as const}
+						value={recipeOverride ?? 'auto'}
+						onChange={(id) => setRecipeOverride(id === 'auto' ? null : (id as FoilRecipeId))}
+					/>
+					<Text style={styles.recipeTitle}>{recipeDef.title}</Text>
+					<Text style={styles.note}>{recipeDef.description}</Text>
+				</Section>
+			) : null}
 
 			<Section title="Frame">
 				<Chips options={FRAME_KEYS} value={frame} onChange={setFrame} />
@@ -126,20 +180,31 @@ export default function FoilLabScreen() {
 				</View>
 			</Section>
 
-			<Section title="Layers">
-				<Text style={styles.note}>
-					Layers not used by the current foil are greyed out. Tap a blend mode to cycle it.
-				</Text>
-				{FOIL_LAYERS.map((layer) => (
-					<LayerRow
-						key={layer}
-						layer={layer}
-						override={overrides[layer]}
-						onPatch={(next) => patch(layer, next)}
-					/>
-				))}
-				<Stepper label="reset all layers" wide onPress={() => setOverrides({})} />
-			</Section>
+			{engine === 'legacy' ? (
+				<Section title="Layers">
+					<Text style={styles.note}>
+						Layers not used by the current foil are greyed out. Tap a blend mode to cycle it.
+					</Text>
+					{FOIL_LAYERS.map((layer) => (
+						<LayerRow
+							key={layer}
+							layer={layer}
+							override={overrides[layer]}
+							onPatch={(next) => patch(layer, next)}
+						/>
+					))}
+					<Stepper label="reset all layers" wide onPress={() => setOverrides({})} />
+				</Section>
+			) : (
+				<Section title="Reference">
+					<Pressable
+						onPress={() => Linking.openURL('https://poke-holo.simey.me/')}
+						style={styles.refBtn}
+					>
+						<Text style={styles.refText}>poke-holo.simey.me — technique reference</Text>
+					</Pressable>
+				</Section>
+			)}
 		</ScrollView>
 	);
 }
@@ -263,6 +328,15 @@ const styles = StyleSheet.create({
 	},
 	sectionTitle: { ...type.meta, color: palette.teal },
 	note: { ...type.small, color: palette.creamFaint },
+	recipeTitle: { ...type.subtitle, color: palette.cream },
+	link: { ...type.bodyStrong, color: palette.teal, paddingTop: space.xs },
+	refBtn: {
+		paddingVertical: space.sm,
+		paddingHorizontal: space.md,
+		borderRadius: radius.sm,
+		backgroundColor: palette.raisedHigh
+	},
+	refText: { ...type.small, color: palette.butter },
 	row: { flexDirection: 'row', gap: space.sm, alignItems: 'center' },
 	chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs },
 	chip: {

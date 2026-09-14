@@ -85,6 +85,9 @@ export default function MyCardScreen() {
 				<Link href="/dev/foil-lab" style={styles.devLink}>
 					Open the foil lab →
 				</Link>
+				<Link href="/dev/foil-sampler" style={styles.devLink}>
+					Open the foil sampler →
+				</Link>
 				<Link href="/dev/cards" style={styles.devLink}>
 					Open the card gallery →
 				</Link>

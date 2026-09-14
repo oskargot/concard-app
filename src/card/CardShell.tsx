@@ -18,7 +18,8 @@ import Svg, { Polygon } from 'react-native-svg';
 import { BGS, FRAMES, type CardStyle } from './card-style';
 import { CARD_ASPECT } from '../theme/tokens';
 import { Foil } from './foil/Foil';
-import type { FoilLayerName, FoilOverride } from './foil/Foil';
+import type { FoilEngine, FoilLayerName, FoilOverride } from './foil/Foil';
+import type { FoilRecipeId } from './foil/recipes';
 import type { FoilKind } from './tiers';
 
 export interface CardShellProps {
@@ -36,6 +37,10 @@ export interface CardShellProps {
 	intensity?: number;
 	foilOverrides?: Partial<Record<FoilLayerName, FoilOverride>>;
 	detail?: 'full' | 'thumb';
+	/** `v2` = shine+glare experiment. Production leaves unset (legacy). */
+	foilEngine?: FoilEngine;
+	/** Foil-lab: force a specific v2 recipe regardless of `foil` kind. */
+	foilRecipe?: FoilRecipeId;
 	children?: ReactNode;
 	/** Drawn outside the face clip, so stickers can hang over the card edge. */
 	overlay?: ReactNode;
@@ -72,6 +77,8 @@ export function CardShell({
 	intensity = 1,
 	foilOverrides,
 	detail = 'full',
+	foilEngine,
+	foilRecipe,
 	children,
 	overlay
 }: CardShellProps) {
@@ -121,6 +128,8 @@ export function CardShell({
 						intensity={intensity}
 						overrides={foilOverrides}
 						detail={detail}
+						engine={foilEngine}
+						recipe={foilRecipe}
 					/>
 				) : null}
 			</View>
