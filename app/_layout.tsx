@@ -50,6 +50,7 @@ export default function RootLayout() {
 							<Stack.Screen name="(tabs)" options={{ headerShown: false }} />
 							<Stack.Screen name="(auth)" options={{ headerShown: false }} />
 							<Stack.Screen name="dev/foil-lab" options={{ title: 'Foil lab' }} />
+							<Stack.Screen name="dev/foil-sampler" options={{ title: 'Foil sampler' }} />
 							<Stack.Screen name="dev/cards" options={{ title: 'Card gallery' }} />
 						</Stack>
 					</AuthGate>
