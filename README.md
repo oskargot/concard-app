@@ -22,8 +22,14 @@ Supabase schema and migrations live — both surfaces share one project.
 
 ```sh
 npm install
+cp .env.example .env   # fill in from your Supabase project, Settings -> API
 npx expo start
 ```
+
+Without a `.env` the app shows a setup screen naming what is missing rather than
+failing on every screen. The Supabase project is the same one the web app uses;
+this branch needs the migration in `concard` that adds the per-card identity
+columns.
 
 Scan the QR with Expo Go. Then open **My Card → the foil lab**.
 
@@ -38,9 +44,13 @@ Scan the QR with Expo Go. Then open **My Card → the foil lab**.
 
 ```
 app/                    expo-router routes
+  (auth)/               sign in · claim a username · first card (§10)
   (tabs)/               My Card · Scan · Binder (design bible §11)
   dev/foil-lab          every foil layer, individually switchable
   dev/cards             every card look on fixture data
+src/auth/               session and profile state; the route gate
+src/lib/                Supabase client, env, username rules, generated types
+src/ui/                 buttons, fields, panels — deliberately quiet chrome
 src/theme/              arcade dusk palette (§12) and non-colour tokens
 src/card/               the card renderer
   card-style.ts         style tokens, shared verbatim with the web app
@@ -106,6 +116,13 @@ resolvable.
 
 ## Status
 
-Phase 1 of 7. The card renderer and the foil lab are in; auth, the QR back, the
-card editor, stickers, the scanner with its offline queue, and the binder are
-not. Tab screens for Scan and Binder are placeholders.
+Phase 2 of 7 done.
+
+- **In:** the card renderer and foil lab; email/password auth, the username claim
+  and the forced first card.
+- **Not in:** the QR back, the card switcher and editor, photo upload, stickers,
+  the scanner with its offline queue, the binder, settings. The Scan and Binder
+  tabs are placeholders.
+
+Nothing has been run against a live Supabase project yet — that needs a real
+`.env` and a device.
