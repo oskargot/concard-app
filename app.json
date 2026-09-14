@@ -1,0 +1,51 @@
+{
+	"expo": {
+		"name": "Concard",
+		"slug": "concard",
+		"scheme": "concard",
+		"version": "0.1.0",
+		"orientation": "portrait",
+		"icon": "./assets/icon.png",
+		"userInterfaceStyle": "dark",
+		"backgroundColor": "#1A0B2E",
+		"newArchEnabled": true,
+		"ios": {
+			"supportsTablet": true,
+			"bundleIdentifier": "me.concard.app",
+			"associatedDomains": ["applinks:concard.me"]
+		},
+		"android": {
+			"package": "me.concard.app",
+			"adaptiveIcon": {
+				"backgroundColor": "#1A0B2E",
+				"foregroundImage": "./assets/android-icon-foreground.png",
+				"monochromeImage": "./assets/android-icon-monochrome.png"
+			},
+			"predictiveBackGestureEnabled": false,
+			"intentFilters": [
+				{
+					"action": "VIEW",
+					"autoVerify": true,
+					"data": [{ "scheme": "https", "host": "concard.me" }],
+					"category": ["BROWSABLE", "DEFAULT"]
+				}
+			]
+		},
+		"plugins": [
+			"expo-router",
+			[
+				"expo-font",
+				{
+					"fonts": [
+						"./assets/fonts/Fredoka-Bold.ttf",
+						"./assets/fonts/Fredoka-SemiBold.ttf",
+						"./assets/fonts/SpaceGrotesk-Regular.ttf",
+						"./assets/fonts/SpaceGrotesk-Medium.ttf",
+						"./assets/fonts/SpaceGrotesk-Bold.ttf"
+					]
+				}
+			]
+		],
+		"experiments": { "typedRoutes": true }
+	}
+}
