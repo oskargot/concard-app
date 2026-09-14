@@ -30,8 +30,6 @@ export function CardFace({ view, width }: { view: CardView; width: number }) {
 
 	return (
 		<View style={{ flex: 1, padding: m.u(4.67), gap: m.u(3) }}>
-			<Photo view={view} width={width} ink={ink} />
-
 			<View style={{ gap: m.u(1), paddingBottom: m.u(2) }}>
 				<Text
 					numberOfLines={1}
@@ -71,6 +69,8 @@ export function CardFace({ view, width }: { view: CardView; width: number }) {
 					) : null}
 				</View>
 			</View>
+
+			<Photo view={view} width={width} ink={ink} />
 
 			{!compact && view.bio ? (
 				<View
