@@ -253,6 +253,25 @@ export const PHOTO_SHAPE_LABEL: Record<PhotoShape, string> = {
 	circle: 'Circle'
 };
 
+/**
+ * The style as a plain record, for writing to the `style` jsonb column.
+ *
+ * CardStyle is a closed interface, which Supabase's `Json` type rejects because
+ * it has no index signature. Spreading it into a record keeps the write typed
+ * without weakening CardStyle itself, and it names every key explicitly so a new
+ * axis cannot be silently dropped on the way to the database.
+ */
+export function styleToJson(style: CardStyle): Record<string, string> {
+	return {
+		frame: style.frame,
+		bg: style.bg,
+		shape: style.shape,
+		photo_shape: style.photo_shape,
+		bio_align: style.bio_align,
+		link_layout: style.link_layout
+	};
+}
+
 /** Small deterministic rotation (−8°…8°) so a row of discs never looks mechanical. */
 export function stickerRotation(id: string): number {
 	let h = 0;
