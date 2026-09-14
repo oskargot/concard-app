@@ -55,6 +55,8 @@ export default function ScanScreen() {
 				<Pressable style={styles.permissionButton} onPress={requestPermission}>
 					<Text style={styles.permissionButtonText}>ALLOW CAMERA</Text>
 				</Pressable>
+				{message ? <Text style={styles.permissionSuccess}>{message}</Text> : null}
+				{error ? <Text style={styles.permissionError}>{error}</Text> : null}
 				<DemoScan onPress={() => onScan({ data: demoPayload } as BarcodeScanningResult)} />
 			</View>
 		);
@@ -171,6 +173,8 @@ const styles = StyleSheet.create({
 		borderRadius: radius.md
 	},
 	permissionButtonText: { ...type.meta, color: palette.void },
+	permissionSuccess: { ...type.small, color: palette.success, textAlign: 'center' },
+	permissionError: { ...type.small, color: palette.danger, textAlign: 'center' },
 	scrimTop: {
 		position: 'absolute',
 		top: 0,

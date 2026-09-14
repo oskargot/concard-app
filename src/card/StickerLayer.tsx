@@ -146,7 +146,7 @@ function PlacedStickerView({
 				{editable && selected ? (
 					<>
 						<Pressable
-							hitSlop={8}
+							hitSlop={10}
 							onPress={() => onDelete?.(id)}
 							style={[styles.control, styles.delete]}
 						>
@@ -189,16 +189,16 @@ const styles = StyleSheet.create({
 	},
 	control: {
 		position: 'absolute',
-		width: 22,
-		height: 22,
-		borderRadius: 11,
+		width: 28,
+		height: 28,
+		borderRadius: 14,
 		alignItems: 'center',
 		justifyContent: 'center',
 		backgroundColor: palette.teal,
 		borderWidth: 2,
 		borderColor: palette.void
 	},
-	delete: { left: -12, top: -12, backgroundColor: palette.rose },
-	resize: { right: -12, bottom: -12 },
-	controlText: { color: palette.void, fontFamily: font.bodyBold, fontSize: 12 }
+	delete: { left: -15, top: -15, backgroundColor: palette.rose },
+	resize: { right: -15, bottom: -15 },
+	controlText: { color: palette.void, fontFamily: font.bodyBold, fontSize: 15 }
 });
