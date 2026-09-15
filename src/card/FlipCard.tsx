@@ -26,7 +26,7 @@ import Animated, {
 import { CARD_ASPECT } from '../theme/tokens';
 
 /** Maximum tilt in degrees. Matches the range Foil maps its parallax across. */
-const TILT_RANGE = 16;
+const TILT_RANGE = 10;
 
 /** How much of the card you have to drag across to reach full tilt. */
 const DRAG_TO_FULL = 0.55;
@@ -81,28 +81,19 @@ export function FlipCard({
 	const gesture = Gesture.Simultaneous(pan, tap);
 
 	const frontStyle = useAnimatedStyle(() => ({
-		transform: [
-			{ perspective: 900 },
-			{ rotateY: `${interpolate(flip.value, [0, 1], [0, 180])}deg` },
-			{ rotateX: `${rx.value}deg` },
-			{ rotateZ: '0deg' }
-		],
+		transform: [{ rotateY: `${interpolate(flip.value, [0, 1], [0, 180])}deg` }],
 		backfaceVisibility: 'hidden' as const
 	}));
 
 	const backStyle = useAnimatedStyle(() => ({
-		transform: [
-			{ perspective: 900 },
-			{ rotateY: `${interpolate(flip.value, [0, 1], [180, 360])}deg` },
-			{ rotateX: `${rx.value}deg` }
-		],
+		transform: [{ rotateY: `${interpolate(flip.value, [0, 1], [180, 360])}deg` }],
 		backfaceVisibility: 'hidden' as const
 	}));
 
-	// The Y tilt is applied to a wrapper rather than to each face, so it composes
-	// with the flip rotation instead of fighting it.
+	// Perspective and tilt live on one layer. Applying perspective again to each
+	// face made iOS resample text through nested 3D textures while dragging.
 	const wrapperStyle = useAnimatedStyle(() => ({
-		transform: [{ perspective: 900 }, { rotateY: `${ry.value}deg` }]
+		transform: [{ perspective: 1200 }, { rotateX: `${rx.value}deg` }, { rotateY: `${ry.value}deg` }]
 	}));
 
 	return (

@@ -88,6 +88,54 @@ export interface FoilSwatchProps {
 	tilt?: number;
 }
 
+export type SamplerFoilPreset =
+	'linear-holo' | 'rainbow-glitter' | 'radiant-crosshatch' | 'cosmos-speckle' | 'ice-crackle';
+
+/**
+ * The sampler techniques adapted for a real card: the card's tilt owns the
+ * light position, and a restrained outer opacity keeps copy and artwork clear.
+ */
+export function SamplerFoil({
+	preset,
+	width,
+	height,
+	rx,
+	ry,
+	seed,
+	intensity,
+	blend = 'screen'
+}: {
+	preset: SamplerFoilPreset;
+	width: number;
+	height: number;
+	rx: SharedValue<number>;
+	ry: SharedValue<number>;
+	seed: string;
+	intensity: number;
+	blend?: ViewStyle['mixBlendMode'];
+}) {
+	const x = useDerivedValue(() => clampPct(50 + (ry.value / 10) * 44));
+	const y = useDerivedValue(() => clampPct(50 - (rx.value / 10) * 42));
+	const light = { x, y, width, height };
+	const numericSeed = useMemo(() => hashSeed(seed), [seed]);
+
+	return (
+		<View
+			style={[
+				StyleSheet.absoluteFill,
+				{ opacity: intensity, mixBlendMode: blend, isolation: 'isolate' }
+			]}
+			pointerEvents="none"
+		>
+			{preset === 'linear-holo' ? <LinearHoloLayers {...light} /> : null}
+			{preset === 'rainbow-glitter' ? <RainbowGlitterLayers {...light} seed={numericSeed} /> : null}
+			{preset === 'radiant-crosshatch' ? <RadiantCrosshatchLayers {...light} /> : null}
+			{preset === 'cosmos-speckle' ? <CosmosSpeckleLayers {...light} seed={numericSeed} /> : null}
+			{preset === 'ice-crackle' ? <IceCrackleLayers {...light} seed={numericSeed} /> : null}
+		</View>
+	);
+}
+
 export function FoilSwatch({ def, width, now, tilt = 1 }: FoilSwatchProps) {
 	const height = width / SWATCH_ASPECT;
 
@@ -246,8 +294,12 @@ function GradientLayer({
 	opacity = 1,
 	opacityFn
 }: GradientLayerProps) {
-	const w = width * overscan;
-	const h = height * overscan;
+	// Several source recipes move farther than their original CSS background
+	// overscan. Native Views expose that boundary, so translated layers reserve
+	// an additional 70% in both dimensions.
+	const safeOverscan = translate ? overscan + 0.7 : overscan;
+	const w = width * safeOverscan;
+	const h = height * safeOverscan;
 	const style = useAnimatedStyle(() => {
 		const d = translate ? translate(x.value, y.value) : { tx: 0, ty: 0 };
 		return {
@@ -300,8 +352,9 @@ function SvgLayer({
 	opacity = 1,
 	render
 }: SvgLayerProps) {
-	const w = width * overscan;
-	const h = height * overscan;
+	const safeOverscan = translate ? overscan + 0.7 : overscan;
+	const w = width * safeOverscan;
+	const h = height * safeOverscan;
 	const style = useAnimatedStyle(() => {
 		const d = translate ? translate(x.value, y.value) : { tx: 0, ty: 0 };
 		return { transform: [{ translateX: d.tx }, { translateY: d.ty }] };

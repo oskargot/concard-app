@@ -18,7 +18,7 @@ import Svg, { Polygon } from 'react-native-svg';
 import { BGS, FRAMES, type CardStyle } from './card-style';
 import { CARD_ASPECT } from '../theme/tokens';
 import { Foil } from './foil/Foil';
-import type { FoilLayerName, FoilOverride } from './foil/Foil';
+import type { FoilLayerName, FoilOverride, SamplerFoilOptions } from './foil/Foil';
 import type { FoilKind } from './tiers';
 
 export interface CardShellProps {
@@ -35,6 +35,7 @@ export interface CardShellProps {
 	ry: SharedValue<number>;
 	intensity?: number;
 	foilOverrides?: Partial<Record<FoilLayerName, FoilOverride>>;
+	foilSampler?: SamplerFoilOptions;
 	detail?: 'full' | 'thumb';
 	children?: ReactNode;
 	/** Drawn outside the face clip, so stickers can hang over the card edge. */
@@ -71,12 +72,14 @@ export function CardShell({
 	ry,
 	intensity = 1,
 	foilOverrides,
+	foilSampler,
 	detail = 'full',
 	children,
 	overlay
 }: CardShellProps) {
 	const m = shellMetrics(width, style.shape);
 	const shaved = style.shape === 'shaved';
+	const foilKind = style.frame === 'holo' && foil === 'none' ? 'holo' : foil;
 
 	const band = (
 		<View
@@ -109,9 +112,9 @@ export function CardShell({
 			>
 				{/* content sits under the light, so the foil plays over the face */}
 				<View style={StyleSheet.absoluteFill}>{children}</View>
-				{foil ? (
+				{foilKind ? (
 					<Foil
-						kind={foil}
+						kind={foilKind}
 						width={m.width - m.band * 2}
 						height={m.height - m.band * 2}
 						radius={m.faceRadius}
@@ -120,6 +123,7 @@ export function CardShell({
 						seed={seed}
 						intensity={intensity}
 						overrides={foilOverrides}
+						samplerOptions={foilSampler}
 						detail={detail}
 					/>
 				) : null}

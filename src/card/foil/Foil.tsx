@@ -47,6 +47,7 @@ import {
 	repeatingLinear
 } from './gradients';
 import { facetField, glitterField, hashSeed, starField } from './speckle';
+import { SamplerFoil, type SamplerFoilPreset } from './FoilSwatch';
 
 /** Every layer the stack can draw, in stacking order. */
 export const FOIL_LAYERS = [
@@ -70,7 +71,7 @@ export type FoilLayerName = (typeof FOIL_LAYERS)[number];
  * bars because for a sticker, depth is the point.
  */
 const RECIPES: Record<FoilKind, readonly FoilLayerName[]> = {
-	none: ['wash', 'spec', 'edge'],
+	none: ['spec', 'edge'],
 	glitter: ['wash', 'glitter', 'spec', 'edge'],
 	holo: ['wash', 'bars', 'spec', 'edge'],
 	cosmic: ['space', 'nebula', 'stars', 'bars', 'spec', 'edge'],
@@ -90,8 +91,23 @@ const DEFAULTS: Record<FoilLayerName, { blend: ViewStyle['mixBlendMode']; opacit
 	facets: { blend: 'color-dodge', opacity: 0.5 },
 	glitter: { blend: 'color-dodge', opacity: 0.8 },
 	stars: { blend: 'plus-lighter', opacity: 0.9 },
-	spec: { blend: 'screen', opacity: 1 },
+	spec: { blend: 'screen', opacity: 0.42 },
 	edge: { blend: 'normal', opacity: 1 }
+};
+
+const SAMPLER_PRESET: Partial<Record<FoilKind, SamplerFoilPreset>> = {
+	glitter: 'rainbow-glitter',
+	holo: 'linear-holo',
+	cosmic: 'cosmos-speckle',
+	mosaic: 'radiant-crosshatch'
+};
+
+/** Sampler recipes are intentionally accents, not translucent curtains. */
+const SAMPLER_INTENSITY: Partial<Record<FoilKind, number>> = {
+	glitter: 0.2,
+	holo: 0.22,
+	cosmic: 0.24,
+	mosaic: 0.22
 };
 
 /** How far a layer slides per degree of tilt, as a fraction of card size.
@@ -117,6 +133,13 @@ export interface FoilOverride {
 	opacity?: number;
 }
 
+export interface SamplerFoilOptions {
+	preset?: SamplerFoilPreset;
+	blend?: ViewStyle['mixBlendMode'];
+	/** Absolute sampler opacity, before the CardShell intensity multiplier. */
+	intensity?: number;
+}
+
 export interface FoilProps {
 	kind: FoilKind;
 	/** Card size in px. Everything scales off this; nothing is hardcoded. */
@@ -133,6 +156,8 @@ export interface FoilProps {
 	intensity?: number;
 	/** Per-layer overrides. Used by /dev/foil-lab; production passes nothing. */
 	overrides?: Partial<Record<FoilLayerName, FoilOverride>>;
+	/** Production sampler controls used by the on-device holo lab. */
+	samplerOptions?: SamplerFoilOptions;
 	/** Thumbnails ask for sparser dot fields. */
 	detail?: 'full' | 'thumb';
 }
@@ -147,9 +172,12 @@ export function Foil({
 	radius = 0,
 	intensity = 1,
 	overrides,
+	samplerOptions,
 	detail = 'full'
 }: FoilProps) {
 	if (intensity <= 0) return null;
+	const sampler = overrides ? undefined : (samplerOptions?.preset ?? SAMPLER_PRESET[kind]);
+	const recipe = sampler ? (['spec', 'edge'] as const) : RECIPES[kind];
 
 	return (
 		// `isolation: isolate` is what keeps color-dodge from reaching through the
@@ -158,7 +186,19 @@ export function Foil({
 			style={[StyleSheet.absoluteFill, styles.stack, { borderRadius: radius }]}
 			pointerEvents="none"
 		>
-			{RECIPES[kind].map((name) => {
+			{sampler ? (
+				<SamplerFoil
+					preset={sampler}
+					width={width}
+					height={height}
+					rx={rx}
+					ry={ry}
+					seed={seed}
+					intensity={(samplerOptions?.intensity ?? SAMPLER_INTENSITY[kind] ?? 0.18) * intensity}
+					blend={samplerOptions?.blend}
+				/>
+			) : null}
+			{recipe.map((name) => {
 				const o = overrides?.[name];
 				if (o?.enabled === false) return null;
 				return (

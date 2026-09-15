@@ -69,7 +69,6 @@ function PlacedStickerView({
 		id: sticker.sticker_id,
 		name: 'Sticker',
 		glyph: '✦',
-		rarity: 'common' as const,
 		foil: 'none' as const,
 		color: palette.butter,
 		unlocked: true

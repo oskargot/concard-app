@@ -1,9 +1,8 @@
 /**
  * The card front's content: photo, name, handle, pronouns, bio and links.
  *
- * Layout proportions are carried over from the web card (`Card.svelte`) so the
- * two renderers draw the same object — padding 4.67cqw, photo 47.33cqw tall,
- * name at 7.67cqw, and so on. `m.u(n)` is that file's `n cqw`.
+ * The face keeps the web card's proportional sizing (`m.u(n)` is `n cqw`) but
+ * uses a clearer native hierarchy: identity, artwork, then anchored details.
  *
  * Bio alignment and link layout come from `CardStyle` (design bible §6).
  *
@@ -29,14 +28,14 @@ export function CardFace({ view, width }: { view: CardView; width: number }) {
 	const compact = width < COMPACT_BELOW;
 
 	return (
-		<View style={{ flex: 1, padding: m.u(4.67), gap: m.u(3) }}>
-			<View style={{ gap: m.u(1), paddingBottom: m.u(2) }}>
+		<View style={{ flex: 1, padding: m.u(4.67), gap: m.u(2.4) }}>
+			<View style={{ gap: m.u(0.55) }}>
 				<Text
 					numberOfLines={1}
 					style={{
 						fontFamily: font.display,
-						fontSize: m.u(7.67),
-						lineHeight: m.u(7.67) * 1.1,
+						fontSize: m.u(7.2),
+						lineHeight: m.u(7.2) * 1.06,
 						color: ink.ink
 					}}
 				>
@@ -70,32 +69,36 @@ export function CardFace({ view, width }: { view: CardView; width: number }) {
 				</View>
 			</View>
 
-			<Photo view={view} width={width} ink={ink} />
+			<Photo view={view} width={width} ink={ink} compact={compact} />
 
-			{!compact && view.bio ? (
-				<View
-					style={{
-						backgroundColor: ink.wash,
-						borderRadius: m.u(4.67),
-						paddingVertical: m.u(2.67),
-						paddingHorizontal: m.u(3)
-					}}
-				>
-					<Text
-						style={{
-							fontFamily: font.body,
-							fontSize: Math.max(m.u(3.83), 8),
-							lineHeight: Math.max(m.u(3.83), 8) * 1.45,
-							color: ink.body,
-							textAlign: style.bio_align
-						}}
-					>
-						{view.bio}
-					</Text>
+			{!compact && (view.bio || view.links.length > 0) ? (
+				<View style={{ flex: 1, justifyContent: 'flex-end', gap: m.u(2) }}>
+					{view.bio ? (
+						<View
+							style={{
+								backgroundColor: ink.wash,
+								borderRadius: m.u(3.4),
+								paddingVertical: m.u(2.35),
+								paddingHorizontal: m.u(3)
+							}}
+						>
+							<Text
+								numberOfLines={3}
+								style={{
+									fontFamily: font.body,
+									fontSize: Math.max(m.u(3.65), 8),
+									lineHeight: Math.max(m.u(3.65), 8) * 1.36,
+									color: ink.body,
+									textAlign: style.bio_align
+								}}
+							>
+								{view.bio}
+							</Text>
+						</View>
+					) : null}
+					{view.links.length > 0 ? <Links view={view} width={width} ink={ink} /> : null}
 				</View>
 			) : null}
-
-			{!compact && view.links.length > 0 ? <Links view={view} width={width} ink={ink} /> : null}
 		</View>
 	);
 }
@@ -103,28 +106,31 @@ export function CardFace({ view, width }: { view: CardView; width: number }) {
 function Photo({
 	view,
 	width,
-	ink
+	ink,
+	compact
 }: {
 	view: CardView;
 	width: number;
 	ink: ReturnType<typeof inkFor>;
+	compact: boolean;
 }) {
 	const m = shellMetrics(width, view.style.shape);
 	const shape = view.style.photo_shape;
+	const photoSize = compact ? 88 : 58;
 
 	// The four photo silhouettes, carried over from the web card.
 	const radius =
 		shape === 'square'
 			? m.u(1.33)
 			: shape === 'circle'
-				? m.u(49.33) / 2
+				? m.u(photoSize) / 2
 				: shape === 'arch'
 					? undefined
 					: m.u(4.67);
 
 	const box = {
-		height: shape === 'circle' ? m.u(49.33) : m.u(47.33),
-		width: shape === 'circle' ? m.u(49.33) : undefined,
+		height: m.u(photoSize),
+		width: shape === 'circle' ? m.u(photoSize) : undefined,
 		alignSelf: shape === 'circle' ? ('center' as const) : undefined,
 		borderRadius: radius,
 		// the arch: fully round at the top, gently rounded at the bottom
