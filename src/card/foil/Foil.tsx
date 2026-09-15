@@ -104,10 +104,10 @@ const SAMPLER_PRESET: Partial<Record<FoilKind, SamplerFoilPreset>> = {
 
 /** Sampler recipes are intentionally accents, not translucent curtains. */
 const SAMPLER_INTENSITY: Partial<Record<FoilKind, number>> = {
-	glitter: 0.46,
-	holo: 0.44,
-	cosmic: 0.5,
-	mosaic: 0.46
+	glitter: 0.2,
+	holo: 0.22,
+	cosmic: 0.24,
+	mosaic: 0.22
 };
 
 /** How far a layer slides per degree of tilt, as a fraction of card size.
@@ -133,6 +133,13 @@ export interface FoilOverride {
 	opacity?: number;
 }
 
+export interface SamplerFoilOptions {
+	preset?: SamplerFoilPreset;
+	blend?: ViewStyle['mixBlendMode'];
+	/** Absolute sampler opacity, before the CardShell intensity multiplier. */
+	intensity?: number;
+}
+
 export interface FoilProps {
 	kind: FoilKind;
 	/** Card size in px. Everything scales off this; nothing is hardcoded. */
@@ -149,6 +156,8 @@ export interface FoilProps {
 	intensity?: number;
 	/** Per-layer overrides. Used by /dev/foil-lab; production passes nothing. */
 	overrides?: Partial<Record<FoilLayerName, FoilOverride>>;
+	/** Production sampler controls used by the on-device holo lab. */
+	samplerOptions?: SamplerFoilOptions;
 	/** Thumbnails ask for sparser dot fields. */
 	detail?: 'full' | 'thumb';
 }
@@ -163,10 +172,11 @@ export function Foil({
 	radius = 0,
 	intensity = 1,
 	overrides,
+	samplerOptions,
 	detail = 'full'
 }: FoilProps) {
 	if (intensity <= 0) return null;
-	const sampler = overrides ? undefined : SAMPLER_PRESET[kind];
+	const sampler = overrides ? undefined : (samplerOptions?.preset ?? SAMPLER_PRESET[kind]);
 	const recipe = sampler ? (['spec', 'edge'] as const) : RECIPES[kind];
 
 	return (
@@ -184,7 +194,8 @@ export function Foil({
 					rx={rx}
 					ry={ry}
 					seed={seed}
-					intensity={(SAMPLER_INTENSITY[kind] ?? 0.18) * intensity}
+					intensity={(samplerOptions?.intensity ?? SAMPLER_INTENSITY[kind] ?? 0.18) * intensity}
+					blend={samplerOptions?.blend}
 				/>
 			) : null}
 			{recipe.map((name) => {

@@ -18,7 +18,7 @@ import Svg, { Polygon } from 'react-native-svg';
 import { BGS, FRAMES, type CardStyle } from './card-style';
 import { CARD_ASPECT } from '../theme/tokens';
 import { Foil } from './foil/Foil';
-import type { FoilLayerName, FoilOverride } from './foil/Foil';
+import type { FoilLayerName, FoilOverride, SamplerFoilOptions } from './foil/Foil';
 import type { FoilKind } from './tiers';
 
 export interface CardShellProps {
@@ -35,6 +35,7 @@ export interface CardShellProps {
 	ry: SharedValue<number>;
 	intensity?: number;
 	foilOverrides?: Partial<Record<FoilLayerName, FoilOverride>>;
+	foilSampler?: SamplerFoilOptions;
 	detail?: 'full' | 'thumb';
 	children?: ReactNode;
 	/** Drawn outside the face clip, so stickers can hang over the card edge. */
@@ -71,6 +72,7 @@ export function CardShell({
 	ry,
 	intensity = 1,
 	foilOverrides,
+	foilSampler,
 	detail = 'full',
 	children,
 	overlay
@@ -121,6 +123,7 @@ export function CardShell({
 						seed={seed}
 						intensity={intensity}
 						overrides={foilOverrides}
+						samplerOptions={foilSampler}
 						detail={detail}
 					/>
 				) : null}

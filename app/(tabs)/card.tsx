@@ -10,6 +10,7 @@ import {
 	useWindowDimensions
 } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
+import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { SharedValue } from 'react-native-reanimated';
 
@@ -42,6 +43,7 @@ type Mode = 'card' | 'edit' | 'share';
 export default function CardScreen() {
 	const insets = useSafeAreaInsets();
 	const { width } = useWindowDimensions();
+	const router = useRouter();
 	const { profile } = useAuth();
 	const [mode, setMode] = useState<Mode>('card');
 	const [selected, setSelected] = useState<string | null>(null);
@@ -296,6 +298,11 @@ export default function CardScreen() {
 					<View style={styles.viewActions}>
 						<Button label="Edit this card" onPress={() => setMode('edit')} />
 						<Button label="Show my QR" variant="secondary" onPress={() => setMode('share')} />
+						<Button
+							label="Open holo lab"
+							variant="ghost"
+							onPress={() => router.push('/dev/foil-lab')}
+						/>
 					</View>
 				) : null}
 			</ScrollView>
