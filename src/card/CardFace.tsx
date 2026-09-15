@@ -1,113 +1,358 @@
 /**
- * The card front's content: photo, name, handle, pronouns, bio and links.
+ * The card front's content: ruled name/handle, photo, bio and link chips.
  *
- * Layout proportions are carried over from the web card (`Card.svelte`) so the
- * two renderers draw the same object — padding 4.67cqw, photo 47.33cqw tall,
- * name at 7.67cqw, and so on. `m.u(n)` is that file's `n cqw`.
- *
- * Bio alignment and link layout come from `CardStyle` (design bible §6).
+ * Layout proportions and stacking order match the web card (`Card.svelte`) so
+ * the two renderers draw the same object — padding 4.67cqw, photo 47.33cqw tall,
+ * name at 7.67cqw, header first then photo. `m.u(n)` is that file's `n cqw`.
  *
  * Like the web card, the face drops its bio and links below a certain width so
  * binder thumbnails stay legible instead of turning into grey mush.
+ *
+ * ## Editing in place
+ *
+ * The card editor passes an `edit` prop and this file swaps its `Text` nodes for
+ * `TextInput`s carrying the identical style — see `FaceText`. That is deliberate
+ * and it is why the editor does not have its own copy of this layout: the geometry
+ * above is load-bearing for snapshot fidelity, and a forked editing renderer would
+ * be a second place for it to drift from the web card. With `edit` absent every
+ * branch here collapses back to exactly what it drew before, so the binder, the
+ * dev gallery and collection snapshots are untouched.
  */
 
 import { Image } from 'expo-image';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View, type TextStyle } from 'react-native';
 
 import { font } from '../theme/tokens';
 import { BGS, inkFor, type CardStyle } from './card-style';
 import { shellMetrics } from './CardShell';
+import { displayUrl } from './links';
 import type { CardView } from './types';
 
-/** Below this card width the face shows name and handle only. */
+/** Below this card width the face shows name and photo only. */
 const COMPACT_BELOW = 180;
+/** Below this, even the handle goes — binder micro-tiles. */
+const MICRO_BELOW = 110;
+/** Web card shows at most three chips; the rest become "+N more". */
+const MAX_CHIPS = 3;
 
-export function CardFace({ view, width }: { view: CardView; width: number }) {
+/**
+ * Turns the face into the editor's canvas.
+ *
+ * Every field is optional on its own: a handler that isn't passed stays
+ * read-only, so the editor can open the name for editing while the handle —
+ * which belongs to the profile, not the card — stays fixed text.
+ */
+export interface CardFaceEdit {
+	onChangeTitle?: (next: string) => void;
+	onChangePronouns?: (next: string) => void;
+	onChangeBio?: (next: string) => void;
+	bioMax?: number;
+	/** Tap the photo well to pick a new image. */
+	onPressPhoto?: () => void;
+	/** The sticker drawer button, drawn only while editing. */
+	onPressStickers?: () => void;
+	stickersEnabled?: boolean;
+}
+
+export function CardFace({
+	view,
+	width,
+	edit
+}: {
+	view: CardView;
+	width: number;
+	edit?: CardFaceEdit;
+}) {
 	const style: CardStyle = view.style;
 	const m = shellMetrics(width, style.shape);
 	const ink = inkFor(style.bg);
 	const compact = width < COMPACT_BELOW;
+	const micro = width < MICRO_BELOW;
+	const hair = Math.max(m.u(0.5), 1);
+	const borderTint = ink.dark ? 'rgba(247,245,238,0.25)' : 'rgba(23,22,27,0.25)';
+
+	const badgeOverFooter =
+		!!view.affiliation && view.affiliation.x > 0.62 && view.affiliation.y > 0.76;
+
+	const chips = view.links.slice(0, MAX_CHIPS);
+	const more = Math.max(0, view.links.length - MAX_CHIPS);
+
+	// An empty bio normally collapses. While editing it has to stay, or there is
+	// nothing left on screen to tap to write one.
+	const showBio = !compact && (!!view.bio || !!edit?.onChangeBio);
+
+	const titleStyle: TextStyle = {
+		fontFamily: font.display,
+		fontSize: m.u(7.67),
+		lineHeight: m.u(7.67),
+		color: ink.ink
+	};
+	const handleStyle: TextStyle = {
+		fontFamily: font.bodyBold,
+		fontSize: Math.max(m.u(3.17), 7),
+		lineHeight: Math.max(m.u(3.17), 7) * 1.2,
+		letterSpacing: 0.4,
+		color: ink.mute,
+		flexShrink: 1
+	};
+	const pronounStyle: TextStyle = {
+		fontFamily: font.body,
+		fontSize: Math.max(m.u(2.9), 6.5),
+		color: ink.mute
+	};
+	const bioStyle: TextStyle = {
+		fontFamily: font.body,
+		fontSize: Math.max(m.u(3.83), 8),
+		lineHeight: Math.max(m.u(3.83), 8) * 1.45,
+		color: ink.body,
+		textAlign: style.bio_align
+	};
 
 	return (
 		<View style={{ flex: 1, padding: m.u(4.67), gap: m.u(3) }}>
-			<Photo view={view} width={width} ink={ink} />
-
-			<View style={{ gap: m.u(1), paddingBottom: m.u(2) }}>
-				<Text
+			{/* Ruled header — name sits above the photo, same as the web card. */}
+			<View
+				style={{
+					gap: m.u(1),
+					paddingBottom: m.u(2),
+					borderBottomWidth: hair,
+					borderBottomColor: ink.ink,
+					minWidth: 0
+				}}
+			>
+				<FaceText
+					value={view.title}
+					onChangeText={edit?.onChangeTitle}
 					numberOfLines={1}
-					style={{
-						fontFamily: font.display,
-						fontSize: m.u(7.67),
-						lineHeight: m.u(7.67) * 1.1,
-						color: ink.ink
-					}}
-				>
-					{view.title}
-				</Text>
-				<View style={{ flexDirection: 'row', alignItems: 'center', gap: m.u(1.5) }}>
-					<Text
-						numberOfLines={1}
-						style={{
-							fontFamily: font.bodyBold,
-							fontSize: Math.max(m.u(3.17), 7),
-							lineHeight: Math.max(m.u(3.17), 7) * 1.2,
-							letterSpacing: 0.4,
-							color: ink.mute
-						}}
-					>
-						@{view.handle}
-					</Text>
-					{view.pronouns ? (
-						<Text
-							numberOfLines={1}
-							style={{
-								fontFamily: font.body,
-								fontSize: Math.max(m.u(2.9), 6.5),
-								color: ink.mute
-							}}
-						>
-							· {view.pronouns}
+					style={titleStyle}
+					placeholder="Your name"
+					placeholderColor={ink.mute}
+					maxLength={40}
+				/>
+				{!micro ? (
+					<View style={{ flexDirection: 'row', alignItems: 'center', gap: m.u(1.5) }}>
+						{/* The handle is the username — one per person, not per card, so it
+						    is never editable here even in the editor. */}
+						<Text numberOfLines={1} style={handleStyle}>
+							@{view.handle}
 						</Text>
-					) : null}
-				</View>
+						{view.pronouns || edit?.onChangePronouns ? (
+							<View style={{ flexDirection: 'row', alignItems: 'center', minWidth: 0 }}>
+								<Text style={pronounStyle}>· </Text>
+								<FaceText
+									value={view.pronouns ?? ''}
+									onChangeText={edit?.onChangePronouns}
+									numberOfLines={1}
+									style={pronounStyle}
+									placeholder="pronouns"
+									placeholderColor={ink.mute}
+									maxLength={30}
+								/>
+							</View>
+						) : null}
+					</View>
+				) : null}
 			</View>
 
-			{!compact && view.bio ? (
+			<Photo view={view} width={width} ink={ink} compact={compact} edit={edit} />
+
+			{showBio ? (
 				<View
 					style={{
+						flex: 1,
+						minHeight: 0,
 						backgroundColor: ink.wash,
 						borderRadius: m.u(4.67),
 						paddingVertical: m.u(2.67),
-						paddingHorizontal: m.u(3)
+						paddingHorizontal: m.u(3),
+						borderWidth: hair,
+						borderColor: borderTint
 					}}
 				>
-					<Text
-						style={{
-							fontFamily: font.body,
-							fontSize: Math.max(m.u(3.83), 8),
-							lineHeight: Math.max(m.u(3.83), 8) * 1.45,
-							color: ink.body,
-							textAlign: style.bio_align
-						}}
-					>
-						{view.bio}
-					</Text>
+					<FaceText
+						value={view.bio}
+						onChangeText={edit?.onChangeBio}
+						style={bioStyle}
+						placeholder="Say something card-sized."
+						placeholderColor={ink.mute}
+						maxLength={edit?.bioMax}
+						multiline
+						fill
+					/>
 				</View>
 			) : null}
 
-			{!compact && view.links.length > 0 ? <Links view={view} width={width} ink={ink} /> : null}
+			{!compact ? (
+				<View
+					style={{
+						flexDirection: 'row',
+						flexWrap: 'wrap',
+						alignItems: 'center',
+						gap: m.u(1.33),
+						marginTop: 'auto',
+						paddingRight: badgeOverFooter ? m.u(22) : 0
+					}}
+				>
+					{chips.map((link, i) => (
+						<View
+							key={`${link.label}-${i}`}
+							style={{
+								maxWidth: '100%',
+								backgroundColor: ink.wash,
+								borderRadius: m.u(3),
+								paddingVertical: m.u(1.33),
+								paddingHorizontal: m.u(2.67),
+								borderWidth: hair,
+								borderColor: borderTint
+							}}
+						>
+							<Text
+								numberOfLines={1}
+								style={{
+									fontFamily: font.bodyMedium,
+									fontSize: Math.max(m.u(3.17), 7),
+									lineHeight: Math.max(m.u(3.17), 7) * 1.2,
+									color: ink.ink
+								}}
+							>
+								{link.label || displayUrl(link.url)}
+							</Text>
+						</View>
+					))}
+					{more > 0 ? (
+						<Text
+							style={{
+								fontFamily: font.bodyBold,
+								fontSize: Math.max(m.u(2.67), 6.5),
+								letterSpacing: 1.1,
+								textTransform: 'uppercase',
+								color: ink.mute
+							}}
+						>
+							+{more} more
+						</Text>
+					) : null}
+
+					{/* Editor-only: the sticker drawer. Never drawn on a real card. */}
+					{edit?.onPressStickers ? (
+						<Pressable
+							onPress={edit.onPressStickers}
+							disabled={!edit.stickersEnabled}
+							accessibilityRole="button"
+							accessibilityLabel={
+								edit.stickersEnabled ? 'Open the sticker drawer' : 'Stickers are coming soon'
+							}
+							accessibilityState={{ disabled: !edit.stickersEnabled }}
+							style={({ pressed }) => ({
+								marginLeft: 'auto',
+								opacity: !edit.stickersEnabled ? 0.45 : pressed ? 0.7 : 1,
+								backgroundColor: ink.wash,
+								borderRadius: m.u(3),
+								paddingVertical: m.u(1.33),
+								paddingHorizontal: m.u(2.67),
+								borderWidth: hair,
+								borderStyle: 'dashed',
+								borderColor: borderTint
+							})}
+						>
+							<Text
+								style={{
+									fontFamily: font.bodyBold,
+									fontSize: Math.max(m.u(2.67), 6.5),
+									letterSpacing: 1.1,
+									textTransform: 'uppercase',
+									color: ink.mute
+								}}
+							>
+								stickers
+							</Text>
+						</Pressable>
+					) : null}
+				</View>
+			) : null}
 		</View>
 	);
 }
 
+/**
+ * A line of card text that becomes a field when the editor hands it a setter.
+ *
+ * Both branches take the same `style` object, which is the point: the text must
+ * not shift by a pixel when it turns into an input. `TextInput` needs three
+ * resets to match `Text` — its own default padding, Android's extra font
+ * padding, and Android's vertical centring — and without them the name would
+ * jump on focus.
+ */
+function FaceText({
+	value,
+	onChangeText,
+	style,
+	placeholder,
+	placeholderColor,
+	numberOfLines,
+	maxLength,
+	multiline,
+	fill
+}: {
+	value: string;
+	onChangeText?: (next: string) => void;
+	style: TextStyle;
+	placeholder?: string;
+	placeholderColor?: string;
+	numberOfLines?: number;
+	maxLength?: number;
+	multiline?: boolean;
+	fill?: boolean;
+}) {
+	if (!onChangeText) {
+		// Rendered even when empty: an empty `Text` still claims its line box, and
+		// the header's height is part of the geometry the web card agrees with.
+		return (
+			<Text numberOfLines={numberOfLines} style={style}>
+				{value}
+			</Text>
+		);
+	}
+
+	return (
+		<TextInput
+			value={value}
+			onChangeText={onChangeText}
+			placeholder={placeholder}
+			placeholderTextColor={placeholderColor}
+			maxLength={maxLength}
+			multiline={multiline}
+			numberOfLines={numberOfLines}
+			scrollEnabled={false}
+			accessibilityLabel={placeholder}
+			style={[
+				style,
+				faceInput.reset,
+				multiline ? faceInput.multiline : null,
+				fill ? faceInput.fill : null
+			]}
+		/>
+	);
+}
+
+const faceInput = StyleSheet.create({
+	reset: { padding: 0, margin: 0, includeFontPadding: false },
+	multiline: { textAlignVertical: 'top' },
+	fill: { flex: 1 }
+});
+
 function Photo({
 	view,
 	width,
-	ink
+	ink,
+	compact,
+	edit
 }: {
 	view: CardView;
 	width: number;
 	ink: ReturnType<typeof inkFor>;
+	compact: boolean;
+	edit?: CardFaceEdit;
 }) {
 	const m = shellMetrics(width, view.style.shape);
 	const shape = view.style.photo_shape;
@@ -123,7 +368,8 @@ function Photo({
 					: m.u(4.67);
 
 	const box = {
-		height: shape === 'circle' ? m.u(49.33) : m.u(47.33),
+		height: shape === 'circle' ? m.u(49.33) : compact ? undefined : m.u(47.33),
+		flex: compact && shape !== 'circle' ? 1 : undefined,
 		width: shape === 'circle' ? m.u(49.33) : undefined,
 		alignSelf: shape === 'circle' ? ('center' as const) : undefined,
 		borderRadius: radius,
@@ -136,28 +382,43 @@ function Photo({
 		backgroundColor: ink.hatchA
 	};
 
-	if (!view.art_url) {
-		// An empty photo well reads as intentional, not as a failed image: the web
-		// card hatches it in two tints derived from the face colour.
-		return (
-			<View style={box}>
-				<View
-					style={[
-						StyleSheet.absoluteFill,
-						{
-							experimental_backgroundImage: `linear-gradient(45deg, ${ink.hatchA} 0%, ${ink.hatchA} 48%, ${ink.hatchB} 50%, ${ink.hatchB} 100%)`
-						}
-					]}
-				/>
-			</View>
-		);
-	}
+	const label = (
+		<Text
+			style={{
+				fontFamily: font.bodyBold,
+				fontSize: Math.max(m.u(2.67), 6.5),
+				letterSpacing: 1.1,
+				textTransform: 'uppercase',
+				color: ink.mute
+			}}
+		>
+			{edit?.onPressPhoto ? (view.art_url ? 'change' : 'add photo') : 'photo'}
+		</Text>
+	);
 
-	return (
-		<View style={box}>
+	const inner = !view.art_url ? (
+		// Empty well: hatch + "photo" label, same as the web card.
+		<>
+			<View
+				style={[
+					StyleSheet.absoluteFill,
+					{
+						experimental_backgroundImage: `repeating-linear-gradient(135deg, ${ink.hatchA} 0 7px, ${ink.hatchB} 7px 14px)`
+					}
+				]}
+			/>
+			{label}
+		</>
+	) : (
+		<>
 			<Image
 				source={{ uri: view.art_url }}
-				style={StyleSheet.absoluteFill}
+				style={[
+					StyleSheet.absoluteFill,
+					{
+						transform: [{ scale: view.art_scale }]
+					}
+				]}
 				contentFit="cover"
 				// pan/zoom: the web card offsets background-position and scales
 				contentPosition={{
@@ -166,72 +427,95 @@ function Photo({
 				}}
 				transition={120}
 			/>
-		</View>
-	);
-}
-
-function Links({
-	view,
-	width,
-	ink
-}: {
-	view: CardView;
-	width: number;
-	ink: ReturnType<typeof inkFor>;
-}) {
-	const m = shellMetrics(width, view.style.shape);
-	const grid = view.style.link_layout === 'grid';
-	const chipFont = Math.max(m.u(3.17), 7);
-
-	// Rows leave a gutter for the fandom badge; the grid wraps into it instead.
-	return (
-		<View
-			style={{
-				flexDirection: 'row',
-				flexWrap: 'wrap',
-				gap: m.u(1.33),
-				paddingRight: grid ? 0 : m.u(22)
-			}}
-		>
-			{view.links.slice(0, grid ? 6 : 4).map((link, i) => (
+			{/* A filled well says nothing normally; in the editor it needs to advertise
+			    that it is tappable, so the label comes back over a scrim. */}
+			{edit?.onPressPhoto ? (
 				<View
-					key={`${link.label}-${i}`}
-					style={{
-						backgroundColor: ink.wash,
-						borderRadius: m.u(3),
-						paddingVertical: m.u(1.33),
-						paddingHorizontal: m.u(2.67),
-						flexBasis: grid ? '31%' : undefined
-					}}
+					style={[
+						StyleSheet.absoluteFill,
+						{
+							alignItems: 'center',
+							justifyContent: 'flex-end',
+							paddingBottom: m.u(2),
+							backgroundColor: 'rgba(23,22,27,0.28)'
+						}
+					]}
 				>
-					<Text
-						numberOfLines={1}
-						style={{
-							fontFamily: font.bodyMedium,
-							fontSize: chipFont,
-							lineHeight: chipFont * 1.2,
-							color: ink.ink
-						}}
-					>
-						{link.label}
-					</Text>
+					{label}
 				</View>
-			))}
-			{view.links.length > (grid ? 6 : 4) ? (
-				<Text
-					style={{
-						fontFamily: font.bodyBold,
-						fontSize: Math.max(m.u(2.67), 6.5),
-						color: ink.mute,
-						alignSelf: 'center'
-					}}
-				>
-					+{view.links.length - (grid ? 6 : 4)} MORE
-				</Text>
 			) : null}
-		</View>
+		</>
+	);
+
+	const centred = !view.art_url;
+
+	if (!edit?.onPressPhoto) {
+		return (
+			<View style={[box, centred && { alignItems: 'center', justifyContent: 'center' }]}>
+				{inner}
+			</View>
+		);
+	}
+
+	return (
+		<Pressable
+			onPress={edit.onPressPhoto}
+			accessibilityRole="button"
+			accessibilityLabel={view.art_url ? 'Change card photo' : 'Add a card photo'}
+			style={({ pressed }) => [
+				box,
+				centred && { alignItems: 'center', justifyContent: 'center' },
+				pressed && { opacity: 0.8 }
+			]}
+		>
+			{inner}
+		</Pressable>
 	);
 }
 
 /** Exported so the foil lab can show a face colour swatch without importing BGS. */
 export const faceColorFor = (style: CardStyle) => BGS[style.bg];
+
+/** The vertical middle of each band of the face, in px from the card's top edge. */
+export interface FaceBands {
+	header: number;
+	photo: number;
+	bio: number;
+	footer: number;
+}
+
+/**
+ * Where each band of the face sits.
+ *
+ * The editor puts an arrow beside the thing each arrow changes — the photo-shape
+ * control next to the photo, the bio alignment next to the bio — which means it
+ * needs the same measurements the layout above is built from. Deriving them here
+ * rather than in the editor keeps one copy: change a padding or the photo height
+ * and the controls follow it instead of quietly sliding out of alignment.
+ */
+export function faceBands(width: number, style: CardStyle): FaceBands {
+	const m = shellMetrics(width, style.shape);
+	const u = m.u;
+	const pad = u(4.67);
+	const gap = u(3);
+	const hair = Math.max(u(0.5), 1);
+
+	const headerH = u(7.67) + u(1) + Math.max(u(3.17), 7) * 1.2 + u(2) + hair;
+	const photoH = style.photo_shape === 'circle' ? u(49.33) : u(47.33);
+	const chipH = Math.max(u(3.17), 7) * 1.2 + u(1.33) * 2 + hair * 2;
+
+	// The face is inset from the card edge by the metal band, so every offset
+	// below is measured from the card, not from the face.
+	const headerTop = m.band + pad;
+	const photoTop = headerTop + headerH + gap;
+	const bioTop = photoTop + photoH + gap;
+	const footerBottom = m.height - m.band - pad;
+	const footerTop = footerBottom - chipH;
+
+	return {
+		header: headerTop + headerH / 2,
+		photo: photoTop + photoH / 2,
+		bio: (bioTop + Math.max(bioTop, footerTop - gap)) / 2,
+		footer: (footerTop + footerBottom) / 2
+	};
+}

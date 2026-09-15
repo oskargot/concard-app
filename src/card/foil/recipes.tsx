@@ -3,7 +3,7 @@
  *
  * Ported from the foil sampler / simeydotme technique: each recipe is a small
  * stack of Groups (shine) plus a hotspot (glare), with filter punch and
- * parallax that actually travels. These are the candidates for production —
+ * parallax that actually travels. These are the candidates for production  E
  * `/dev/foil-lab` can run them on a real Concard face via FoilV2 before any
  * tier wiring lands in `tiers.ts`.
  */
@@ -54,7 +54,7 @@ export interface FoilRecipeDef {
 	render: (light: FoilLight & { seed: number }) => ReactNode;
 }
 
-/** Draft map from production foil kinds → experiment recipes. Tunable in lab. */
+/** Draft map from production foil kinds ↁEexperiment recipes. Tunable in lab. */
 export const V2_KIND_RECIPES: Record<FoilKind, FoilRecipeId> = {
 	none: 'plain-base',
 	glitter: 'rainbow-glitter',
@@ -108,8 +108,7 @@ function PlainBaseLayers({ x, y, width, height }: FoilLight) {
 					width={width}
 					height={height}
 					background={PLAIN_WASH}
-					overscan={1.5}
-					translate={slide(width * 0.18, height * 0.22)}
+					motion={slide(width * 0.18, height * 0.22)}
 				/>
 			</Group>
 			<GradientLayer
@@ -120,8 +119,7 @@ function PlainBaseLayers({ x, y, width, height }: FoilLight) {
 				background={PLAIN_GLARE}
 				blend="overlay"
 				filter={[{ brightness: 0.85 }, { contrast: 1.6 }]}
-				overscan={1.6}
-				translate={slide(width * 0.28, height * 0.28, false)}
+				motion={slide(width * 0.28, height * 0.28, false)}
 				opacityFn={pfcOpacity(0.35, 0.45)}
 			/>
 		</>
@@ -145,8 +143,7 @@ function LinearHoloLayers({ x, y, width, height }: FoilLight) {
 					height={height}
 					background={HOLO_BANDS}
 					blend="overlay"
-					overscan={1.6}
-					translate={slide(width * 0.5, height * 0.6)}
+					motion={slide(width * 0.5, height * 0.6)}
 				/>
 			</Group>
 			<Group
@@ -162,8 +159,7 @@ function LinearHoloLayers({ x, y, width, height }: FoilLight) {
 					width={width}
 					height={height}
 					background={HOLO_BARCODE}
-					overscan={1.4}
-					translate={slide(width * 0.22, height * 0.1)}
+					motion={slide(width * 0.22, height * 0.1)}
 				/>
 				<GradientLayer
 					x={x}
@@ -172,8 +168,7 @@ function LinearHoloLayers({ x, y, width, height }: FoilLight) {
 					height={height}
 					background={HOLO_BARCODE}
 					blend="screen"
-					overscan={1.4}
-					translate={slide(width * 0.18, height * 0.16, false)}
+					motion={slide(width * 0.18, height * 0.16, false)}
 				/>
 			</Group>
 			<GradientLayer
@@ -184,8 +179,7 @@ function LinearHoloLayers({ x, y, width, height }: FoilLight) {
 				background={HOTSPOT_ICE_WHITE}
 				blend="overlay"
 				filter={[{ brightness: 0.75 }, { contrast: 2.2 }]}
-				overscan={1.7}
-				translate={slide(width * 0.32, height * 0.32, false)}
+				motion={slide(width * 0.32, height * 0.32, false)}
 			/>
 		</>
 	);
@@ -201,8 +195,7 @@ function RainbowGlitterLayers({ x, y, width, height, seed }: FoilLight & { seed:
 					width={width}
 					height={height}
 					background={GLITTER_SHEET_A}
-					overscan={1.7}
-					translate={slide(width * 0.4, height * 0.55)}
+					motion={slide(width * 0.4, height * 0.55)}
 				/>
 				<SvgLayer
 					x={x}
@@ -221,8 +214,7 @@ function RainbowGlitterLayers({ x, y, width, height, seed }: FoilLight & { seed:
 					height={height}
 					background={GLITTER_PASTEL}
 					blend="luminosity"
-					overscan={1.5}
-					translate={slide(0, height * 0.5)}
+					motion={slide(0, height * 0.5)}
 				/>
 			</Group>
 			<Group
@@ -238,8 +230,7 @@ function RainbowGlitterLayers({ x, y, width, height, seed }: FoilLight & { seed:
 					width={width}
 					height={height}
 					background={GLITTER_SHEET_B}
-					overscan={1.7}
-					translate={slide(width * 0.4, height * 0.55, false)}
+					motion={slide(width * 0.4, height * 0.55, false)}
 				/>
 				<SvgLayer
 					x={x}
@@ -260,8 +251,7 @@ function RainbowGlitterLayers({ x, y, width, height, seed }: FoilLight & { seed:
 				background={HOTSPOT_WARM}
 				blend="overlay"
 				opacity={0.75}
-				overscan={1.6}
-				translate={slide(width * 0.3, height * 0.3, false)}
+				motion={slide(width * 0.3, height * 0.3, false)}
 			/>
 		</>
 	);
@@ -282,8 +272,7 @@ function RadiantCrosshatchLayers({ x, y, width, height }: FoilLight) {
 					width={width}
 					height={height}
 					background={CROSSHATCH_A}
-					overscan={1.6}
-					translate={slide(width * 0.35, height * 0.35)}
+					motion={slide(width * 0.35, height * 0.35)}
 				/>
 				<GradientLayer
 					x={x}
@@ -292,8 +281,7 @@ function RadiantCrosshatchLayers({ x, y, width, height }: FoilLight) {
 					height={height}
 					background={CROSSHATCH_B}
 					blend="darken"
-					overscan={1.6}
-					translate={slide(width * 0.35, height * 0.35)}
+					motion={slide(width * 0.35, height * 0.35)}
 				/>
 				<GradientLayer
 					x={x}
@@ -302,8 +290,7 @@ function RadiantCrosshatchLayers({ x, y, width, height }: FoilLight) {
 					height={height}
 					background={HOTSPOT_CROSS_ELLIPSE}
 					blend="exclusion"
-					overscan={1.6}
-					translate={slide(width * 0.14, height * 0.14, false)}
+					motion={slide(width * 0.14, height * 0.14, false)}
 				/>
 			</Group>
 			<GradientLayer
@@ -314,8 +301,7 @@ function RadiantCrosshatchLayers({ x, y, width, height }: FoilLight) {
 				background={HOTSPOT_CROSS_GLOW}
 				blend="hard-light"
 				filter={[{ brightness: 1 }, { contrast: 1.5 }]}
-				overscan={1.6}
-				translate={slide(width * 0.3, height * 0.3, false)}
+				motion={slide(width * 0.3, height * 0.3, false)}
 			/>
 		</>
 	);
@@ -336,8 +322,7 @@ function CosmosSpeckleLayers({ x, y, width, height, seed }: FoilLight & { seed: 
 					width={width}
 					height={height}
 					background={COSMOS_BAND}
-					overscan={2.2}
-					translate={slide(width * 0.9, height * 0.5)}
+					motion={slide(width * 0.9, height * 0.5)}
 				/>
 				<SvgLayer
 					x={x}
@@ -366,8 +351,7 @@ function CosmosSpeckleLayers({ x, y, width, height, seed }: FoilLight & { seed: 
 				height={height}
 				background={HOTSPOT_COSMOS}
 				blend="overlay"
-				overscan={1.6}
-				translate={slide(width * 0.3, height * 0.3, false)}
+				motion={slide(width * 0.3, height * 0.3, false)}
 				opacityFn={pfcOpacity(0.25, 1)}
 			/>
 		</>
@@ -390,8 +374,7 @@ function IceCrackleLayers({ x, y, width, height, seed }: FoilLight & { seed: num
 					width={width}
 					height={height}
 					background={HOTSPOT_ICE_A}
-					overscan={1.5}
-					translate={slide(width * 0.18, height * 0.18, false)}
+					motion={slide(width * 0.18, height * 0.18, false)}
 				/>
 				<GradientLayer
 					x={x}
@@ -400,8 +383,7 @@ function IceCrackleLayers({ x, y, width, height, seed }: FoilLight & { seed: num
 					height={height}
 					background={ICE_SHEET}
 					blend="hard-light"
-					overscan={1.8}
-					translate={slide(width * 0.45, height * 0.45)}
+					motion={slide(width * 0.45, height * 0.45)}
 				/>
 				<SvgLayer
 					x={x}
@@ -425,8 +407,7 @@ function IceCrackleLayers({ x, y, width, height, seed }: FoilLight & { seed: num
 					width={width}
 					height={height}
 					background={HOTSPOT_ICE_B}
-					overscan={1.5}
-					translate={slide(width * 0.16, height * 0.16, false)}
+					motion={slide(width * 0.16, height * 0.16, false)}
 				/>
 				<SvgLayer
 					x={x}
@@ -492,7 +473,7 @@ export const FOIL_RECIPES: Record<FoilRecipeId, FoilRecipeDef> = {
 		id: 'ice-crackle',
 		title: 'Ice crackle',
 		description:
-			'Fracture lines exclusion-blended into a cool sheet — frost breaking the light instead of a rainbow.',
+			'Fracture lines exclusion-blended into a cool sheet  Efrost breaking the light instead of a rainbow.',
 		tint: '#0d1216',
 		phase: 5.6,
 		render: (l) => <IceCrackleLayers {...l} />

@@ -22,13 +22,34 @@ export interface FoilLight {
 	height: number;
 }
 
-/** Slides an oversized layer opposite (or with) the light. */
-export function slide(ampX: number, ampY: number, invert = true) {
+/** Slides an oversized layer opposite (or with) the light.
+ *  Carry `ampX`/`ampY` so GradientLayer can size itself to hide edges. */
+export function slide(ampX: number, ampY: number, invert = true): LayerMotion {
 	const s = invert ? -1 : 1;
-	return (lx: number, ly: number) => {
-		'worklet';
-		return { tx: s * ((lx - 50) / 50) * ampX, ty: s * ((ly - 50) / 50) * ampY };
+	return {
+		ampX,
+		ampY,
+		translate: (lx: number, ly: number) => {
+			'worklet';
+			return { tx: s * ((lx - 50) / 50) * ampX, ty: s * ((ly - 50) / 50) * ampY };
+		}
 	};
+}
+
+/**
+ * How big a moving layer must be so ±amp travel never shows an edge.
+ * Padding on each side must be ≥ amp; plus a small margin for rounding.
+ */
+export function overscanFor(
+	width: number,
+	height: number,
+	motion: LayerMotion | undefined,
+	margin = 0.18
+): number {
+	if (!motion) return 1;
+	const fx = width > 0 ? motion.ampX / width : 0;
+	const fy = height > 0 ? motion.ampY / height : 0;
+	return 1 + 2 * Math.max(fx, fy) + margin;
 }
 
 /** Opacity that rises (or falls) with distance from centre — simey's `--pfc`. */
@@ -42,6 +63,14 @@ export function pfcOpacity(base: number, coeff: number) {
 
 type Translate = (x: number, y: number) => { tx: number; ty: number };
 type OpacityFn = (x: number, y: number) => number;
+
+export interface LayerMotion {
+	translate: Translate;
+	/** Max travel in px along X when the light goes edge to edge. */
+	ampX: number;
+	/** Max travel in px along Y when the light goes edge to edge. */
+	ampY: number;
+}
 
 interface GroupProps {
 	x: SharedValue<number>;
@@ -81,8 +110,9 @@ interface GradientLayerProps {
 	background: string;
 	blend?: ViewStyle['mixBlendMode'];
 	filter?: ViewStyle['filter'];
+	/** Override auto-sizing. Prefer `motion` — overscan is derived from travel. */
 	overscan?: number;
-	translate?: Translate;
+	motion?: LayerMotion;
 	opacity?: number;
 	opacityFn?: OpacityFn;
 }
@@ -96,13 +126,15 @@ export function GradientLayer({
 	background,
 	blend,
 	filter,
-	overscan = 1,
-	translate,
+	overscan,
+	motion,
 	opacity = 1,
 	opacityFn
 }: GradientLayerProps) {
-	const w = width * overscan;
-	const h = height * overscan;
+	const scale = overscan ?? overscanFor(width, height, motion);
+	const w = width * scale;
+	const h = height * scale;
+	const translate = motion?.translate;
 	const style = useAnimatedStyle(() => {
 		const d = translate ? translate(x.value, y.value) : { tx: 0, ty: 0 };
 		return {
@@ -137,7 +169,7 @@ interface SvgLayerProps {
 	height: number;
 	blend?: ViewStyle['mixBlendMode'];
 	overscan?: number;
-	translate?: Translate;
+	motion?: LayerMotion;
 	opacity?: number;
 	render: (w: number, h: number) => ReactNode;
 }
@@ -149,13 +181,15 @@ export function SvgLayer({
 	width,
 	height,
 	blend,
-	overscan = 1,
-	translate,
+	overscan,
+	motion,
 	opacity = 1,
 	render
 }: SvgLayerProps) {
-	const w = width * overscan;
-	const h = height * overscan;
+	const scale = overscan ?? overscanFor(width, height, motion);
+	const w = width * scale;
+	const h = height * scale;
+	const translate = motion?.translate;
 	const style = useAnimatedStyle(() => {
 		const d = translate ? translate(x.value, y.value) : { tx: 0, ty: 0 };
 		return { transform: [{ translateX: d.tx }, { translateY: d.ty }] };

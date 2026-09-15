@@ -70,12 +70,13 @@ export type FoilLayerName = (typeof FOIL_LAYERS)[number];
 /**
  * Which layers each foil uses.
  *
- * `none` is tier 0 and is not bare: it gets the holo base every Concard carries.
- * `holo` is the sticker ceiling rather than a card tier, and leans on moving
- * bars because for a sticker, depth is the point.
+ * `none` is tier 0: only the inner edge lip. The web card also runs a hard-light
+ * holo wash + specular over every face, but those blend modes frost text on RN
+ * (and can band/pixelate), so the plain card stays readable here — foil starts
+ * at glitter. `holo` is the sticker ceiling rather than a card tier.
  */
 const RECIPES: Record<FoilKind, readonly FoilLayerName[]> = {
-	none: ['wash', 'spec', 'edge'],
+	none: ['edge'],
 	glitter: ['wash', 'glitter', 'spec', 'edge'],
 	holo: ['wash', 'bars', 'spec', 'edge'],
 	cosmic: ['space', 'nebula', 'stars', 'bars', 'spec', 'edge'],
@@ -90,25 +91,25 @@ const RECIPES: Record<FoilKind, readonly FoilLayerName[]> = {
 const DEFAULTS: Record<FoilLayerName, { blend: ViewStyle['mixBlendMode']; opacity: number }> = {
 	space: { blend: 'normal', opacity: 0.94 },
 	nebula: { blend: 'screen', opacity: 0.8 },
-	wash: { blend: 'hard-light', opacity: 0.2 },
+	// Soft-light + lower alpha: hard-light at 0.2 washed the face into glass on device.
+	wash: { blend: 'soft-light', opacity: 0.14 },
 	bars: { blend: 'color-dodge', opacity: 0.3 },
 	facets: { blend: 'color-dodge', opacity: 0.5 },
-	glitter: { blend: 'color-dodge', opacity: 0.8 },
+	glitter: { blend: 'color-dodge', opacity: 0.55 },
 	stars: { blend: 'plus-lighter', opacity: 0.9 },
-	spec: { blend: 'screen', opacity: 1 },
+	spec: { blend: 'screen', opacity: 0.55 },
 	edge: { blend: 'normal', opacity: 1 }
 };
 
-/** How far a layer slides per degree of tilt, as a fraction of card size.
- *  Bigger reads as deeper — right for a starfield, wrong for a card face. */
-const PARALLAX: Partial<Record<FoilLayerName, number>> = {
-	wash: 0.0022,
-	bars: 0.0016,
-	spec: 0.0024,
-	nebula: 0.0009,
-	stars: 0.0014,
-	facets: 0.0006
-};
+/**
+ * How far a layer slides per degree of tilt, as a fraction of card size.
+ *
+ * Deliberately empty while FlipCard owns the physical 3D tilt: translating foil
+ * layers every frame invalidates the hardware texture the body tilt depends on,
+ * and that was the glassy pixelation. The card tilting in perspective *is* the
+ * light cue; foil-lab's v2 engine still does its own motion for experiments.
+ */
+const PARALLAX: Partial<Record<FoilLayerName, number>> = {};
 
 /** Oversize for translated layers, so sliding never exposes an edge. */
 const OVERSCAN = 1.4;

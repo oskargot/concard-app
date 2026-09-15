@@ -1,14 +1,15 @@
-import { useMemo } from 'react';
-import { Link } from 'expo-router';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { Link, useFocusEffect, useRouter } from 'expo-router';
 import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/auth/AuthProvider';
-import { CardFace } from '@/card/CardFace';
-import { CardShell } from '@/card/CardShell';
+import { Card } from '@/card/Card';
+import { CardBack } from '@/card/CardBack';
 import { FlipCard } from '@/card/FlipCard';
 import { normalizeStyle } from '@/card/card-style';
 import { foilForTier } from '@/card/tiers';
+import { useCard } from '@/card/use-card';
 import type { CardView } from '@/card/types';
 import { SITE_ORIGIN } from '@/lib/env';
 import { profileUrl } from '@/lib/username';
@@ -27,9 +28,28 @@ export default function MyCardScreen() {
 	const { profile, signOut } = useAuth();
 	const { width } = useWindowDimensions();
 	const insets = useSafeAreaInsets();
+	const router = useRouter();
 	const cardWidth = Math.min(width - space.xl * 2, 340);
 
-	const view = useMemo<CardView>(
+	// The editor is pushed over this screen, so coming back fires no mount and a
+	// card edited there would otherwise still be drawn as it was on the way in.
+	const [refreshKey, setRefreshKey] = useState(0);
+	const firstFocus = useRef(true);
+	useFocusEffect(
+		useCallback(() => {
+			if (firstFocus.current) {
+				firstFocus.current = false;
+				return;
+			}
+			setRefreshKey((k) => k + 1);
+		}, [])
+	);
+
+	const { view: loaded } = useCard(profile?.active_card_id ?? null, profile, refreshKey);
+
+	// Until the row arrives, the profile alone is enough to draw a plausible card
+	// rather than a hole where one goes.
+	const fallback = useMemo<CardView>(
 		() => ({
 			title: profile?.display_name ?? 'Your name',
 			handle: profile?.username ?? 'you',
@@ -40,8 +60,6 @@ export default function MyCardScreen() {
 			art_x: 0.5,
 			art_y: 0.5,
 			art_scale: 1,
-			// Phase 3 loads the card row itself; until then the style defaults,
-			// which is what normalizeStyle returns for an absent value.
 			style: normalizeStyle(null),
 			affiliation: null,
 			links: [],
@@ -50,6 +68,8 @@ export default function MyCardScreen() {
 		[profile]
 	);
 
+	const view = loaded ?? fallback;
+
 	return (
 		<ScrollView contentContainerStyle={[styles.page, { paddingBottom: insets.bottom + space.xxl }]}>
 			<Text style={styles.kicker}>Drag to tilt</Text>
@@ -57,16 +77,28 @@ export default function MyCardScreen() {
 			<FlipCard
 				width={cardWidth}
 				renderFront={(rx, ry) => (
-					<CardShell
-						style={view.style}
+					<Card
+						view={view}
 						width={cardWidth}
 						foil={foilForTier(0)}
 						seed={profile?.username ?? 'me'}
 						rx={rx}
 						ry={ry}
-					>
-						<CardFace view={view} width={cardWidth} />
-					</CardShell>
+					/>
+				)}
+				renderBack={(rx, ry) => (
+					<CardBack
+						style={view.style}
+						width={cardWidth}
+						variant="qr"
+						url={
+							profile
+								? profileUrl(SITE_ORIGIN, profile.username).replace(/^https?:\/\//, '')
+								: undefined
+						}
+						rx={rx}
+						ry={ry}
+					/>
 				)}
 			/>
 
@@ -75,6 +107,14 @@ export default function MyCardScreen() {
 					{profileUrl(SITE_ORIGIN, profile.username).replace(/^https?:\/\//, '')}
 				</Text>
 			) : null}
+
+			<View style={styles.actions}>
+				<Button
+					label="Edit card"
+					onPress={() => router.push('/card/edit')}
+					disabled={!profile?.active_card_id}
+				/>
+			</View>
 
 			<Panel>
 				<Text style={styles.devTitle}>Phase 1 · the renderer</Text>
@@ -109,6 +149,7 @@ const styles = StyleSheet.create({
 		gap: space.lg
 	},
 	kicker: { ...type.meta, color: palette.creamFaint },
+	actions: { width: '100%' },
 	handle: { ...type.bodyStrong, color: palette.teal },
 	devTitle: { ...type.subtitle, color: palette.cream },
 	devBody: { ...type.small, color: palette.creamMute },

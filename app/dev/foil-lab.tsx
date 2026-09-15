@@ -27,8 +27,7 @@ import {
 import { Link } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { CardFace } from '@/card/CardFace';
-import { CardShell } from '@/card/CardShell';
+import { Card } from '@/card/Card';
 import { FlipCard } from '@/card/FlipCard';
 import { DEMO_CARD } from '@/card/demo-card';
 import { BG_KEYS, FRAME_KEYS, type BgKey, type FrameKey } from '@/card/card-style';
@@ -95,8 +94,8 @@ export default function FoilLabScreen() {
 				<FlipCard
 					width={cardWidth}
 					renderFront={(rx, ry) => (
-						<CardShell
-							style={view.style}
+						<Card
+							view={view}
 							width={cardWidth}
 							foil={kind}
 							seed="foil-lab"
@@ -106,9 +105,7 @@ export default function FoilLabScreen() {
 							foilOverrides={engine === 'legacy' ? overrides : undefined}
 							foilEngine={engine}
 							foilRecipe={engine === 'v2' ? (recipeOverride ?? undefined) : undefined}
-						>
-							<CardFace view={view} width={cardWidth} />
-						</CardShell>
+						/>
 					)}
 				/>
 			</View>

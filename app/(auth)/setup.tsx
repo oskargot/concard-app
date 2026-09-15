@@ -1,3 +1,4 @@
+import { Link } from 'expo-router';
 import { ScrollView, StyleSheet, Text } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -41,6 +42,17 @@ export default function SetupScreen() {
 					API, then restart the dev server so Expo picks them up.
 				</Body>
 			</Panel>
+
+			<Panel>
+				<Text style={styles.label}>Meanwhile</Text>
+				<Body>The foil screens work without Supabase — open them to tilt cards now.</Body>
+				<Link href="/dev/foil-lab" style={styles.link}>
+					Open the foil lab →
+				</Link>
+				<Link href="/dev/foil-sampler" style={styles.link}>
+					Open the foil sampler →
+				</Link>
+			</Panel>
 		</ScrollView>
 	);
 }
@@ -48,5 +60,6 @@ export default function SetupScreen() {
 const styles = StyleSheet.create({
 	page: { paddingHorizontal: space.xl, gap: space.lg },
 	label: { ...type.meta, color: palette.teal },
-	code: { ...type.bodyStrong, color: palette.butter }
+	code: { ...type.bodyStrong, color: palette.butter },
+	link: { ...type.bodyStrong, color: palette.teal, paddingTop: space.xs }
 });
