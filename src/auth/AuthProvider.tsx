@@ -127,7 +127,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 	}, []);
 
 	const status: AuthStatus = useMemo(() => {
-		if (!supabase) return 'unconfigured';
+		// The prototype is deliberately explorable without credentials. Screens
+		// use persisted fixture data and swap to this same API when configured.
+		if (!supabase) return 'ready';
 		if (!session) return 'signed-out';
 		if (!profile) return 'needs-username';
 		if (!profile.active_card_id) return 'needs-card';

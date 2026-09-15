@@ -81,6 +81,40 @@ export function starField(seed: number, count = 120): Speck[] {
 	return out;
 }
 
+export interface CrackleLine {
+	/** Points in 0..1 of the card's width/height, left to right. */
+	points: { x: number; y: number }[];
+	opacity: number;
+	/** Stroke width, as a fraction of the card's width. */
+	strokeWidth: number;
+}
+
+/**
+ * Ice crackle's fracture lines: a handful of near-diagonal jagged strokes,
+ * standing in for the reference's `illusion.png` moiré texture. Exclusion-blended
+ * over a colour sheet, a bright line inverts the sheet instead of tinting it —
+ * these don't need to look like anything on their own, only to break the sheet
+ * into sharp discontinuities where they cross it.
+ */
+export function crackleField(seed: number, lines = 10): CrackleLine[] {
+	const rand = rng(seed);
+	const out: CrackleLine[] = [];
+	for (let i = 0; i < lines; i++) {
+		const steps = 5 + Math.floor(rand() * 3);
+		const points: { x: number; y: number }[] = [];
+		let x = -0.15;
+		let y = rand();
+		points.push({ x, y });
+		for (let s = 0; s < steps; s++) {
+			x += 1.3 / steps;
+			y += (rand() - 0.5) * 0.16;
+			points.push({ x, y });
+		}
+		out.push({ points, opacity: 0.3 + rand() * 0.5, strokeWidth: 0.006 + rand() * 0.01 });
+	}
+	return out;
+}
+
 export interface Facet {
 	/** Polygon points in 0..1 card space. */
 	points: { x: number; y: number }[];

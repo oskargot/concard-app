@@ -80,6 +80,8 @@ export interface Database {
 					art_y: number;
 					art_scale: number;
 					style: Json;
+					/** Per-card link chips. See 20260915000000. */
+					links: Json;
 					affiliation: string | null;
 					affiliation_x: number;
 					affiliation_y: number;
@@ -98,6 +100,7 @@ export interface Database {
 					art_y?: number;
 					art_scale?: number;
 					style?: Json;
+					links?: Json;
 					affiliation?: string | null;
 					affiliation_x?: number;
 					affiliation_y?: number;
@@ -112,6 +115,7 @@ export interface Database {
 					art_y?: number;
 					art_scale?: number;
 					style?: Json;
+					links?: Json;
 					affiliation?: string | null;
 					affiliation_x?: number;
 					affiliation_y?: number;
