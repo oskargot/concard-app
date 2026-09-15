@@ -99,7 +99,12 @@ blend-mode cycle, opacity) against real hardware on both platforms.
 
 ### The card editor (`app/card/edit.tsx`, `src/card/editor/`, `src/card/use-card-editor.ts`)
 
-The card is the interface — there are no option panels. Three things follow from that and are
+**There is one editor, and this is it.** The My Card tab (`app/(tabs)/card.tsx`) used to carry a
+second one inline under a mode toggle; for a while the app had two, and a card could be styled one
+way in one and another way in the other. That tab is now display-only — view and QR — and pushes
+here. Resist putting editing controls back on it.
+
+The card is the interface — there are no option panels. Four things follow from that and are
 load-bearing:
 
 - **`CardFace` edits itself.** It takes an optional `edit` prop and swaps its `Text` nodes for
@@ -117,7 +122,15 @@ load-bearing:
 - **Autosave, no save button.** `useCardEditor` debounces the whole editable row into one update.
   Reads and writes both honour the inherit rule: null `display_name` / `pronouns` / `bio` mean "use
   the profile's", so the editor resolves them for display and writes null back whenever the value
-  matches the profile again.
+  matches the profile again. It reads the profile through a **ref, not a dependency** — supabase-js
+  replaces the profile object on every token refresh, and depending on its identity would reload the
+  card mid-edit and overwrite whatever was being typed.
+- **Stickers save on their own path.** `sticker_placements` is a separate table with no stable key to
+  update against — draft placement ids are local strings (`placed-<sticker>-<time>`), not the uuids
+  the table mints — so `saveStickers` replaces the card's whole set. That is two round trips, guarded
+  by a fingerprint of everything but the ids, so dragging a sticker rewrites them and typing a bio
+  does not. `Card`'s `overlay` prop carries the interactive `StickerLayer` and stands `CardOverlay`'s
+  static marks down, since both draw the same placements.
 
 `cardViewFrom` (`card-view.ts`) is the single row→`CardView` conversion, shared by the editor and by
 `useCard` so a card can't render differently depending on which screen loaded it.
@@ -170,11 +183,12 @@ app is the source of truth:
 
 ## Status
 
-Phase 2 of 7, plus the card editor. In: card renderer, foil lab, email/password auth, username claim,
-forced first card, card editor (text in place, style, per-card links, affiliation, photo upload). Not
-in: QR back, card switcher, stickers, photo pan/zoom, scanner + offline queue, binder, settings — Scan
-and Binder tabs are currently placeholders. Nothing has been exercised against a live Supabase project
-yet.
+In: card renderer, foil lab, email/password auth, username claim, forced first card, and the card
+editor — text edited in place, style, per-card links, affiliation, photo upload and stickers. The Scan,
+Binder, Stickers and home tabs are no longer placeholders; they arrived with the PRD restructure along
+with the zustand store (`src/store/`), which holds the active card, the binder cache and an offline
+scan queue. Not in: card switcher, photo pan/zoom, settings. Nothing has been exercised against a live
+Supabase project yet.
 
 **The editor needs a migration this repo does not own.** `supabase/migrations/20260915000000_card_links_and_art.sql`
 adds `cards.links` and the `card-art` storage bucket; copy it into the `concard` web repo and apply it
