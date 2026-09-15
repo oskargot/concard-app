@@ -3,17 +3,19 @@ import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } fr
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
-import {
-	RARITY_COLOR,
-	STICKER_CATALOG,
-	type StickerDefinition,
-	type StickerRarity
-} from '@/stickers/catalog';
-import { useConcardStore } from '@/store/useConcardStore';
+import type { StickerFoil } from '@/card/tiers';
+import { STICKER_CATALOG, type StickerDefinition } from '@/stickers/catalog';
 import { palette } from '@/theme/palette';
 import { radius, space, type } from '@/theme/tokens';
 
-type Filter = 'all' | StickerRarity;
+type Filter = 'all' | StickerFoil;
+
+const FILTERS: { value: Filter; label: string }[] = [
+	{ value: 'all', label: 'All' },
+	{ value: 'none', label: 'Base' },
+	{ value: 'glitter', label: 'Glitter' },
+	{ value: 'holo', label: 'Holo' }
+];
 
 export default function StickersScreen() {
 	const insets = useSafeAreaInsets();
@@ -21,9 +23,8 @@ export default function StickersScreen() {
 	const router = useRouter();
 	const [filter, setFilter] = useState<Filter>('all');
 	const [selected, setSelected] = useState<StickerDefinition | null>(null);
-	const equipped = useConcardStore((state) => state.active_card.stickers);
 	const visible = useMemo(
-		() => STICKER_CATALOG.filter((sticker) => filter === 'all' || sticker.rarity === filter),
+		() => STICKER_CATALOG.filter((sticker) => filter === 'all' || sticker.foil === filter),
 		[filter]
 	);
 	const tileWidth = (width - space.xl * 2 - space.sm * 3) / 4;
@@ -49,19 +50,19 @@ export default function StickersScreen() {
 			</View>
 
 			<Text style={styles.intro}>
-				Decorate your card with convention drops. Rarer stickers shimmer harder.
+				Decorate your card with convention drops, from base finds to full holo.
 			</Text>
 
 			<ScrollView horizontal showsHorizontalScrollIndicator={false}>
 				<View style={styles.filters}>
-					{(['all', 'common', 'uncommon', 'rare', 'legendary'] as Filter[]).map((item) => (
+					{FILTERS.map((item) => (
 						<Pressable
-							key={item}
-							onPress={() => setFilter(item)}
-							style={[styles.filter, filter === item && styles.filterOn]}
+							key={item.value}
+							onPress={() => setFilter(item.value)}
+							style={[styles.filter, filter === item.value && styles.filterOn]}
 						>
-							<Text style={[styles.filterText, filter === item && styles.filterTextOn]}>
-								{item.toUpperCase()}
+							<Text style={[styles.filterText, filter === item.value && styles.filterTextOn]}>
+								{item.label.toUpperCase()}
 							</Text>
 						</Pressable>
 					))}
@@ -70,8 +71,7 @@ export default function StickersScreen() {
 
 			<View style={styles.grid}>
 				{visible.map((sticker) => {
-					const count = sticker.unlocked ? (sticker.rarity === 'common' ? 3 : 1) : 0;
-					const onCard = equipped.filter((placed) => placed.sticker_id === sticker.id).length;
+					const count = sticker.unlocked ? (sticker.foil === 'none' ? 3 : 1) : 0;
 					return (
 						<Pressable
 							key={sticker.id}
@@ -92,17 +92,18 @@ export default function StickersScreen() {
 								<Text style={[styles.glyph, !sticker.unlocked && styles.lockedGlyph]}>
 									{sticker.unlocked ? sticker.glyph : '?'}
 								</Text>
+								{sticker.unlocked ? (
+									<View style={styles.quantityBadge}>
+										<Text style={styles.quantity}>×{count}</Text>
+									</View>
+								) : null}
 							</View>
-							<Text numberOfLines={2} style={styles.name}>
+							<Text numberOfLines={1} style={styles.name}>
 								{sticker.unlocked ? sticker.name : '???'}
 							</Text>
-							<View style={styles.metaRow}>
-								<Text style={[styles.rarity, { color: RARITY_COLOR[sticker.rarity] }]}>
-									{sticker.rarity.toUpperCase()}
-								</Text>
-								<Text style={styles.quantity}>×{count}</Text>
-							</View>
-							{onCard ? <Text style={styles.equipped}>ON CARD ×{onCard}</Text> : null}
+							<Text style={[styles.foil, sticker.foil === 'holo' && styles.foilHolo]}>
+								{sticker.foil === 'none' ? 'BASE' : sticker.foil.toUpperCase()}
+							</Text>
 						</Pressable>
 					);
 				})}
@@ -134,8 +135,8 @@ export default function StickersScreen() {
 					<Text style={styles.detailTitle}>
 						{selected.unlocked ? selected.name : 'Undiscovered'}
 					</Text>
-					<Text style={[styles.rarity, { color: RARITY_COLOR[selected.rarity] }]}>
-						{selected.rarity.toUpperCase()} · {selected.foil.toUpperCase()}
+					<Text style={[styles.detailFoil, selected.foil === 'holo' && styles.foilHolo]}>
+						{selected.foil === 'none' ? 'BASE' : selected.foil.toUpperCase()}
 					</Text>
 					<Text style={styles.detailBody}>
 						{selected.unlocked
@@ -185,16 +186,19 @@ const styles = StyleSheet.create({
 	filterTextOn: { color: palette.void },
 	grid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
 	tile: {
-		padding: space.sm,
+		padding: 6,
 		gap: space.xs,
+		aspectRatio: 0.9,
 		backgroundColor: palette.raised,
 		borderRadius: radius.lg,
 		borderWidth: StyleSheet.hairlineWidth,
 		borderColor: palette.line
 	},
 	sticker: {
-		aspectRatio: 1,
-		borderRadius: radius.xl,
+		width: 42,
+		height: 42,
+		alignSelf: 'center',
+		borderRadius: 21,
 		alignItems: 'center',
 		justifyContent: 'center',
 		borderWidth: 3,
@@ -203,11 +207,24 @@ const styles = StyleSheet.create({
 	holo: { boxShadow: `0 0 18px ${palette.tealGlow}` },
 	glyph: { ...type.hero, color: palette.void, fontSize: 32 },
 	lockedGlyph: { color: palette.creamFaint },
-	name: { ...type.small, color: palette.cream, minHeight: 36 },
-	metaRow: { flexDirection: 'row', justifyContent: 'space-between' },
-	rarity: { ...type.meta, fontSize: 8 },
-	quantity: { ...type.small, color: palette.creamMute },
-	equipped: { ...type.meta, color: palette.teal, fontSize: 8 },
+	name: { ...type.small, color: palette.cream, minHeight: 18 },
+	foil: { ...type.meta, color: palette.creamFaint, fontSize: 8 },
+	foilHolo: { color: palette.teal },
+	quantityBadge: {
+		position: 'absolute',
+		right: -7,
+		top: -5,
+		minWidth: 23,
+		height: 18,
+		paddingHorizontal: 4,
+		borderRadius: radius.pill,
+		backgroundColor: palette.void,
+		alignItems: 'center',
+		justifyContent: 'center',
+		borderWidth: 1,
+		borderColor: palette.lineStrong
+	},
+	quantity: { ...type.meta, color: palette.cream, fontSize: 8, letterSpacing: 0 },
 	pressed: { opacity: 0.74, transform: [{ scale: 0.98 }] },
 	combine: {
 		flexDirection: 'row',
@@ -245,6 +262,7 @@ const styles = StyleSheet.create({
 	},
 	detailGlyph: { ...type.hero, fontSize: 56, color: palette.void },
 	detailTitle: { ...type.title, color: palette.cream },
+	detailFoil: { ...type.meta, color: palette.creamMute },
 	detailBody: { ...type.small, color: palette.creamMute, textAlign: 'center' },
 	useButton: {
 		marginTop: space.sm,
