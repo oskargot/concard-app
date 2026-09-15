@@ -1,0 +1,17 @@
+{
+	"name": "concard-app",
+	"install": "npm install",
+	"terminals": [
+		{
+			"name": "expo-web",
+			"command": "npx expo start --web --port 8081",
+			"description": "Expo dev server with the web target on http://localhost:8081. Also serves the Metro bundler for Expo Go on device (scan the QR from this terminal)."
+		}
+	],
+	"ports": [
+		{
+			"name": "expo",
+			"port": 8081
+		}
+	]
+}

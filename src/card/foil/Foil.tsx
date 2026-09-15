@@ -50,6 +50,7 @@ import {
 import { FoilV2 } from './FoilV2';
 import type { FoilRecipeId } from './recipes';
 import { facetField, glitterField, hashSeed, starField } from './speckle';
+import { SamplerFoil, type SamplerFoilPreset } from './FoilSwatch';
 
 /** Which foil engine to draw. `v2` is the shine+glare experiment in foil-lab. */
 export type FoilEngine = 'legacy' | 'v2';
@@ -77,7 +78,7 @@ export type FoilLayerName = (typeof FOIL_LAYERS)[number];
  * at glitter. `holo` is the sticker ceiling rather than a card tier.
  */
 const RECIPES: Record<FoilKind, readonly FoilLayerName[]> = {
-	none: ['edge'],
+	none: ['spec', 'edge'],
 	glitter: ['wash', 'glitter', 'spec', 'edge'],
 	holo: ['wash', 'bars', 'spec', 'edge'],
 	cosmic: ['space', 'nebula', 'stars', 'bars', 'spec', 'edge'],
@@ -98,19 +99,35 @@ const DEFAULTS: Record<FoilLayerName, { blend: ViewStyle['mixBlendMode']; opacit
 	facets: { blend: 'color-dodge', opacity: 0.5 },
 	glitter: { blend: 'color-dodge', opacity: 0.55 },
 	stars: { blend: 'plus-lighter', opacity: 0.9 },
-	spec: { blend: 'screen', opacity: 0.55 },
+	spec: { blend: 'screen', opacity: 0.42 },
 	edge: { blend: 'normal', opacity: 1 }
 };
 
-/**
- * How far a layer slides per degree of tilt, as a fraction of card size.
- *
- * Deliberately empty while FlipCard owns the physical 3D tilt: translating foil
- * layers every frame invalidates the hardware texture the body tilt depends on,
- * and that was the glassy pixelation. The card tilting in perspective *is* the
- * light cue; foil-lab's v2 engine still does its own motion for experiments.
- */
-const PARALLAX: Partial<Record<FoilLayerName, number>> = {};
+const SAMPLER_PRESET: Partial<Record<FoilKind, SamplerFoilPreset>> = {
+	glitter: 'rainbow-glitter',
+	holo: 'linear-holo',
+	cosmic: 'cosmos-speckle',
+	mosaic: 'radiant-crosshatch'
+};
+
+/** Sampler recipes are intentionally accents, not translucent curtains. */
+const SAMPLER_INTENSITY: Partial<Record<FoilKind, number>> = {
+	glitter: 0.2,
+	holo: 0.22,
+	cosmic: 0.24,
+	mosaic: 0.22
+};
+
+/** How far a layer slides per degree of tilt, as a fraction of card size.
+ *  Bigger reads as deeper — right for a starfield, wrong for a card face. */
+const PARALLAX: Partial<Record<FoilLayerName, number>> = {
+	wash: 0.0022,
+	bars: 0.0016,
+	spec: 0.0024,
+	nebula: 0.0009,
+	stars: 0.0014,
+	facets: 0.0006
+};
 
 /** Oversize for translated layers, so sliding never exposes an edge. */
 const OVERSCAN = 1.4;
@@ -122,6 +139,13 @@ export interface FoilOverride {
 	enabled?: boolean;
 	blend?: ViewStyle['mixBlendMode'];
 	opacity?: number;
+}
+
+export interface SamplerFoilOptions {
+	preset?: SamplerFoilPreset;
+	blend?: ViewStyle['mixBlendMode'];
+	/** Absolute sampler opacity, before the CardShell intensity multiplier. */
+	intensity?: number;
 }
 
 export interface FoilProps {
@@ -140,6 +164,8 @@ export interface FoilProps {
 	intensity?: number;
 	/** Per-layer overrides. Used by /dev/foil-lab; production passes nothing. */
 	overrides?: Partial<Record<FoilLayerName, FoilOverride>>;
+	/** Production sampler controls used by the on-device holo lab. */
+	samplerOptions?: SamplerFoilOptions;
 	/** Thumbnails ask for sparser dot fields. */
 	detail?: 'full' | 'thumb';
 	/** `v2` swaps in the shine+glare recipes. Production leaves this unset. */
@@ -163,6 +189,8 @@ export function Foil({
 	recipe
 }: FoilProps) {
 	if (intensity <= 0) return null;
+	const sampler = overrides ? undefined : (samplerOptions?.preset ?? SAMPLER_PRESET[kind]);
+	const recipe = sampler ? (['spec', 'edge'] as const) : RECIPES[kind];
 
 	if (engine === 'v2') {
 		return (
@@ -187,7 +215,19 @@ export function Foil({
 			style={[StyleSheet.absoluteFill, styles.stack, { borderRadius: radius }]}
 			pointerEvents="none"
 		>
-			{RECIPES[kind].map((name) => {
+			{sampler ? (
+				<SamplerFoil
+					preset={sampler}
+					width={width}
+					height={height}
+					rx={rx}
+					ry={ry}
+					seed={seed}
+					intensity={(samplerOptions?.intensity ?? SAMPLER_INTENSITY[kind] ?? 0.18) * intensity}
+					blend={samplerOptions?.blend}
+				/>
+			) : null}
+			{recipe.map((name) => {
 				const o = overrides?.[name];
 				if (o?.enabled === false) return null;
 				return (
