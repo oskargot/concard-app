@@ -19,8 +19,18 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { repeatingLinear } from './gradients';
-import { FOIL_RECIPES, SAMPLER_RECIPE_IDS, type FoilRecipeId } from './recipes';
-import { hashSeed } from './speckle';
+import { CoverFoilTexture, TiledFoilTexture } from './FoilTexture';
+import {
+	cosmosBand,
+	crosshatchBars,
+	iceCrackleSheet,
+	linearHoloBands,
+	linearHoloBarcode,
+	linearHoloScanlines,
+	radialHotspot,
+	rainbowGlitterPastelBand,
+	rainbowGlitterSheet
+} from './sampler-gradients';
 import { palette } from '../../theme/palette';
 import { radius, space, type as t } from '../../theme/tokens';
 
@@ -189,7 +199,594 @@ export const SAMPLER_SWATCHES: SwatchDef[] = SAMPLER_RECIPE_IDS.map((id) => {
 		phase: recipe.phase,
 		render: recipe.render
 	};
-});
+}
+
+/** A worklet factory: opacity that rises (or falls) with distance from centre —
+ *  the CSS export's `--pfc`, "how far off-centre the light has travelled". */
+function pfcOpacity(base: number, coeff: number) {
+	return (lx: number, ly: number) => {
+		'worklet';
+		const pfc = Math.min(1, Math.hypot(lx - 50, ly - 50) / 60);
+		return base + coeff * pfc;
+	};
+}
+
+type Translate = (x: number, y: number) => { tx: number; ty: number };
+type OpacityFn = (x: number, y: number) => number;
+
+interface GroupProps {
+	x: SharedValue<number>;
+	y: SharedValue<number>;
+	blend?: ViewStyle['mixBlendMode'];
+	opacity?: number;
+	opacityFn?: OpacityFn;
+	filter?: ViewStyle['filter'];
+	children: ReactNode;
+}
+
+/** Stands in for one CSS div: its children blend against each other inside
+ *  (`isolation:'isolate'`), then the whole composite blends outward as one
+ *  layer via this view's own `mixBlendMode` — exactly what `background-blend-mode`
+ *  plus an outer `mix-blend-mode` did in the export. */
+function Group({ x, y, blend, opacity = 1, opacityFn, filter, children }: GroupProps) {
+	const style = useAnimatedStyle(
+		() => ({ opacity: opacityFn ? opacityFn(x.value, y.value) : opacity }),
+		[opacity, opacityFn]
+	);
+	return (
+		<Animated.View
+			pointerEvents="none"
+			style={[
+				StyleSheet.absoluteFill,
+				{ isolation: 'isolate' as const, mixBlendMode: blend, filter },
+				style
+			]}
+		>
+			{children}
+		</Animated.View>
+	);
+}
+
+interface GradientLayerProps {
+	x: SharedValue<number>;
+	y: SharedValue<number>;
+	width: number;
+	height: number;
+	background: string;
+	blend?: ViewStyle['mixBlendMode'];
+	filter?: ViewStyle['filter'];
+	overscan?: number;
+	translate?: Translate;
+	opacity?: number;
+	opacityFn?: OpacityFn;
+}
+
+/** One CSS `background-image` layer: a fixed gradient, oversized so it never
+ *  shows an edge, translated by `translate` instead of restyled. */
+function GradientLayer({
+	x,
+	y,
+	width,
+	height,
+	background,
+	blend,
+	filter,
+	overscan = 1,
+	translate,
+	opacity = 1,
+	opacityFn
+}: GradientLayerProps) {
+	const w = width * overscan;
+	const h = height * overscan;
+	const style = useAnimatedStyle(() => {
+		const d = translate ? translate(x.value, y.value) : { tx: 0, ty: 0 };
+		return {
+			transform: [{ translateX: d.tx }, { translateY: d.ty }],
+			opacity: opacityFn ? opacityFn(x.value, y.value) : opacity
+		};
+	});
+	return (
+		<Animated.View
+			pointerEvents="none"
+			style={[
+				{
+					position: 'absolute',
+					left: -(w - width) / 2,
+					top: -(h - height) / 2,
+					width: w,
+					height: h,
+					mixBlendMode: blend,
+					filter,
+					experimental_backgroundImage: background
+				},
+				style
+			]}
+		/>
+	);
+}
+
+interface TextureLayerProps {
+	x: SharedValue<number>;
+	y: SharedValue<number>;
+	width: number;
+	height: number;
+	blend?: ViewStyle['mixBlendMode'];
+	overscan?: number;
+	translate?: Translate;
+	opacity?: number;
+	render: (w: number, h: number) => ReactNode;
+}
+
+/** Same idea as `GradientLayer`, for card-relative raster texture layers. */
+function TextureLayer({
+	x,
+	y,
+	width,
+	height,
+	blend,
+	overscan = 1,
+	translate,
+	opacity = 1,
+	render
+}: TextureLayerProps) {
+	const w = width * overscan;
+	const h = height * overscan;
+	const style = useAnimatedStyle(() => {
+		const d = translate ? translate(x.value, y.value) : { tx: 0, ty: 0 };
+		return { transform: [{ translateX: d.tx }, { translateY: d.ty }] };
+	});
+	return (
+		<Animated.View
+			pointerEvents="none"
+			style={[
+				{
+					position: 'absolute',
+					left: -(w - width) / 2,
+					top: -(h - height) / 2,
+					width: w,
+					height: h,
+					opacity,
+					mixBlendMode: blend
+				},
+				style
+			]}
+		>
+			{render(w, h)}
+		</Animated.View>
+	);
+}
+
+// ---------------------------------------------------------------------------
+// The five recipes
+// ---------------------------------------------------------------------------
+
+const HOLO_SCANLINES = linearHoloScanlines();
+const HOLO_BANDS = linearHoloBands();
+const HOLO_BARCODE = linearHoloBarcode();
+const HOTSPOT_ICE_WHITE = radialHotspot('hsl(180,100%,95%)', 'rgba(0,0,0,0.85)');
+
+function LinearHoloLayers({ x, y, width, height }: SwatchLight) {
+	return (
+		<>
+			<Group
+				x={x}
+				y={y}
+				blend="color-dodge"
+				filter={[{ brightness: 1.05 }, { contrast: 1.15 }, { saturate: 1.2 }]}
+			>
+				<GradientLayer x={x} y={y} width={width} height={height} background={HOLO_SCANLINES} />
+				<GradientLayer
+					x={x}
+					y={y}
+					width={width}
+					height={height}
+					background={HOLO_BANDS}
+					blend="overlay"
+					overscan={1.6}
+					translate={slide(width * 0.5, height * 0.6)}
+				/>
+				<TextureLayer
+					x={x}
+					y={y}
+					width={width}
+					height={height}
+					blend="soft-light"
+					opacity={0.55}
+					render={(w, h) => <TiledFoilTexture name="grain" width={w} height={h} tileScale={0.32} />}
+				/>
+			</Group>
+			<Group
+				x={x}
+				y={y}
+				blend="hard-light"
+				opacity={0.6}
+				filter={[{ brightness: 1.1 }, { contrast: 1.1 }]}
+			>
+				<GradientLayer
+					x={x}
+					y={y}
+					width={width}
+					height={height}
+					background={HOLO_BARCODE}
+					overscan={1.4}
+					translate={slide(width * 0.22, height * 0.1)}
+				/>
+				<GradientLayer
+					x={x}
+					y={y}
+					width={width}
+					height={height}
+					background={HOLO_BARCODE}
+					blend="screen"
+					overscan={1.4}
+					translate={slide(width * 0.18, height * 0.16, false)}
+				/>
+			</Group>
+			<GradientLayer
+				x={x}
+				y={y}
+				width={width}
+				height={height}
+				background={HOTSPOT_ICE_WHITE}
+				blend="overlay"
+				filter={[{ brightness: 0.75 }, { contrast: 2.2 }]}
+				overscan={1.7}
+				translate={slide(width * 0.32, height * 0.32, false)}
+			/>
+		</>
+	);
+}
+
+const GLITTER_SHEET_A = rainbowGlitterSheet('-30deg');
+const GLITTER_SHEET_B = rainbowGlitterSheet('-60deg');
+const GLITTER_PASTEL = rainbowGlitterPastelBand();
+const HOTSPOT_WARM = radialHotspot('hsla(50,20%,90%,0.7)', 'rgba(0,0,0,0.85)');
+
+function RainbowGlitterLayers({ x, y, width, height }: SwatchLight) {
+	return (
+		<>
+			<Group x={x} y={y} filter={[{ contrast: 3 }, { saturate: 1.8 }]}>
+				<GradientLayer
+					x={x}
+					y={y}
+					width={width}
+					height={height}
+					background={GLITTER_SHEET_A}
+					overscan={1.7}
+					translate={slide(width * 0.4, height * 0.55)}
+				/>
+				<TextureLayer
+					x={x}
+					y={y}
+					width={width}
+					height={height}
+					blend="overlay"
+					render={(w, h) => (
+						<TiledFoilTexture name="glitter" width={w} height={h} tileScale={0.25} />
+					)}
+				/>
+				<GradientLayer
+					x={x}
+					y={y}
+					width={width}
+					height={height}
+					background={GLITTER_PASTEL}
+					blend="luminosity"
+					overscan={1.5}
+					translate={slide(0, height * 0.5)}
+				/>
+			</Group>
+			<Group
+				x={x}
+				y={y}
+				blend="color-dodge"
+				filter={[{ contrast: 3 }]}
+				opacityFn={pfcOpacity(1, -0.4)}
+			>
+				<GradientLayer
+					x={x}
+					y={y}
+					width={width}
+					height={height}
+					background={GLITTER_SHEET_B}
+					overscan={1.7}
+					translate={slide(width * 0.4, height * 0.55, false)}
+				/>
+				<TextureLayer
+					x={x}
+					y={y}
+					width={width}
+					height={height}
+					blend="overlay"
+					render={(w, h) => (
+						<TiledFoilTexture name="glitter" width={w} height={h} tileScale={0.25} />
+					)}
+				/>
+			</Group>
+			<GradientLayer
+				x={x}
+				y={y}
+				width={width}
+				height={height}
+				background={HOTSPOT_WARM}
+				blend="overlay"
+				opacity={0.75}
+				overscan={1.6}
+				translate={slide(width * 0.3, height * 0.3, false)}
+			/>
+		</>
+	);
+}
+
+const CROSSHATCH_A = crosshatchBars('-45deg');
+const CROSSHATCH_B = crosshatchBars('45deg');
+const HOTSPOT_CROSS_ELLIPSE = radialHotspot('hsl(0,0%,96%)', 'hsl(175,100%,88%)', 20, 130);
+const HOTSPOT_CROSS_GLOW = radialHotspot('rgba(255,255,255,0.9)', 'rgba(0,0,0,0.4)', 5, 110);
+
+function RadiantCrosshatchLayers({ x, y, width, height }: SwatchLight) {
+	return (
+		<>
+			<Group
+				x={x}
+				y={y}
+				blend="color-dodge"
+				filter={[{ brightness: 0.9 }, { contrast: 2 }, { saturate: 1.6 }]}
+			>
+				<GradientLayer
+					x={x}
+					y={y}
+					width={width}
+					height={height}
+					background={CROSSHATCH_A}
+					overscan={1.6}
+					translate={slide(width * 0.35, height * 0.35)}
+				/>
+				<GradientLayer
+					x={x}
+					y={y}
+					width={width}
+					height={height}
+					background={CROSSHATCH_B}
+					blend="darken"
+					overscan={1.6}
+					translate={slide(width * 0.35, height * 0.35)}
+				/>
+				<GradientLayer
+					x={x}
+					y={y}
+					width={width}
+					height={height}
+					background={HOTSPOT_CROSS_ELLIPSE}
+					blend="exclusion"
+					overscan={1.6}
+					translate={slide(width * 0.14, height * 0.14, false)}
+				/>
+			</Group>
+			<TextureLayer
+				x={x}
+				y={y}
+				width={width}
+				height={height}
+				blend="multiply"
+				opacity={0.9}
+				render={(w, h) => <TiledFoilTexture name="trainer" width={w} height={h} tileScale={0.25} />}
+			/>
+			<TextureLayer
+				x={x}
+				y={y}
+				width={width}
+				height={height}
+				blend="overlay"
+				opacity={0.55}
+				render={(w, h) => <TiledFoilTexture name="glitter" width={w} height={h} tileScale={0.15} />}
+			/>
+			<GradientLayer
+				x={x}
+				y={y}
+				width={width}
+				height={height}
+				background={HOTSPOT_CROSS_GLOW}
+				blend="hard-light"
+				filter={[{ brightness: 1 }, { contrast: 1.5 }]}
+				overscan={1.6}
+				translate={slide(width * 0.3, height * 0.3, false)}
+			/>
+		</>
+	);
+}
+
+const COSMOS_BAND = cosmosBand();
+const HOTSPOT_COSMOS = radialHotspot('hsla(204,100%,95%,0.9)', 'hsl(250,15%,15%)', 5, 150);
+
+function CosmosSpeckleLayers({ x, y, width, height }: SwatchLight) {
+	return (
+		<>
+			<Group
+				x={x}
+				y={y}
+				blend="color-dodge"
+				filter={[{ brightness: 1.1 }, { contrast: 1.1 }, { saturate: 0.9 }]}
+			>
+				<GradientLayer
+					x={x}
+					y={y}
+					width={width}
+					height={height}
+					background={COSMOS_BAND}
+					overscan={2.2}
+					translate={slide(width * 0.9, height * 0.5)}
+				/>
+				<TextureLayer
+					x={x}
+					y={y}
+					width={width}
+					height={height}
+					blend="color-burn"
+					render={() => <CoverFoilTexture name="cosmosBottom" />}
+				/>
+				<TextureLayer
+					x={x}
+					y={y}
+					width={width}
+					height={height}
+					blend="overlay"
+					opacity={0.75}
+					render={() => <CoverFoilTexture name="cosmosMiddle" />}
+				/>
+				<TextureLayer
+					x={x}
+					y={y}
+					width={width}
+					height={height}
+					blend="screen"
+					opacity={0.55}
+					render={() => <CoverFoilTexture name="cosmosTop" />}
+				/>
+			</Group>
+			<GradientLayer
+				x={x}
+				y={y}
+				width={width}
+				height={height}
+				background={HOTSPOT_COSMOS}
+				blend="overlay"
+				overscan={1.6}
+				translate={slide(width * 0.3, height * 0.3, false)}
+				opacityFn={pfcOpacity(0.25, 1)}
+			/>
+		</>
+	);
+}
+
+const ICE_SHEET = iceCrackleSheet();
+const HOTSPOT_ICE_A = radialHotspot('hsla(190,100%,96%,0.85)', 'hsl(210,30%,10%)', 5, 90);
+const HOTSPOT_ICE_B = radialHotspot('hsla(195,100%,92%,0.5)', 'hsl(0,0%,10%)', 8, 70);
+
+function IceCrackleLayers({ x, y, width, height }: SwatchLight) {
+	return (
+		<>
+			<Group
+				x={x}
+				y={y}
+				blend="color-dodge"
+				opacity={0.85}
+				filter={[{ brightness: 0.55 }, { contrast: 1.7 }, { saturate: 0.85 }]}
+			>
+				<GradientLayer
+					x={x}
+					y={y}
+					width={width}
+					height={height}
+					background={HOTSPOT_ICE_A}
+					overscan={1.5}
+					translate={slide(width * 0.18, height * 0.18, false)}
+				/>
+				<GradientLayer
+					x={x}
+					y={y}
+					width={width}
+					height={height}
+					background={ICE_SHEET}
+					blend="hard-light"
+					overscan={1.8}
+					translate={slide(width * 0.45, height * 0.45)}
+				/>
+				<TextureLayer
+					x={x}
+					y={y}
+					width={width}
+					height={height}
+					blend="exclusion"
+					opacity={0.65}
+					render={(w, h) => (
+						<TiledFoilTexture name="illusion" width={w} height={h} tileScale={0.62} />
+					)}
+				/>
+			</Group>
+			<Group
+				x={x}
+				y={y}
+				blend="overlay"
+				filter={[{ brightness: 0.9 }, { contrast: 1.6 }, { saturate: 0.6 }]}
+				opacityFn={pfcOpacity(0.5, 0.5)}
+			>
+				<GradientLayer
+					x={x}
+					y={y}
+					width={width}
+					height={height}
+					background={HOTSPOT_ICE_B}
+					overscan={1.5}
+					translate={slide(width * 0.16, height * 0.16, false)}
+				/>
+				<TextureLayer
+					x={x}
+					y={y}
+					width={width}
+					height={height}
+					blend="color-dodge"
+					opacity={0.5}
+					render={(w, h) => (
+						<TiledFoilTexture name="glitter" width={w} height={h} tileScale={0.28} />
+					)}
+				/>
+			</Group>
+		</>
+	);
+}
+
+export const SAMPLER_SWATCHES: SwatchDef[] = [
+	{
+		id: 'linear-holo',
+		index: '01',
+		title: 'Linear holo',
+		description:
+			'Rainbow bands over fine scanlines, color-dodged, sliding against a hard-lit barcode sparkle.',
+		tint: '#101218',
+		phase: 0,
+		render: (l) => <LinearHoloLayers {...l} />
+	},
+	{
+		id: 'rainbow-glitter',
+		index: '02',
+		title: 'Rainbow glitter',
+		description:
+			'Two counter-sliding rainbow sheets with a glitter fleck field worked between them.',
+		tint: '#14101a',
+		phase: 1.1,
+		render: (l) => <RainbowGlitterLayers {...l} />
+	},
+	{
+		id: 'radiant-crosshatch',
+		index: '03',
+		title: 'Radiant crosshatch',
+		description:
+			'Two greyscale bar stacks at ±45°, darken-blended into a crosshatch, then lit by an ellipse of glow.',
+		tint: '#0f1414',
+		phase: 2.3,
+		render: (l) => <RadiantCrosshatchLayers {...l} />
+	},
+	{
+		id: 'cosmos-speckle',
+		index: '04',
+		title: 'Cosmos speckle',
+		description:
+			'A star-speckled field color-burned against a drifting rainbow band, so galaxies glide as the light moves.',
+		tint: '#0d1018',
+		phase: 3.4,
+		render: (l) => <CosmosSpeckleLayers {...l} />
+	},
+	{
+		id: 'ice-crackle',
+		index: '13',
+		title: 'Ice crackle',
+		description:
+			'Fracture lines exclusion-blended into a cool sheet — frost breaking the light instead of a rainbow.',
+		tint: '#0d1216',
+		phase: 5.6,
+		render: (l) => <IceCrackleLayers {...l} />
+	}
+];
 
 // ---------------------------------------------------------------------------
 // Blank card mock — the export's placeholder card, not a real Concard

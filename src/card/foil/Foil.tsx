@@ -35,9 +35,10 @@
 import { useMemo } from 'react';
 import { StyleSheet, View, type ViewStyle } from 'react-native';
 import Animated, { interpolate, useAnimatedStyle, type SharedValue } from 'react-native-reanimated';
-import Svg, { Circle, Defs, LinearGradient, Polygon, Stop } from 'react-native-svg';
+import Svg, { Defs, LinearGradient, Polygon, Stop } from 'react-native-svg';
 
 import type { FoilKind } from '../tiers';
+import { CoverFoilTexture, TiledFoilTexture } from './FoilTexture';
 import {
 	HOLO_SPECTRUM,
 	holoWash,
@@ -318,7 +319,18 @@ function LayerContent({
 				</>
 			);
 		case 'bars':
-			return <View style={[StyleSheet.absoluteFill, { experimental_backgroundImage: BARS }]} />;
+			return (
+				<>
+					<View style={[StyleSheet.absoluteFill, { experimental_backgroundImage: BARS }]} />
+					<TiledFoilTexture
+						name="grain"
+						width={width}
+						height={height}
+						tileScale={0.32}
+						opacity={0.28}
+					/>
+				</>
+			);
 		case 'spec':
 			return <View style={[StyleSheet.absoluteFill, { experimental_backgroundImage: SPEC }]} />;
 		case 'edge':
@@ -340,53 +352,18 @@ function LayerContent({
 			);
 		case 'glitter':
 			return (
-				<DotField seed={numericSeed} kind="glitter" width={width} height={height} thumb={thumb} />
+				<TiledFoilTexture
+					name="glitter"
+					width={width}
+					height={height}
+					tileScale={thumb ? 0.34 : 0.25}
+				/>
 			);
 		case 'stars':
-			return (
-				<DotField seed={numericSeed} kind="stars" width={width} height={height} thumb={thumb} />
-			);
+			return <CoverFoilTexture name="cosmosTop" opacity={0.9} />;
 		case 'facets':
 			return <FacetField seed={numericSeed} width={width} height={height} thumb={thumb} />;
 	}
-}
-
-/** Glitter flecks and starfields. Drawn white and blended, so their colour comes
- *  from the layers underneath — which is what makes the light appear to travel
- *  *across* the glitter rather than the glitter itself moving. */
-function DotField({
-	seed,
-	kind,
-	width,
-	height,
-	thumb
-}: {
-	seed: number;
-	kind: 'glitter' | 'stars';
-	width: number;
-	height: number;
-	thumb: boolean;
-}) {
-	const specks = useMemo(
-		() =>
-			kind === 'glitter' ? glitterField(seed, thumb ? 70 : 220) : starField(seed, thumb ? 45 : 120),
-		[seed, kind, thumb]
-	);
-
-	return (
-		<Svg width={width} height={height} style={StyleSheet.absoluteFill}>
-			{specks.map((s, i) => (
-				<Circle
-					key={i}
-					cx={s.x * width}
-					cy={s.y * height}
-					r={s.r * width}
-					fill="#ffffff"
-					opacity={s.opacity}
-				/>
-			))}
-		</Svg>
-	);
 }
 
 /** The mosaic tier: a jittered lattice of triangles, each sampling the holo
