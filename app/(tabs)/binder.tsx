@@ -12,7 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CardFace } from '@/card/CardFace';
 import { CardShell } from '@/card/CardShell';
-import { StaticCard } from '@/card/FlipCard';
+import { FlipCard, StaticCard } from '@/card/FlipCard';
 import { StickerLayer } from '@/card/StickerLayer';
 import { foilForTier, meetingsToNextTier, tierLabel } from '@/card/tiers';
 import type { CollectedCard } from '@/card/types';
@@ -135,9 +135,10 @@ export default function BinderScreen() {
 									<Text style={styles.closeText}>×</Text>
 								</Pressable>
 							</View>
-							<StaticCard
+							<FlipCard
 								width={Math.min(width - space.xl * 4, 310)}
-								render={(rx, ry) => (
+								flippable={false}
+								renderFront={(rx, ry) => (
 									<CardShell
 										style={selected.view.style}
 										width={Math.min(width - space.xl * 4, 310)}
@@ -156,6 +157,7 @@ export default function BinderScreen() {
 									</CardShell>
 								)}
 							/>
+							<Text style={styles.tiltHint}>DRAG TO MOVE THE LIGHT</Text>
 							<View style={styles.progress}>
 								<View style={styles.progressHead}>
 									<Text style={styles.progressTier}>{tierLabel(selected.tier)} tier</Text>
@@ -276,6 +278,7 @@ const styles = StyleSheet.create({
 	},
 	closeText: { fontSize: 26, color: palette.cream },
 	progress: { width: '100%', gap: space.sm },
+	tiltHint: { ...type.meta, color: palette.teal, fontSize: 9 },
 	progressHead: { flexDirection: 'row', justifyContent: 'space-between' },
 	progressTier: { ...type.bodyStrong, color: palette.butter },
 	progressCount: { ...type.small, color: palette.creamMute },
