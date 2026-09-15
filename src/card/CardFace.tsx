@@ -356,13 +356,14 @@ function Photo({
 }) {
 	const m = shellMetrics(width, view.style.shape);
 	const shape = view.style.photo_shape;
+	const photoSize = compact ? 88 : 58;
 
 	// The four photo silhouettes, carried over from the web card.
 	const radius =
 		shape === 'square'
 			? m.u(1.33)
 			: shape === 'circle'
-				? m.u(49.33) / 2
+				? m.u(photoSize) / 2
 				: shape === 'arch'
 					? undefined
 					: m.u(4.67);

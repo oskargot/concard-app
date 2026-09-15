@@ -7,6 +7,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AuthProvider, useAuth, type AuthStatus } from '@/auth/AuthProvider';
+import { ConcardSync } from '@/store/ConcardSync';
 import { palette } from '@/theme/palette';
 import { font } from '@/theme/tokens';
 
@@ -38,6 +39,7 @@ export default function RootLayout() {
 			<SafeAreaProvider>
 				<StatusBar style="light" />
 				<AuthProvider>
+					<ConcardSync />
 					<AuthGate>
 						<Stack
 							screenOptions={{

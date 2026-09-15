@@ -36,6 +36,7 @@ export interface CardShellProps {
 	ry: SharedValue<number>;
 	intensity?: number;
 	foilOverrides?: Partial<Record<FoilLayerName, FoilOverride>>;
+	foilSampler?: SamplerFoilOptions;
 	detail?: 'full' | 'thumb';
 	/** `v2` = shine+glare experiment. Production leaves unset (legacy). */
 	foilEngine?: FoilEngine;
@@ -76,6 +77,7 @@ export function CardShell({
 	ry,
 	intensity = 1,
 	foilOverrides,
+	foilSampler,
 	detail = 'full',
 	foilEngine,
 	foilRecipe,
@@ -84,6 +86,7 @@ export function CardShell({
 }: CardShellProps) {
 	const m = shellMetrics(width, style.shape);
 	const shaved = style.shape === 'shaved';
+	const foilKind = style.frame === 'holo' && foil === 'none' ? 'holo' : foil;
 
 	const band = (
 		<View
@@ -116,9 +119,9 @@ export function CardShell({
 			>
 				{/* content sits under the light, so the foil plays over the face */}
 				<View style={StyleSheet.absoluteFill}>{children}</View>
-				{foil ? (
+				{foilKind ? (
 					<Foil
-						kind={foil}
+						kind={foilKind}
 						width={m.width - m.band * 2}
 						height={m.height - m.band * 2}
 						radius={m.faceRadius}
@@ -127,6 +130,7 @@ export function CardShell({
 						seed={seed}
 						intensity={intensity}
 						overrides={foilOverrides}
+						samplerOptions={foilSampler}
 						detail={detail}
 						engine={foilEngine}
 						recipe={foilRecipe}
