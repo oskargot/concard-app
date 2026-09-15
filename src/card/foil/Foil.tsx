@@ -104,10 +104,10 @@ const SAMPLER_PRESET: Partial<Record<FoilKind, SamplerFoilPreset>> = {
 
 /** Sampler recipes are intentionally accents, not translucent curtains. */
 const SAMPLER_INTENSITY: Partial<Record<FoilKind, number>> = {
-	glitter: 0.16,
-	holo: 0.18,
-	cosmic: 0.22,
-	mosaic: 0.17
+	glitter: 0.46,
+	holo: 0.44,
+	cosmic: 0.5,
+	mosaic: 0.46
 };
 
 /** How far a layer slides per degree of tilt, as a fraction of card size.

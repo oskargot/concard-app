@@ -31,6 +31,7 @@
  */
 
 import { useMemo, type ReactNode } from 'react';
+import MaskedView from '@react-native-masked-view/masked-view';
 import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -116,15 +117,45 @@ export function SamplerFoil({
 	const y = useDerivedValue(() => clampPct(50 - (rx.value / 16) * 42));
 	const light = { x, y, width, height };
 	const numericSeed = useMemo(() => hashSeed(seed), [seed]);
+	const maskStyle = useAnimatedStyle(() => ({
+		transform: [{ translateX: ((x.value - 50) / 50) * width * 0.62 }, { rotate: '16deg' }]
+	}));
 
 	return (
-		<View style={[StyleSheet.absoluteFill, { opacity: intensity }]} pointerEvents="none">
-			{preset === 'linear-holo' ? <LinearHoloLayers {...light} /> : null}
-			{preset === 'rainbow-glitter' ? <RainbowGlitterLayers {...light} seed={numericSeed} /> : null}
-			{preset === 'radiant-crosshatch' ? <RadiantCrosshatchLayers {...light} /> : null}
-			{preset === 'cosmos-speckle' ? <CosmosSpeckleLayers {...light} seed={numericSeed} /> : null}
-			{preset === 'ice-crackle' ? <IceCrackleLayers {...light} seed={numericSeed} /> : null}
-		</View>
+		<MaskedView
+			style={StyleSheet.absoluteFill}
+			maskElement={
+				<View style={[StyleSheet.absoluteFill, styles.productionMask]}>
+					<Animated.View
+						style={[
+							{
+								width: width * 0.46,
+								height: height * 1.45,
+								borderRadius: width * 0.23,
+								backgroundColor: '#000'
+							},
+							maskStyle
+						]}
+					/>
+				</View>
+			}
+		>
+			<View
+				style={[
+					StyleSheet.absoluteFill,
+					{ opacity: intensity, mixBlendMode: 'screen', isolation: 'isolate' }
+				]}
+				pointerEvents="none"
+			>
+				{preset === 'linear-holo' ? <LinearHoloLayers {...light} /> : null}
+				{preset === 'rainbow-glitter' ? (
+					<RainbowGlitterLayers {...light} seed={numericSeed} />
+				) : null}
+				{preset === 'radiant-crosshatch' ? <RadiantCrosshatchLayers {...light} /> : null}
+				{preset === 'cosmos-speckle' ? <CosmosSpeckleLayers {...light} seed={numericSeed} /> : null}
+				{preset === 'ice-crackle' ? <IceCrackleLayers {...light} seed={numericSeed} /> : null}
+			</View>
+		</MaskedView>
 	);
 }
 
@@ -907,6 +938,7 @@ const styles = StyleSheet.create({
 		overflow: 'hidden',
 		isolation: 'isolate'
 	} as ViewStyle,
+	productionMask: { alignItems: 'center', justifyContent: 'center' },
 	caption: { gap: space.xs },
 	captionRow: { flexDirection: 'row', alignItems: 'baseline', gap: space.xs },
 	index: { ...t.meta, color: palette.creamFaint, letterSpacing: 0 },

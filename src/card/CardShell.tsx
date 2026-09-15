@@ -77,6 +77,7 @@ export function CardShell({
 }: CardShellProps) {
 	const m = shellMetrics(width, style.shape);
 	const shaved = style.shape === 'shaved';
+	const foilKind = style.frame === 'holo' && foil === 'none' ? 'holo' : foil;
 
 	const band = (
 		<View
@@ -109,9 +110,9 @@ export function CardShell({
 			>
 				{/* content sits under the light, so the foil plays over the face */}
 				<View style={StyleSheet.absoluteFill}>{children}</View>
-				{foil ? (
+				{foilKind ? (
 					<Foil
-						kind={foil}
+						kind={foilKind}
 						width={m.width - m.band * 2}
 						height={m.height - m.band * 2}
 						radius={m.faceRadius}
