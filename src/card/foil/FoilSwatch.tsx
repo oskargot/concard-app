@@ -510,17 +510,6 @@ function RadiantCrosshatchLayers({ x, y, width, height }: SwatchLight) {
 					overscan={1.6}
 					translate={slide(width * 0.35, height * 0.35)}
 				/>
-				<TextureLayer
-					x={x}
-					y={y}
-					width={width}
-					height={height}
-					blend="hard-light"
-					opacity={0.75}
-					render={(w, h) => (
-						<TiledFoilTexture name="trainer" width={w} height={h} tileScale={0.25} />
-					)}
-				/>
 				<GradientLayer
 					x={x}
 					y={y}
@@ -542,6 +531,15 @@ function RadiantCrosshatchLayers({ x, y, width, height }: SwatchLight) {
 					translate={slide(width * 0.14, height * 0.14, false)}
 				/>
 			</Group>
+			<TextureLayer
+				x={x}
+				y={y}
+				width={width}
+				height={height}
+				blend="multiply"
+				opacity={0.9}
+				render={(w, h) => <TiledFoilTexture name="trainer" width={w} height={h} tileScale={0.25} />}
+			/>
 			<TextureLayer
 				x={x}
 				y={y}
