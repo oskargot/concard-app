@@ -47,29 +47,25 @@ import { FOIL_KINDS, type FoilKind } from '@/card/tiers';
 import { palette } from '@/theme/palette';
 import { radius, space, type } from '@/theme/tokens';
 
-const PRESETS: { value: SamplerFoilPreset; label: string }[] = [
-	{ value: 'linear-holo', label: 'Linear holo' },
-	{ value: 'rainbow-glitter', label: 'Glitter' },
-	{ value: 'radiant-crosshatch', label: 'Crosshatch' },
-	{ value: 'cosmos-speckle', label: 'Cosmos' },
-	{ value: 'ice-crackle', label: 'Ice crackle' }
-];
-
-const BLENDS: { value: NonNullable<ViewStyle['mixBlendMode']>; label: string }[] = [
-	{ value: 'screen', label: 'Screen' },
-	{ value: 'soft-light', label: 'Soft light' },
-	{ value: 'overlay', label: 'Overlay' },
-	{ value: 'plus-lighter', label: 'Plus lighter' },
-	{ value: 'color-dodge', label: 'Color dodge' },
-	{ value: 'hard-light', label: 'Hard light' },
-	{ value: 'luminosity', label: 'Luminosity' }
-];
-
-const FACES: { value: BgKey; label: string }[] = [
-	{ value: 'paper', label: 'Paper' },
-	{ value: 'blush', label: 'Blush' },
-	{ value: 'violet', label: 'Violet' },
-	{ value: 'slate', label: 'Slate' }
+/** Every CSS blend mode React Native 0.86 accepts, in `mixBlendMode`'s order. */
+const BLEND_MODES: NonNullable<ViewStyle['mixBlendMode']>[] = [
+	'normal',
+	'multiply',
+	'screen',
+	'overlay',
+	'darken',
+	'lighten',
+	'color-dodge',
+	'color-burn',
+	'hard-light',
+	'soft-light',
+	'difference',
+	'exclusion',
+	'hue',
+	'saturation',
+	'color',
+	'luminosity',
+	'plus-lighter'
 ];
 
 export default function FoilLabScreen() {
@@ -93,30 +89,16 @@ export default function FoilLabScreen() {
 	const recipeDef = FOIL_RECIPES[activeRecipe];
 
 	return (
-		<ScrollView
-			contentContainerStyle={[
-				styles.page,
-				{ paddingTop: space.lg, paddingBottom: insets.bottom + space.xxl }
-			]}
-		>
-			<View style={styles.intro}>
-				<Text style={styles.eyebrow}>ON-DEVICE TEST BENCH</Text>
-				<Text style={styles.title}>Holo lab</Text>
-				<Text style={styles.body}>
-					Drag the real card, then compare modes for clarity at rest and at full tilt.
-				</Text>
-			</View>
-
+		<ScrollView contentContainerStyle={[styles.page, { paddingBottom: insets.bottom + space.xxl }]}>
 			<View style={styles.stage}>
 				<FlipCard
 					width={cardWidth}
-					flippable={false}
 					renderFront={(rx, ry) => (
 						<Card
 							view={view}
 							width={cardWidth}
-							foil="holo"
-							seed="production-holo-lab"
+							foil={kind}
+							seed="foil-lab"
 							rx={rx}
 							ry={ry}
 							intensity={intensity}
@@ -127,7 +109,7 @@ export default function FoilLabScreen() {
 					)}
 				/>
 			</View>
-			<Text style={styles.hint}>DRAG TO MOVE THE LIGHT · WATCH TEXT AND EDGES</Text>
+			<Text style={styles.hint}>Drag the card to move the light</Text>
 
 			<Section title="Engine">
 				<Chips
@@ -183,26 +165,15 @@ export default function FoilLabScreen() {
 				<Chips options={FRAME_KEYS} value={frame} onChange={setFrame} />
 			</Section>
 
-			<Section title={`Intensity · ${intensity.toFixed(2)}`}>
-				<View style={styles.stepRow}>
-					<Stepper label="− 0.05" onPress={() => setIntensity((value) => clamp(value - 0.05))} />
-					<Stepper label="+ 0.05" onPress={() => setIntensity((value) => clamp(value + 0.05))} />
-					<Stepper label="Reset" onPress={() => setIntensity(0.42)} />
-				</View>
+			<Section title="Face">
+				<Chips options={BG_KEYS} value={bg} onChange={setBg} />
 			</Section>
 
-			<Section title="Card face">
-				<View style={styles.faceRow}>
-					{FACES.map((face) => (
-						<Pressable
-							key={face.value}
-							onPress={() => setBg(face.value)}
-							style={[styles.faceChoice, bg === face.value && styles.faceChoiceOn]}
-						>
-							<View style={[styles.faceSwatch, { backgroundColor: BGS[face.value] }]} />
-							<Text style={styles.faceLabel}>{face.label}</Text>
-						</Pressable>
-					))}
+			<Section title={`Intensity · ${intensity.toFixed(2)}`}>
+				<View style={styles.row}>
+					<Stepper label="−" onPress={() => setIntensity((v) => clamp(v - 0.1))} />
+					<Stepper label="+" onPress={() => setIntensity((v) => clamp(v + 0.1))} />
+					<Stepper label="reset" wide onPress={() => setIntensity(1)} />
 				</View>
 			</Section>
 
@@ -277,7 +248,7 @@ function LayerRow({
 					onPress={() => onPatch({ opacity: clamp((opacity ?? 0.5) + 0.05) })}
 				/>
 			</View>
-		</ScrollView>
+		</View>
 	);
 }
 
@@ -290,57 +261,67 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 	);
 }
 
-function ChoiceGrid<T extends string>({
+function Chips<T extends string>({
 	options,
 	value,
 	onChange
 }: {
-	options: { value: T; label: string }[];
+	options: readonly T[];
 	value: T;
-	onChange: (value: T) => void;
+	onChange: (next: T) => void;
 }) {
 	return (
-		<View style={styles.choices}>
-			{options.map((option) => (
-				<Pressable
-					key={option.value}
-					onPress={() => onChange(option.value)}
-					style={[styles.choice, value === option.value && styles.choiceOn]}
-				>
-					<Text style={[styles.choiceText, value === option.value && styles.choiceTextOn]}>
-						{option.label}
-					</Text>
-				</Pressable>
-			))}
+		<View style={styles.chipWrap}>
+			{options.map((opt) => {
+				const on = opt === value;
+				return (
+					<Pressable
+						key={opt}
+						onPress={() => onChange(opt)}
+						style={[styles.chip, on && styles.chipOn]}
+					>
+						<Text style={[styles.chipText, on && styles.chipTextOn]}>{opt}</Text>
+					</Pressable>
+				);
+			})}
 		</View>
 	);
 }
 
-function Stepper({ label, onPress }: { label: string; onPress: () => void }) {
+function Stepper({
+	label,
+	onPress,
+	wide,
+	small
+}: {
+	label: string;
+	onPress: () => void;
+	wide?: boolean;
+	small?: boolean;
+}) {
 	return (
-		<Pressable style={styles.stepper} onPress={onPress}>
+		<Pressable
+			onPress={onPress}
+			style={[styles.stepper, wide && styles.stepperWide, small && styles.stepperSmall]}
+		>
 			<Text style={styles.stepperText}>{label}</Text>
 		</Pressable>
 	);
 }
 
-const clamp = (value: number) => Math.max(0, Math.min(1, Math.round(value * 100) / 100));
+const clamp = (n: number) => Math.max(0, Math.min(2, Math.round(n * 100) / 100));
 
 const styles = StyleSheet.create({
-	page: { paddingHorizontal: space.xl, gap: space.lg },
-	intro: { gap: space.xs },
-	eyebrow: { ...type.meta, color: palette.teal },
-	title: { ...type.hero, color: palette.cream },
-	body: { ...type.body, color: palette.creamMute },
-	stage: { alignItems: 'center', paddingVertical: space.sm },
-	hint: { ...type.meta, color: palette.teal, textAlign: 'center', fontSize: 9 },
+	page: { paddingHorizontal: space.xl, paddingTop: space.lg, gap: space.lg },
+	stage: { alignItems: 'center' },
+	hint: { ...type.meta, color: palette.creamFaint, textAlign: 'center' },
 	section: {
-		gap: space.md,
-		padding: space.lg,
-		borderRadius: radius.lg,
 		backgroundColor: palette.raised,
+		borderRadius: radius.lg,
 		borderWidth: StyleSheet.hairlineWidth,
-		borderColor: palette.line
+		borderColor: palette.line,
+		padding: space.md,
+		gap: space.sm
 	},
 	sectionTitle: { ...type.meta, color: palette.teal },
 	note: { ...type.small, color: palette.creamFaint },
@@ -363,33 +344,47 @@ const styles = StyleSheet.create({
 		borderWidth: StyleSheet.hairlineWidth,
 		borderColor: palette.line
 	},
-	choiceOn: { backgroundColor: palette.teal, borderColor: palette.teal },
-	choiceText: { ...type.small, color: palette.creamMute },
-	choiceTextOn: { color: palette.void, fontFamily: 'SpaceGrotesk-Bold' },
-	note: { ...type.small, color: palette.creamMute },
-	stepRow: { flexDirection: 'row', gap: space.sm },
-	stepper: {
-		flex: 1,
+	chipOn: {
+		backgroundColor: palette.rose,
+		borderColor: palette.rose,
+		boxShadow: `0 0 14px ${palette.roseGlow}`
+	},
+	chipText: { ...type.small, color: palette.creamMute },
+	chipTextOn: { color: palette.void, fontFamily: 'SpaceGrotesk-Bold' },
+	layerRow: {
+		flexDirection: 'row',
 		alignItems: 'center',
-		paddingVertical: space.sm,
-		borderRadius: radius.md,
+		gap: space.sm,
+		paddingVertical: space.xs,
+		borderTopWidth: StyleSheet.hairlineWidth,
+		borderTopColor: palette.line
+	},
+	layerRowOff: { opacity: 0.45 },
+	layerToggle: { flexDirection: 'row', alignItems: 'center', gap: space.xs, width: 96 },
+	checkbox: { color: palette.creamFaint, fontSize: 13 },
+	checkboxOn: { color: palette.teal },
+	layerName: { ...type.small, color: palette.cream },
+	blendBtn: {
+		flex: 1,
+		paddingVertical: space.xs,
+		paddingHorizontal: space.sm,
+		borderRadius: radius.sm,
+		backgroundColor: palette.raisedHigh
+	},
+	blendText: { ...type.small, color: palette.butter, fontSize: 11 },
+	opacityGroup: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
+	opacityText: { ...type.small, color: palette.creamMute, width: 38, textAlign: 'center' },
+	stepper: {
+		minWidth: 40,
+		alignItems: 'center',
+		paddingVertical: space.xs + 2,
+		paddingHorizontal: space.sm,
+		borderRadius: radius.sm,
 		backgroundColor: palette.raisedHigh,
 		borderWidth: StyleSheet.hairlineWidth,
 		borderColor: palette.line
 	},
-	stepperText: { ...type.small, color: palette.butter },
-	faceRow: { flexDirection: 'row', gap: space.sm },
-	faceChoice: { flex: 1, gap: space.xs, padding: 3, borderRadius: radius.md, borderWidth: 2 },
-	faceChoiceOn: { borderColor: palette.teal },
-	faceSwatch: { height: 34, borderRadius: radius.sm },
-	faceLabel: { ...type.small, color: palette.creamMute, textAlign: 'center' },
-	readability: {
-		gap: space.sm,
-		padding: space.lg,
-		borderRadius: radius.lg,
-		backgroundColor: 'rgba(69,229,213,0.08)',
-		borderWidth: 1,
-		borderColor: 'rgba(69,229,213,0.25)'
-	},
-	readabilityTitle: { ...type.bodyStrong, color: palette.teal }
+	stepperWide: { minWidth: 120 },
+	stepperSmall: { minWidth: 30, paddingVertical: 2 },
+	stepperText: { ...type.small, color: palette.cream }
 });

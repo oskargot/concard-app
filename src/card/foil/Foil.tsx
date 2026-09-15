@@ -49,7 +49,6 @@ import {
 import { FoilV2 } from './FoilV2';
 import type { FoilRecipeId } from './recipes';
 import { facetField, glitterField, hashSeed, starField } from './speckle';
-import { SamplerFoil, type SamplerFoilPreset } from './FoilSwatch';
 
 /** Which foil engine to draw. `v2` is the shine+glare experiment in foil-lab. */
 export type FoilEngine = 'legacy' | 'v2';
@@ -124,13 +123,6 @@ export interface FoilOverride {
 	opacity?: number;
 }
 
-export interface SamplerFoilOptions {
-	preset?: SamplerFoilPreset;
-	blend?: ViewStyle['mixBlendMode'];
-	/** Absolute sampler opacity, before the CardShell intensity multiplier. */
-	intensity?: number;
-}
-
 export interface FoilProps {
 	kind: FoilKind;
 	/** Card size in px. Everything scales off this; nothing is hardcoded. */
@@ -147,8 +139,6 @@ export interface FoilProps {
 	intensity?: number;
 	/** Per-layer overrides. Used by /dev/foil-lab; production passes nothing. */
 	overrides?: Partial<Record<FoilLayerName, FoilOverride>>;
-	/** Production sampler controls used by the on-device holo lab. */
-	samplerOptions?: SamplerFoilOptions;
 	/** Thumbnails ask for sparser dot fields. */
 	detail?: 'full' | 'thumb';
 	/** `v2` swaps in the shine+glare recipes. Production leaves this unset. */
@@ -172,8 +162,6 @@ export function Foil({
 	recipe
 }: FoilProps) {
 	if (intensity <= 0) return null;
-	const sampler = overrides ? undefined : (samplerOptions?.preset ?? SAMPLER_PRESET[kind]);
-	const recipe = sampler ? (['spec', 'edge'] as const) : RECIPES[kind];
 
 	if (engine === 'v2') {
 		return (
@@ -198,19 +186,7 @@ export function Foil({
 			style={[StyleSheet.absoluteFill, styles.stack, { borderRadius: radius }]}
 			pointerEvents="none"
 		>
-			{sampler ? (
-				<SamplerFoil
-					preset={sampler}
-					width={width}
-					height={height}
-					rx={rx}
-					ry={ry}
-					seed={seed}
-					intensity={(samplerOptions?.intensity ?? SAMPLER_INTENSITY[kind] ?? 0.18) * intensity}
-					blend={samplerOptions?.blend}
-				/>
-			) : null}
-			{recipe.map((name) => {
+			{RECIPES[kind].map((name) => {
 				const o = overrides?.[name];
 				if (o?.enabled === false) return null;
 				return (

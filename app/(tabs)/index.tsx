@@ -1,97 +1,34 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
-import { Link, useFocusEffect, useRouter } from 'expo-router';
-import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { useRouter } from 'expo-router';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useAuth } from '@/auth/AuthProvider';
-import { Card } from '@/card/Card';
-import { CardBack } from '@/card/CardBack';
-import { FlipCard } from '@/card/FlipCard';
-import { normalizeStyle } from '@/card/card-style';
-import { foilForTier } from '@/card/tiers';
-import { useCard } from '@/card/use-card';
-import type { CardView } from '@/card/types';
-import { SITE_ORIGIN } from '@/lib/env';
-import { profileUrl } from '@/lib/username';
-import { Button, Meta, Panel } from '@/ui';
+import { useConcardStore } from '@/store/useConcardStore';
 import { palette } from '@/theme/palette';
 import { radius, space, type } from '@/theme/tokens';
 
 export default function HomeScreen() {
 	const insets = useSafeAreaInsets();
 	const router = useRouter();
-	const cardWidth = Math.min(width - space.xl * 2, 340);
-
-	// The editor is pushed over this screen, so coming back fires no mount and a
-	// card edited there would otherwise still be drawn as it was on the way in.
-	const [refreshKey, setRefreshKey] = useState(0);
-	const firstFocus = useRef(true);
-	useFocusEffect(
-		useCallback(() => {
-			if (firstFocus.current) {
-				firstFocus.current = false;
-				return;
-			}
-			setRefreshKey((k) => k + 1);
-		}, [])
-	);
-
-	const { view: loaded } = useCard(profile?.active_card_id ?? null, profile, refreshKey);
-
-	// Until the row arrives, the profile alone is enough to draw a plausible card
-	// rather than a hole where one goes.
-	const fallback = useMemo<CardView>(
-		() => ({
-			title: profile?.display_name ?? 'Your name',
-			handle: profile?.username ?? 'you',
-			pronouns: profile?.pronouns ?? null,
-			bio: profile?.bio ?? '',
-			label: null,
-			art_url: null,
-			art_x: 0.5,
-			art_y: 0.5,
-			art_scale: 1,
-			style: normalizeStyle(null),
-			affiliation: null,
-			links: [],
-			stickers: []
-		}),
-		[profile]
-	);
-
-	const view = loaded ?? fallback;
+	const binder = useConcardStore((state) => state.binder_cache);
+	const pending = useConcardStore((state) => state.scan_queue.length);
+	const activeCard = useConcardStore((state) => state.active_card);
+	const lastSync = useConcardStore((state) => state.last_sync_at);
+	const uniquePeople = new Set(binder.map((card) => card.view.handle)).size;
 
 	return (
-		<ScrollView contentContainerStyle={[styles.page, { paddingBottom: insets.bottom + space.xxl }]}>
-			<Text style={styles.kicker}>Drag to tilt</Text>
-
-			<FlipCard
-				width={cardWidth}
-				renderFront={(rx, ry) => (
-					<Card
-						view={view}
-						width={cardWidth}
-						foil={foilForTier(0)}
-						seed={profile?.username ?? 'me'}
-						rx={rx}
-						ry={ry}
-					/>
-				)}
-				renderBack={(rx, ry) => (
-					<CardBack
-						style={view.style}
-						width={cardWidth}
-						variant="qr"
-						url={
-							profile
-								? profileUrl(SITE_ORIGIN, profile.username).replace(/^https?:\/\//, '')
-								: undefined
-						}
-						rx={rx}
-						ry={ry}
-					/>
-				)}
-			/>
+		<ScrollView
+			contentContainerStyle={[
+				styles.page,
+				{ paddingTop: insets.top + space.xl, paddingBottom: insets.bottom + space.xxl }
+			]}
+		>
+			<View style={styles.header}>
+				<View>
+					<Text style={styles.eyebrow}>CONCARD / EVENT MODE</Text>
+					<Text style={styles.title}>Ready, {activeCard.title.split(' ')[0]}?</Text>
+				</View>
+				<View style={styles.liveDot} />
+			</View>
 
 			<Pressable style={styles.hero} onPress={() => router.push('/scan' as never)}>
 				<View style={styles.heroGlow} />
@@ -105,30 +42,11 @@ export default function HomeScreen() {
 				</View>
 			</Pressable>
 
-			<View style={styles.actions}>
-				<Button
-					label="Edit card"
-					onPress={() => router.push('/card/edit')}
-					disabled={!profile?.active_card_id}
-				/>
+			<View style={styles.statRow}>
+				<Stat value={String(uniquePeople)} label="People met" />
+				<Stat value={String(binder.length)} label="Cards held" />
+				<Stat value={String(pending)} label="To sync" accent={pending > 0} />
 			</View>
-
-			<Panel>
-				<Text style={styles.devTitle}>Phase 1 · the renderer</Text>
-				<Text style={styles.devBody}>
-					The foil lab is where the tier effects get tuned. Open it on a real device and check every
-					layer — blend modes are the one thing that has to be verified on hardware.
-				</Text>
-				<Link href="/dev/foil-lab" style={styles.devLink}>
-					Open the foil lab →
-				</Link>
-				<Link href="/dev/foil-sampler" style={styles.devLink}>
-					Open the foil sampler →
-				</Link>
-				<Link href="/dev/cards" style={styles.devLink}>
-					Open the card gallery →
-				</Link>
-			</Panel>
 
 			<Text style={styles.sectionLabel}>YOUR NEXT MOVE</Text>
 			<View style={styles.actions}>
@@ -276,11 +194,11 @@ const styles = StyleSheet.create({
 		alignItems: 'center',
 		justifyContent: 'center'
 	},
-	kicker: { ...type.meta, color: palette.creamFaint },
-	actions: { width: '100%' },
-	handle: { ...type.bodyStrong, color: palette.teal },
-	devTitle: { ...type.subtitle, color: palette.cream },
-	devBody: { ...type.small, color: palette.creamMute },
-	devLink: { ...type.bodyStrong, color: palette.teal, paddingTop: space.xs },
-	footer: { width: '100%', gap: space.sm, alignItems: 'center' }
+	actionGlyphText: { ...type.title, color: palette.teal },
+	actionCopy: { flex: 1 },
+	actionTitle: { ...type.bodyStrong, color: palette.cream },
+	actionBody: { ...type.small, color: palette.creamFaint },
+	chevron: { fontSize: 28, color: palette.creamFaint },
+	pressed: { opacity: 0.76 },
+	sync: { ...type.small, color: palette.creamFaint, textAlign: 'center' }
 });
