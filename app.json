@@ -8,7 +8,6 @@
 		"icon": "./assets/icon.png",
 		"userInterfaceStyle": "dark",
 		"backgroundColor": "#1A0B2E",
-		"newArchEnabled": true,
 		"ios": {
 			"supportsTablet": true,
 			"bundleIdentifier": "me.concard.app",
@@ -33,6 +32,12 @@
 		},
 		"plugins": [
 			"expo-router",
+			[
+				"expo-camera",
+				{
+					"cameraPermission": "Allow Concard to scan trading card QR codes."
+				}
+			],
 			[
 				"expo-font",
 				{
