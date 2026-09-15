@@ -11,11 +11,12 @@ import {
 } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import type { SharedValue } from 'react-native-reanimated';
 
 import { useAuth } from '@/auth/AuthProvider';
 import { CardFace } from '@/card/CardFace';
 import { CardShell } from '@/card/CardShell';
-import { StaticCard } from '@/card/FlipCard';
+import { FlipCard, StaticCard } from '@/card/FlipCard';
 import { StickerLayer } from '@/card/StickerLayer';
 import {
 	BGS,
@@ -143,6 +144,33 @@ export default function CardScreen() {
 		setSelected(id);
 	}
 
+	const renderCard = (rx: SharedValue<number>, ry: SharedValue<number>) => (
+		<CardShell
+			style={card.style}
+			width={cardWidth}
+			foil={foilForTier(0)}
+			seed={card.id}
+			rx={rx}
+			ry={ry}
+			overlay={
+				<StickerLayer
+					stickers={card.stickers}
+					width={cardWidth}
+					editable={mode === 'edit'}
+					selectedId={selected}
+					onSelect={setSelected}
+					onChange={updateSticker}
+					onDelete={(id) => {
+						removeSticker(id);
+						setSelected(null);
+					}}
+				/>
+			}
+		>
+			<CardFace view={card} width={cardWidth} />
+		</CardShell>
+	);
+
 	return (
 		<KeyboardAvoidingView
 			style={styles.flex}
@@ -191,35 +219,11 @@ export default function CardScreen() {
 					</View>
 				) : (
 					<View style={styles.stage}>
-						<StaticCard
-							width={cardWidth}
-							render={(rx, ry) => (
-								<CardShell
-									style={card.style}
-									width={cardWidth}
-									foil={foilForTier(0)}
-									seed={card.id}
-									rx={rx}
-									ry={ry}
-									overlay={
-										<StickerLayer
-											stickers={card.stickers}
-											width={cardWidth}
-											editable={mode === 'edit'}
-											selectedId={selected}
-											onSelect={setSelected}
-											onChange={updateSticker}
-											onDelete={(id) => {
-												removeSticker(id);
-												setSelected(null);
-											}}
-										/>
-									}
-								>
-									<CardFace view={card} width={cardWidth} />
-								</CardShell>
-							)}
-						/>
+						{mode === 'edit' ? (
+							<StaticCard width={cardWidth} render={renderCard} />
+						) : (
+							<FlipCard width={cardWidth} renderFront={renderCard} flippable={false} />
+						)}
 						{mode === 'edit' ? (
 							<Text style={styles.tip}>
 								Drag a sticker · use the corner dots to delete, resize or rotate
