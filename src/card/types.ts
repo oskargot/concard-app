@@ -15,6 +15,16 @@
 import type { CardStyle } from './card-style';
 import type { StickerFoil } from './tiers';
 
+/**
+ * Design bible §6: 140 characters, "keep it card-sized".
+ *
+ * The `cards.bio` column allows 200 so a value written by the web app is always
+ * valid; the app enforces the bible wherever a bio is composed. Every editor
+ * reads it from here rather than declaring its own, or the onboarding card and
+ * the card editor would drift apart.
+ */
+export const BIO_MAX = 140;
+
 export interface CardLink {
 	label: string;
 	url: string;

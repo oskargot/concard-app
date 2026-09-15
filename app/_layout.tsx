@@ -51,6 +51,7 @@ export default function RootLayout() {
 						>
 							<Stack.Screen name="(tabs)" options={{ headerShown: false }} />
 							<Stack.Screen name="(auth)" options={{ headerShown: false }} />
+							<Stack.Screen name="card/edit" options={{ title: 'Edit card' }} />
 							<Stack.Screen name="dev/foil-lab" options={{ title: 'Foil lab' }} />
 							<Stack.Screen name="dev/foil-sampler" options={{ title: 'Foil sampler' }} />
 							<Stack.Screen name="dev/cards" options={{ title: 'Card gallery' }} />
@@ -90,11 +91,16 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 		// widened here rather than indexed past its declared length.
 		const path = segments as readonly string[];
 		const inAuthFlow = path[0] === '(auth)';
+		// Foil lab / sampler / gallery don't need Supabase — leave them alone so
+		// a designer can tilt cards without finishing auth first.
+		const inDev = path[0] === 'dev';
 		const target = HOME_FOR[status];
+
+		if (inDev) return;
 
 		if (status === 'ready') {
 			// finished onboarding: get out of the auth flow, but leave any other
-			// route (a dev screen, a card detail) alone
+			// route (a card detail) alone
 			if (inAuthFlow) router.replace('/(tabs)');
 			return;
 		}

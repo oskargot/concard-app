@@ -33,9 +33,9 @@
 		"plugins": [
 			"expo-router",
 			[
-				"expo-camera",
+				"expo-image-picker",
 				{
-					"cameraPermission": "Allow Concard to scan trading card QR codes."
+					"photosPermission": "Concard needs your photo library so you can put a picture on your card."
 				}
 			],
 			[

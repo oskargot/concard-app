@@ -6,37 +6,65 @@
  * and /dev/cards, and later by the signed-out landing state.
  */
 
-import { DEFAULT_STYLE, type CardStyle } from './card-style';
+import { ART_DEFAULT, BADGE_HOME, DEFAULT_STYLE, type CardStyle } from './card-style';
 import type { CardView } from './types';
 
+/** Glyph fallbacks for stickers until baked artwork ships in the app. */
+export const DEMO_STICKER_GLYPHS: Record<string, string> = {
+	star: '⭐',
+	cat: '🐱',
+	dragon: '🐉',
+	rainbow: '🌈',
+	heart: '❤️',
+	fire: '🔥',
+	rocket: '🚀',
+	dice: '🎲',
+	crown: '👑',
+	sushi: '🍣',
+	sparkles: '✨',
+	ufo: '🛸'
+};
+
+/**
+ * The card on the home gallery. Gold on butter with stickers and a fandom
+ * badge — matches the web demo fixture so both renderers can be compared.
+ */
 export const DEMO_CARD: CardView = {
-	title: 'Jade Okonkwo',
-	handle: 'jadeo',
-	pronouns: 'she/her',
-	bio: 'Seamstress, armour builder, professional gremlin. Ask me about the wings.',
-	label: 'Cosplay',
+	title: 'Oskar',
+	handle: 'oskar',
+	pronouns: null,
+	bio: 'Anime and sci-fi con regular. Making concard. Will trade stickers for good tea recommendations.',
+	label: null,
 	art_url: null,
-	art_x: 0.5,
-	art_y: 0.5,
-	art_scale: 1,
-	style: { ...DEFAULT_STYLE, bg: 'blush', photo_shape: 'arch' },
+	art_x: ART_DEFAULT.x,
+	art_y: ART_DEFAULT.y,
+	art_scale: ART_DEFAULT.scale,
+	style: { ...DEFAULT_STYLE, frame: 'gold', bg: 'butter', photo_shape: 'arch' },
 	affiliation: {
-		id: 'cosplay',
-		name: 'Cosplay',
-		mark: 'COS',
-		color_a: '#f48fb1',
-		color_b: '#ad1457',
-		x: 0.853,
-		y: 0.895
+		id: 'anime',
+		name: 'Anime',
+		mark: 'ANI',
+		color_a: '#ff7eb6',
+		color_b: '#7c4dff',
+		...BADGE_HOME
 	},
 	links: [
-		{ label: 'Bluesky', url: 'https://bsky.app/profile/jadeo' },
-		{ label: 'Instagram', url: 'https://instagram.com/jadeo' },
-		{ label: 'Ko-fi', url: 'https://ko-fi.com/jadeo' },
-		{ label: 'Portfolio', url: 'https://jadeo.example' },
-		{ label: 'Discord', url: 'https://discord.gg/example' }
+		{ label: 'bsky', url: 'https://bsky.app/profile/oskar' },
+		{ label: 'itch.io', url: 'https://oskar.itch.io' }
 	],
-	stickers: []
+	stickers: [
+		{ sticker_id: 'star', x: 0.87, y: 0.14, rotation: 0, scale: 0.9, z_index: 1, foil: 'none' },
+		{
+			sticker_id: 'dragon',
+			x: 0.13,
+			y: 0.33,
+			rotation: 0,
+			scale: 0.95,
+			z_index: 2,
+			foil: 'glitter'
+		},
+		{ sticker_id: 'rainbow', x: 0.94, y: 0.82, rotation: 0, scale: 0.85, z_index: 3, foil: 'holo' }
+	]
 };
 
 /** A second fixture, so side-by-side comparisons are not two identical cards. */
@@ -49,6 +77,9 @@ export const DEMO_CARD_ALT: CardView = {
 	label: 'Business',
 	style: { ...DEFAULT_STYLE, frame: 'gold', bg: 'slate', photo_shape: 'circle' },
 	affiliation: null,
+	stickers: [
+		{ sticker_id: 'cat', x: 0.18, y: 0.22, rotation: -6, scale: 1, z_index: 1, foil: 'none' }
+	],
 	links: [
 		{ label: 'Shop', url: 'https://example.com' },
 		{ label: 'Tumblr', url: 'https://example.com' }
