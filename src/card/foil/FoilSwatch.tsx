@@ -1,36 +1,14 @@
 /**
- * The foil sampler's swatch card — one blank card mock plus the bespoke layer
- * stack for a single technique from the `Foil Sampler` design export, driven
- * by an automatic light sweep with a touch takeover.
+ * The foil sampler's swatch card — one blank card mock plus a recipe from
+ * `recipes.ts`, driven by an automatic light sweep with a touch takeover.
  *
- * `Foil.tsx` is the production foil renderer: reusable named layers shared
- * across every card tier, tilt-driven from `FlipCard`'s `rx`/`ry`. This is a
- * different job — five *specific* named techniques recreated for comparison,
- * each with its own bespoke gradient stack, and each running the export's own
- * idle animation (a phase-offset sine sweep) rather than sitting still until
- * touched. So it gets its own light rig instead of reusing `FlipCard`'s.
- *
- * Two departures from the CSS export, for the same reasons `Foil.tsx` already
- * diverges from it:
- *
- *  - CSS `background-blend-mode` composites several backgrounds inside one
- *    element; RN has none, so a `Group` (an `isolation:'isolate'` wrapper
- *    carrying the outer `mix-blend-mode`) stands in for one CSS layer, and its
- *    children — each its own View — stand in for that layer's stacked
- *    `background-image`s.
- *  - The CSS export animates `background-position`. Here each moving
- *    background is built once (`experimental_backgroundImage` doesn't parse
- *    `repeating-` gradients, so `repeatingLinear` expands them up front) and
- *    sits on an oversized, transform-translated layer instead — a restyle
- *    isn't cheap enough to drive every frame, a transform is.
- *
- * The export's raster textures (`glitter.png`, the cosmos speckle stack,
- * `illusion.png`) are bundled locally and rendered at card-relative sizes.
- * Repeatable sources use SVG patterns so their density scales with the card
- * without stretching; full-card cosmos sources preserve their native ratio.
+ * `Foil.tsx` / `FoilV2` are the engines that sit on a real Concard. This is a
+ * different job: five *named* techniques on blank mocks for side-by-side
+ * comparison, each running an idle sine sweep rather than sitting still until
+ * touched.
  */
 
-import type { ReactNode } from 'react';
+import { type ReactNode } from 'react';
 import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -58,24 +36,20 @@ import { radius, space, type as t } from '../../theme/tokens';
 
 const SWATCH_ASPECT = 0.718;
 
-export interface SwatchLight {
-	/** Light position, 0..100 of the swatch's own width/height. */
-	x: SharedValue<number>;
-	y: SharedValue<number>;
-	width: number;
-	height: number;
-}
-
 export interface SwatchDef {
-	id: string;
+	id: FoilRecipeId;
 	index: string;
 	title: string;
 	description: string;
-	/** Base colour of the blank card mock this swatch sits on. */
 	tint: string;
-	/** Sine phase offset, so a grid of swatches never sweeps in unison. */
 	phase: number;
-	render: (light: SwatchLight) => ReactNode;
+	render: (light: {
+		x: SharedValue<number>;
+		y: SharedValue<number>;
+		width: number;
+		height: number;
+		seed: number;
+	}) => ReactNode;
 }
 
 export interface FoilSwatchProps {
@@ -85,6 +59,54 @@ export interface FoilSwatchProps {
 	now: SharedValue<number>;
 	/** Degrees of tilt per unit of light offset from centre. 0 disables tilt. */
 	tilt?: number;
+}
+
+export type SamplerFoilPreset =
+	'linear-holo' | 'rainbow-glitter' | 'radiant-crosshatch' | 'cosmos-speckle' | 'ice-crackle';
+
+/**
+ * The sampler techniques adapted for a real card: the card's tilt owns the
+ * light position, and a restrained outer opacity keeps copy and artwork clear.
+ */
+export function SamplerFoil({
+	preset,
+	width,
+	height,
+	rx,
+	ry,
+	seed,
+	intensity,
+	blend = 'screen'
+}: {
+	preset: SamplerFoilPreset;
+	width: number;
+	height: number;
+	rx: SharedValue<number>;
+	ry: SharedValue<number>;
+	seed: string;
+	intensity: number;
+	blend?: ViewStyle['mixBlendMode'];
+}) {
+	const x = useDerivedValue(() => clampPct(50 + (ry.value / 10) * 44));
+	const y = useDerivedValue(() => clampPct(50 - (rx.value / 10) * 42));
+	const light = { x, y, width, height };
+	const numericSeed = useMemo(() => hashSeed(seed), [seed]);
+
+	return (
+		<View
+			style={[
+				StyleSheet.absoluteFill,
+				{ opacity: intensity, mixBlendMode: blend, isolation: 'isolate' }
+			]}
+			pointerEvents="none"
+		>
+			{preset === 'linear-holo' ? <LinearHoloLayers {...light} /> : null}
+			{preset === 'rainbow-glitter' ? <RainbowGlitterLayers {...light} seed={numericSeed} /> : null}
+			{preset === 'radiant-crosshatch' ? <RadiantCrosshatchLayers {...light} /> : null}
+			{preset === 'cosmos-speckle' ? <CosmosSpeckleLayers {...light} seed={numericSeed} /> : null}
+			{preset === 'ice-crackle' ? <IceCrackleLayers {...light} seed={numericSeed} /> : null}
+		</View>
+	);
 }
 
 export function FoilSwatch({ def, width, now, tilt = 1 }: FoilSwatchProps) {
@@ -128,6 +150,8 @@ export function FoilSwatch({ def, width, now, tilt = 1 }: FoilSwatchProps) {
 		[tilt]
 	);
 
+	const seed = hashSeed(`sampler-${def.id}`);
+
 	return (
 		<View style={styles.col}>
 			<GestureDetector gesture={pan}>
@@ -136,7 +160,7 @@ export function FoilSwatch({ def, width, now, tilt = 1 }: FoilSwatchProps) {
 				>
 					<BlankCardMock tint={def.tint} width={width} height={height} />
 					<View style={[styles.stack, { borderRadius: radius.md }]} pointerEvents="none">
-						{def.render({ x, y, width, height })}
+						{def.render({ x, y, width, height, seed })}
 					</View>
 				</Animated.View>
 			</GestureDetector>
@@ -156,17 +180,24 @@ function clampPct(n: number): number {
 	return Math.min(100, Math.max(0, n));
 }
 
-// ---------------------------------------------------------------------------
-// Layer primitives
-// ---------------------------------------------------------------------------
+const SAMPLER_INDEX: Record<string, string> = {
+	'linear-holo': '01',
+	'rainbow-glitter': '02',
+	'radiant-crosshatch': '03',
+	'cosmos-speckle': '04',
+	'ice-crackle': '13'
+};
 
-/** A worklet factory: slides an oversized layer opposite (or with) the light,
- *  by up to `ampX`/`ampY` px, as the light travels from edge to edge. */
-function slide(ampX: number, ampY: number, invert = true) {
-	const s = invert ? -1 : 1;
-	return (lx: number, ly: number) => {
-		'worklet';
-		return { tx: s * ((lx - 50) / 50) * ampX, ty: s * ((ly - 50) / 50) * ampY };
+export const SAMPLER_SWATCHES: SwatchDef[] = SAMPLER_RECIPE_IDS.map((id) => {
+	const recipe = FOIL_RECIPES[id];
+	return {
+		id,
+		index: SAMPLER_INDEX[id] ?? '··',
+		title: recipe.title,
+		description: recipe.description,
+		tint: recipe.tint,
+		phase: recipe.phase,
+		render: recipe.render
 	};
 }
 
@@ -829,8 +860,6 @@ function BlankCardMock({ tint, width, height }: { tint: string; width: number; h
 	);
 }
 
-/** Mix a hex colour toward white by `amount` (0..1). Local to the sampler —
- *  `card-style.ts`'s version isn't exported, and this one only ever lightens. */
 function lighten(hex: string, amount: number): string {
 	const h = hex.replace('#', '');
 	const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));

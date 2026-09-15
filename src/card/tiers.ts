@@ -25,8 +25,9 @@ export type StickerFoil = (typeof STICKER_FOILS)[number];
  * Card tier → foil, and the meeting count that earns it.
  *
  * The bible calls these thresholds "a starting point [to] be tuned in
- * playtesting", so they live in exactly one place. Tier 0 is not bare: it still
- * gets the holo base every Concard has, just no effect on top.
+ * playtesting", so they live in exactly one place. Tier 0 keeps only a subtle
+ * edge lip — no wash over the face (RN blends frost text). Glitter is the
+ * first visible foil effect.
  */
 export interface TierSpec {
 	tier: number;
