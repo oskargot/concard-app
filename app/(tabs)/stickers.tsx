@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
@@ -17,6 +17,7 @@ type Filter = 'all' | StickerRarity;
 
 export default function StickersScreen() {
 	const insets = useSafeAreaInsets();
+	const { width } = useWindowDimensions();
 	const router = useRouter();
 	const [filter, setFilter] = useState<Filter>('all');
 	const [selected, setSelected] = useState<StickerDefinition | null>(null);
@@ -25,6 +26,7 @@ export default function StickersScreen() {
 		() => STICKER_CATALOG.filter((sticker) => filter === 'all' || sticker.rarity === filter),
 		[filter]
 	);
+	const tileWidth = (width - space.xl * 2 - space.sm * 3) / 4;
 
 	return (
 		<ScrollView
@@ -73,7 +75,11 @@ export default function StickersScreen() {
 					return (
 						<Pressable
 							key={sticker.id}
-							style={({ pressed }) => [styles.tile, pressed && styles.pressed]}
+							style={({ pressed }) => [
+								styles.tile,
+								{ width: tileWidth },
+								pressed && styles.pressed
+							]}
 							onPress={() => setSelected(sticker)}
 						>
 							<View
@@ -87,7 +93,9 @@ export default function StickersScreen() {
 									{sticker.unlocked ? sticker.glyph : '?'}
 								</Text>
 							</View>
-							<Text style={styles.name}>{sticker.unlocked ? sticker.name : '???'}</Text>
+							<Text numberOfLines={2} style={styles.name}>
+								{sticker.unlocked ? sticker.name : '???'}
+							</Text>
 							<View style={styles.metaRow}>
 								<Text style={[styles.rarity, { color: RARITY_COLOR[sticker.rarity] }]}>
 									{sticker.rarity.toUpperCase()}
@@ -175,11 +183,10 @@ const styles = StyleSheet.create({
 	filterOn: { backgroundColor: palette.teal, borderColor: palette.teal },
 	filterText: { ...type.meta, color: palette.creamFaint, fontSize: 9 },
 	filterTextOn: { color: palette.void },
-	grid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.md },
+	grid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
 	tile: {
-		width: '47%',
-		padding: space.md,
-		gap: space.sm,
+		padding: space.sm,
+		gap: space.xs,
 		backgroundColor: palette.raised,
 		borderRadius: radius.lg,
 		borderWidth: StyleSheet.hairlineWidth,
@@ -194,9 +201,9 @@ const styles = StyleSheet.create({
 		borderColor: 'rgba(247,240,228,0.68)'
 	},
 	holo: { boxShadow: `0 0 18px ${palette.tealGlow}` },
-	glyph: { ...type.hero, color: palette.void, fontSize: 46 },
+	glyph: { ...type.hero, color: palette.void, fontSize: 32 },
 	lockedGlyph: { color: palette.creamFaint },
-	name: { ...type.bodyStrong, color: palette.cream },
+	name: { ...type.small, color: palette.cream, minHeight: 36 },
 	metaRow: { flexDirection: 'row', justifyContent: 'space-between' },
 	rarity: { ...type.meta, fontSize: 8 },
 	quantity: { ...type.small, color: palette.creamMute },
