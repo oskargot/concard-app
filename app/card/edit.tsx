@@ -3,6 +3,7 @@ import {
 	ActivityIndicator,
 	KeyboardAvoidingView,
 	Platform,
+	Pressable,
 	ScrollView,
 	StyleSheet,
 	Text,
@@ -29,7 +30,9 @@ import {
 import { AffiliationRow } from '@/card/editor/AffiliationRow';
 import { EditorStage, stageLayout, type StyleAxis } from '@/card/editor/EditorStage';
 import { LinkRows } from '@/card/editor/LinkRows';
+import { StickerLayer } from '@/card/StickerLayer';
 import { foilForTier } from '@/card/tiers';
+import { STICKER_CATALOG } from '@/stickers/catalog';
 import { BIO_MAX } from '@/card/types';
 import { useCardEditor } from '@/card/use-card-editor';
 import { PhotoPermissionError, pickCardPhoto, uploadCardPhoto } from '@/lib/card-photo';
@@ -69,6 +72,9 @@ export default function EditCardScreen() {
 
 	const [photoBusy, setPhotoBusy] = useState(false);
 	const [photoError, setPhotoError] = useState<string | null>(null);
+	const [drawerOpen, setDrawerOpen] = useState(false);
+	/** Which placement shows its delete/resize handles. */
+	const [selectedSticker, setSelectedSticker] = useState<string | null>(null);
 
 	const { cardWidth, railsBeside } = useMemo(() => stageLayout(width, PAGE_PADDING), [width]);
 
@@ -209,14 +215,39 @@ export default function EditCardScreen() {
 									onChangeBio: (bio) => set({ bio: bio.slice(0, BIO_MAX) }),
 									bioMax: BIO_MAX,
 									onPressPhoto: pickPhoto,
-									// Stickers are a later phase; the button is drawn so the
-									// face is finished, but there is no drawer behind it yet.
-									onPressStickers: () => {},
-									stickersEnabled: false
+									onPressStickers: () => setDrawerOpen((open) => !open),
+									stickersEnabled: true
 								}}
+								overlay={
+									<StickerLayer
+										stickers={draft.stickers}
+										width={cardWidth}
+										editable
+										selectedId={selectedSticker}
+										onSelect={setSelectedSticker}
+										onChange={editor.updateSticker}
+										onDelete={(id) => {
+											editor.removeSticker(id);
+											setSelectedSticker(null);
+										}}
+									/>
+								}
 							/>
 						)}
 					/>
+
+					{drawerOpen ? (
+						<StickerDrawer
+							onPlace={(stickerId) => setSelectedSticker(editor.addSticker(stickerId))}
+							onClose={() => setDrawerOpen(false)}
+						/>
+					) : null}
+
+					{draft.stickers.length > 0 && !drawerOpen ? (
+						<Text style={styles.hint}>
+							Drag a sticker · tap one, then use the corner dots to delete or resize
+						</Text>
+					) : null}
 
 					<Text style={styles.hint}>
 						Tap the card to edit its words · arrows change the part beside them
@@ -242,6 +273,62 @@ export default function EditCardScreen() {
 				</ScrollView>
 			</KeyboardAvoidingView>
 		</>
+	);
+}
+
+/**
+ * The sticker drawer, opened by the button on the card face.
+ *
+ * It slides in under the card rather than over it, for the same reason the style
+ * controls live in the margins: covering the card would hide the thing you are
+ * decorating at the moment you are deciding where a sticker goes. Locked
+ * stickers are shown rather than hidden, because a drawer that silently omits
+ * them gives no reason to go and earn them.
+ */
+function StickerDrawer({
+	onPlace,
+	onClose
+}: {
+	onPlace: (stickerId: string) => void;
+	onClose: () => void;
+}) {
+	return (
+		<View style={styles.drawer}>
+			<View style={styles.drawerHead}>
+				<Text style={styles.drawerLabel}>Stickers</Text>
+				<Pressable onPress={onClose} accessibilityRole="button" hitSlop={8}>
+					<Text style={styles.drawerClose}>Done</Text>
+				</Pressable>
+			</View>
+			<ScrollView horizontal showsHorizontalScrollIndicator={false}>
+				<View style={styles.drawerRow}>
+					{STICKER_CATALOG.map((sticker) => (
+						<Pressable
+							key={sticker.id}
+							onPress={() => onPlace(sticker.id)}
+							disabled={!sticker.unlocked}
+							accessibilityRole="button"
+							accessibilityLabel={
+								sticker.unlocked ? `Place ${sticker.name}` : `${sticker.name}, locked`
+							}
+							accessibilityState={{ disabled: !sticker.unlocked }}
+							style={({ pressed }) => [
+								styles.stickerPick,
+								!sticker.unlocked && styles.stickerLocked,
+								pressed && sticker.unlocked && { opacity: 0.7 }
+							]}
+						>
+							<View style={[styles.stickerDisc, { backgroundColor: sticker.color }]}>
+								<Text style={styles.stickerGlyph}>{sticker.unlocked ? sticker.glyph : '🔒'}</Text>
+							</View>
+							<Text numberOfLines={1} style={styles.stickerName}>
+								{sticker.name}
+							</Text>
+						</Pressable>
+					))}
+				</View>
+			</ScrollView>
+		</View>
 	);
 }
 
@@ -288,6 +375,31 @@ const styles = StyleSheet.create({
 		color: palette.cream
 	},
 	hint: { ...type.small, color: palette.creamFaint, textAlign: 'center' },
+	drawer: {
+		gap: space.sm,
+		padding: space.md,
+		backgroundColor: palette.raised,
+		borderRadius: radius.lg,
+		borderWidth: StyleSheet.hairlineWidth,
+		borderColor: palette.line
+	},
+	drawerHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+	drawerLabel: { ...type.meta, color: palette.creamMute },
+	drawerClose: { ...type.bodyStrong, color: palette.teal },
+	drawerRow: { flexDirection: 'row', gap: space.md, paddingVertical: space.xs },
+	stickerPick: { width: 64, alignItems: 'center', gap: space.xs },
+	stickerLocked: { opacity: 0.4 },
+	stickerDisc: {
+		width: 50,
+		height: 50,
+		borderRadius: 25,
+		alignItems: 'center',
+		justifyContent: 'center',
+		borderWidth: 2,
+		borderColor: palette.cream
+	},
+	stickerGlyph: { fontFamily: 'Fredoka-Bold', fontSize: 22, color: palette.void },
+	stickerName: { ...type.small, color: palette.creamMute, textAlign: 'center', maxWidth: '100%' },
 	blocked: { ...type.small, color: palette.butter },
 	code: { fontFamily: 'SpaceGrotesk-Bold', color: palette.cream },
 	badgeText: { ...type.meta, color: palette.creamFaint },

@@ -28,7 +28,7 @@ import { supabase } from '../lib/supabase';
 import { affiliationFor } from './card-view';
 import { normalizeStyle, styleToJson, type CardStyle } from './card-style';
 import { linksToJson, normalizeLinks } from './links';
-import type { CardLink, CardView } from './types';
+import type { CardLink, CardView, PlacedSticker } from './types';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 type CardRow = Database['public']['Tables']['cards']['Row'];
@@ -56,9 +56,14 @@ export interface CardDraft {
 	affiliation: string | null;
 	affiliation_x: number;
 	affiliation_y: number;
+	/**
+	 * Placements live in their own table, so these save on a separate path from
+	 * the rest of the row — see `saveStickers`. Their `id`s here are local only.
+	 */
+	stickers: PlacedSticker[];
 }
 
-function toDraft(card: CardRow, profile: Profile): CardDraft {
+function toDraft(card: CardRow, profile: Profile, stickers: PlacedSticker[]): CardDraft {
 	return {
 		display_name: card.display_name ?? profile.display_name,
 		pronouns: card.pronouns ?? profile.pronouns ?? '',
@@ -72,7 +77,8 @@ function toDraft(card: CardRow, profile: Profile): CardDraft {
 		links: normalizeLinks(card.links),
 		affiliation: card.affiliation,
 		affiliation_x: card.affiliation_x,
-		affiliation_y: card.affiliation_y
+		affiliation_y: card.affiliation_y,
+		stickers
 	};
 }
 
@@ -115,6 +121,10 @@ export interface CardEditor {
 	linksBlocked: boolean;
 	set: (patch: Partial<CardDraft>) => void;
 	setStyle: (patch: Partial<CardStyle>) => void;
+	/** Places a sticker and returns its local id, so the caller can select it. */
+	addSticker: (stickerId: string) => string;
+	updateSticker: (id: string, patch: Partial<PlacedSticker>) => void;
+	removeSticker: (id: string) => void;
 	/** Write immediately rather than waiting out the debounce — used on the way out. */
 	flush: () => Promise<void>;
 	dismissError: () => void;
@@ -141,6 +151,8 @@ export function useCardEditor(cardId: string | null, profile: Profile | null): C
 	const dirty = useRef(false);
 	/** Set once the `links` column turns out to be missing, so we stop sending it. */
 	const noLinksColumn = useRef(false);
+	/** Fingerprint of the placements as last written, so unchanged stickers cost nothing. */
+	const savedStickers = useRef<string>('');
 
 	/**
 	 * The profile, read through a ref rather than a dependency.
@@ -176,17 +188,22 @@ export function useCardEditor(cardId: string | null, profile: Profile | null): C
 		let active = true;
 
 		(async () => {
-			const [card, fandomList] = await Promise.all([
+			const [card, fandomList, placements] = await Promise.all([
 				client.from('cards').select('*').eq('id', cardId).maybeSingle(),
-				client.from('fandoms').select('*').eq('is_active', true).order('sort_order')
+				client.from('fandoms').select('*').eq('is_active', true).order('sort_order'),
+				client.from('sticker_placements').select('*').eq('card_id', cardId).order('z_index')
 			]);
 			if (!active) return;
 
 			if (card.error) {
 				setError(card.error.hint ?? card.error.message);
 			} else if (card.data) {
+				const stickers = (!placements.error && (placements.data as PlacedSticker[])) || [];
 				dirty.current = false;
-				setDraft(toDraft(card.data as CardRow, owner));
+				// The baseline the sticker save compares against, so simply opening
+				// the editor never rewrites the placements table.
+				savedStickers.current = fingerprint(stickers);
+				setDraft(toDraft(card.data as CardRow, owner, stickers));
 			}
 			// A missing fandom table is not worth blocking the editor over — the
 			// affiliation row just has nothing to offer.
@@ -230,6 +247,14 @@ export function useCardEditor(cardId: string | null, profile: Profile | null): C
 			return;
 		}
 
+		const stickerError = await saveStickers(cardId, current.stickers, savedStickers);
+		if (stickerError) {
+			dirty.current = true;
+			setSaveState('error');
+			setError(stickerError);
+			return;
+		}
+
 		setSaveState('saved');
 		// A save that works clears whatever the last failure said, or the screen
 		// would go on showing an error about work that has since gone through.
@@ -251,6 +276,77 @@ export function useCardEditor(cardId: string | null, profile: Profile | null): C
 			setDraft((d) => {
 				if (!d) return d;
 				const next = { ...d, ...patch };
+				latest.current = next;
+				return next;
+			});
+			schedule();
+		},
+		[schedule]
+	);
+
+	/**
+	 * Place a new sticker and return its id so the caller can select it.
+	 *
+	 * The id is a local string, not a uuid: placements are replaced wholesale on
+	 * save (`saveStickers`), so a draft placement never needs to match a database
+	 * row, and minting a real uuid would only imply a correspondence that isn't there.
+	 */
+	const addSticker = useCallback(
+		(stickerId: string): string => {
+			const id = `placed-${stickerId}-${Date.now()}`;
+			setDraft((d) => {
+				if (!d) return d;
+				const next: CardDraft = {
+					...d,
+					stickers: [
+						...d.stickers,
+						{
+							id,
+							sticker_id: stickerId,
+							// Centre-ish, and never perfectly straight — a sticker laid down
+							// at exactly 0° reads as printed on rather than stuck on.
+							x: 0.5,
+							y: 0.45,
+							rotation: -6 + Math.random() * 12,
+							scale: 1,
+							z_index: d.stickers.length + 1,
+							foil: 'none'
+						}
+					]
+				};
+				latest.current = next;
+				return next;
+			});
+			schedule();
+			return id;
+		},
+		[schedule]
+	);
+
+	const updateSticker = useCallback(
+		(id: string, patch: Partial<PlacedSticker>) => {
+			setDraft((d) => {
+				if (!d) return d;
+				const next: CardDraft = {
+					...d,
+					stickers: d.stickers.map((s) => ((s.id ?? s.sticker_id) === id ? { ...s, ...patch } : s))
+				};
+				latest.current = next;
+				return next;
+			});
+			schedule();
+		},
+		[schedule]
+	);
+
+	const removeSticker = useCallback(
+		(id: string) => {
+			setDraft((d) => {
+				if (!d) return d;
+				const next: CardDraft = {
+					...d,
+					stickers: d.stickers.filter((s) => (s.id ?? s.sticker_id) !== id)
+				};
 				latest.current = next;
 				return next;
 			});
@@ -311,7 +407,7 @@ export function useCardEditor(cardId: string | null, profile: Profile | null): C
 				fandoms
 			),
 			links: draft.links,
-			stickers: []
+			stickers: draft.stickers
 		};
 	}, [draft, profile, fandoms]);
 
@@ -325,10 +421,75 @@ export function useCardEditor(cardId: string | null, profile: Profile | null): C
 		error,
 		linksBlocked,
 		set,
+		addSticker,
+		updateSticker,
+		removeSticker,
 		setStyle,
 		flush,
 		dismissError: useCallback(() => setError(null), [])
 	};
+}
+
+/**
+ * Everything about a placement that is worth a write. Excludes `id`, which is
+ * local-only (see `addSticker`), so a rewrite that hands out fresh database ids
+ * does not look like a change on the next pass.
+ */
+function fingerprint(stickers: PlacedSticker[]): string {
+	return JSON.stringify(stickers.map((s) => [s.sticker_id, s.x, s.y, s.rotation, s.scale, s.foil]));
+}
+
+/**
+ * Write the placements, if they moved.
+ *
+ * `sticker_placements` is a separate table with a row per sticker and no natural
+ * key to update against — the editor's placement ids are local strings
+ * (`placed-<sticker>-<time>`), not the uuids the table hands out — so the only
+ * honest write is to replace the card's whole set. That is two round trips, which
+ * is why it is guarded by a fingerprint: dragging one sticker rewrites them,
+ * typing a bio does not.
+ *
+ * Deleting first and inserting second leaves a window where the card has no
+ * stickers. Nothing else reads the table mid-edit and the alternative is
+ * diffing rows with no stable identity, so the window is the better trade.
+ *
+ * Returns an error message, or null when there was nothing to do or it worked.
+ */
+async function saveStickers(
+	cardId: string,
+	stickers: PlacedSticker[],
+	saved: { current: string }
+): Promise<string | null> {
+	if (!supabase) return null;
+	const next = fingerprint(stickers);
+	if (next === saved.current) return null;
+
+	const { error: deleteError } = await supabase
+		.from('sticker_placements')
+		.delete()
+		.eq('card_id', cardId);
+	if (deleteError) return deleteError.hint ?? deleteError.message;
+
+	if (stickers.length) {
+		const { error: insertError } = await supabase.from('sticker_placements').insert(
+			stickers.map((sticker, index) => ({
+				card_id: cardId,
+				sticker_id: sticker.sticker_id,
+				x: sticker.x,
+				y: sticker.y,
+				rotation: sticker.rotation,
+				scale: sticker.scale,
+				// Draw order is the order they sit in the draft, which is the order
+				// they were placed — later stickers land on top.
+				z_index: index,
+				foil: sticker.foil
+			}))
+		);
+		if (insertError) return insertError.hint ?? insertError.message;
+	}
+
+	saved.current = next;
+	return null;
 }
 
 /** PostgREST's two ways of saying the column isn't there yet. */

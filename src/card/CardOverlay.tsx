@@ -17,14 +17,21 @@ import type { CardView, PlacedSticker } from './types';
 export function CardOverlay({
 	view,
 	width,
-	glyphs = DEMO_STICKER_GLYPHS
+	glyphs = DEMO_STICKER_GLYPHS,
+	stickers: drawStickers = true
 }: {
 	view: CardView;
 	width: number;
 	/** sticker_id → glyph fallback when baked art is not available yet. */
 	glyphs?: Record<string, string>;
+	/**
+	 * Draw the card's stickers. The editor turns this off because `StickerLayer`
+	 * is drawing the same stickers on top, as draggable objects — left on, every
+	 * sticker would appear twice, once movable and once not.
+	 */
+	stickers?: boolean;
 }) {
-	const stickers = [...view.stickers].sort((a, b) => a.z_index - b.z_index);
+	const stickers = drawStickers ? [...view.stickers].sort((a, b) => a.z_index - b.z_index) : [];
 
 	return (
 		<>

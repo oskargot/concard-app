@@ -4,6 +4,8 @@
  * never looks different on concard.me than in the app.
  */
 
+import type { ReactNode } from 'react';
+
 import { CardFace, type CardFaceEdit } from './CardFace';
 import { CardOverlay } from './CardOverlay';
 import { CardShell, type CardShellProps } from './CardShell';
@@ -27,6 +29,14 @@ export interface CardProps extends Pick<
 	glyphs?: Record<string, string>;
 	/** Editor only: turns the face's text into fields in place. See `CardFace`. */
 	edit?: CardFaceEdit;
+	/**
+	 * Drawn over the card, outside the face clip, alongside the fandom badge.
+	 *
+	 * The editor passes an interactive `StickerLayer` here. Supplying one also
+	 * stands `CardOverlay`'s own sticker marks down, since both would be drawing
+	 * the same placements — one draggable, one not.
+	 */
+	overlay?: ReactNode;
 }
 
 export function Card({
@@ -42,7 +52,8 @@ export function Card({
 	foilEngine,
 	foilRecipe,
 	glyphs,
-	edit
+	edit,
+	overlay
 }: CardProps) {
 	return (
 		<CardShell
@@ -57,7 +68,12 @@ export function Card({
 			detail={detail}
 			foilEngine={foilEngine}
 			foilRecipe={foilRecipe}
-			overlay={<CardOverlay view={view} width={width} glyphs={glyphs} />}
+			overlay={
+				<>
+					<CardOverlay view={view} width={width} glyphs={glyphs} stickers={!overlay} />
+					{overlay}
+				</>
+			}
 		>
 			<CardFace view={view} width={width} edit={edit} />
 		</CardShell>
