@@ -11,8 +11,7 @@
 import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { CardFace } from '@/card/CardFace';
-import { CardShell } from '@/card/CardShell';
+import { Card } from '@/card/Card';
 import { StaticCard } from '@/card/FlipCard';
 import { DEMO_CARD } from '@/card/demo-card';
 import { FRAME_KEYS, PHOTO_SHAPES, SHAPES, type BgKey, type CardStyle } from '@/card/card-style';
@@ -114,17 +113,15 @@ function Sample({
 		<StaticCard
 			width={width}
 			render={(rx, ry) => (
-				<CardShell
-					style={style}
+				<Card
+					view={view}
 					width={width}
 					foil={foilForTier(tier)}
 					seed={`gallery-${tier}`}
 					rx={rx}
 					ry={ry}
 					detail={detail}
-				>
-					<CardFace view={view} width={width} />
-				</CardShell>
+				/>
 			)}
 		/>
 	);

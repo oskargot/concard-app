@@ -1,36 +1,14 @@
 /**
- * The foil sampler's swatch card — one blank card mock plus the bespoke layer
- * stack for a single technique from the `Foil Sampler` design export, driven
- * by an automatic light sweep with a touch takeover.
+ * The foil sampler's swatch card — one blank card mock plus a recipe from
+ * `recipes.ts`, driven by an automatic light sweep with a touch takeover.
  *
- * `Foil.tsx` is the production foil renderer: reusable named layers shared
- * across every card tier, tilt-driven from `FlipCard`'s `rx`/`ry`. This is a
- * different job — five *specific* named techniques recreated for comparison,
- * each with its own bespoke gradient stack, and each running the export's own
- * idle animation (a phase-offset sine sweep) rather than sitting still until
- * touched. So it gets its own light rig instead of reusing `FlipCard`'s.
- *
- * Two departures from the CSS export, for the same reasons `Foil.tsx` already
- * diverges from it:
- *
- *  - CSS `background-blend-mode` composites several backgrounds inside one
- *    element; RN has none, so a `Group` (an `isolation:'isolate'` wrapper
- *    carrying the outer `mix-blend-mode`) stands in for one CSS layer, and its
- *    children — each its own View — stand in for that layer's stacked
- *    `background-image`s.
- *  - The CSS export animates `background-position`. Here each moving
- *    background is built once (`experimental_backgroundImage` doesn't parse
- *    `repeating-` gradients, so `repeatingLinear` expands them up front) and
- *    sits on an oversized, transform-translated layer instead — a restyle
- *    isn't cheap enough to drive every frame, a transform is.
- *
- * The export's raster textures (`glitter.png`, the cosmos speckle stack,
- * `illusion.png`) are rebuilt as seeded SVG fields instead of bundled images,
- * matching `speckle.ts`'s existing glitter/star fields rather than adding a
- * second, image-based texture pipeline next to it.
+ * `Foil.tsx` / `FoilV2` are the engines that sit on a real Concard. This is a
+ * different job: five *named* techniques on blank mocks for side-by-side
+ * comparison, each running an idle sine sweep rather than sitting still until
+ * touched.
  */
 
-import { useMemo, type ReactNode } from 'react';
+import { type ReactNode } from 'react';
 import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -39,9 +17,9 @@ import Animated, {
 	useSharedValue,
 	type SharedValue
 } from 'react-native-reanimated';
-import Svg, { Circle, Polyline } from 'react-native-svg';
 
 import { repeatingLinear } from './gradients';
+import { CoverFoilTexture, TiledFoilTexture } from './FoilTexture';
 import {
 	cosmosBand,
 	crosshatchBars,
@@ -53,30 +31,25 @@ import {
 	rainbowGlitterPastelBand,
 	rainbowGlitterSheet
 } from './sampler-gradients';
-import { crackleField, glitterField, hashSeed, starField, type Speck } from './speckle';
 import { palette } from '../../theme/palette';
 import { radius, space, type as t } from '../../theme/tokens';
 
 const SWATCH_ASPECT = 0.718;
 
-export interface SwatchLight {
-	/** Light position, 0..100 of the swatch's own width/height. */
-	x: SharedValue<number>;
-	y: SharedValue<number>;
-	width: number;
-	height: number;
-}
-
 export interface SwatchDef {
-	id: string;
+	id: FoilRecipeId;
 	index: string;
 	title: string;
 	description: string;
-	/** Base colour of the blank card mock this swatch sits on. */
 	tint: string;
-	/** Sine phase offset, so a grid of swatches never sweeps in unison. */
 	phase: number;
-	render: (light: SwatchLight) => ReactNode;
+	render: (light: {
+		x: SharedValue<number>;
+		y: SharedValue<number>;
+		width: number;
+		height: number;
+		seed: number;
+	}) => ReactNode;
 }
 
 export interface FoilSwatchProps {
@@ -177,6 +150,8 @@ export function FoilSwatch({ def, width, now, tilt = 1 }: FoilSwatchProps) {
 		[tilt]
 	);
 
+	const seed = hashSeed(`sampler-${def.id}`);
+
 	return (
 		<View style={styles.col}>
 			<GestureDetector gesture={pan}>
@@ -185,7 +160,7 @@ export function FoilSwatch({ def, width, now, tilt = 1 }: FoilSwatchProps) {
 				>
 					<BlankCardMock tint={def.tint} width={width} height={height} />
 					<View style={[styles.stack, { borderRadius: radius.md }]} pointerEvents="none">
-						{def.render({ x, y, width, height })}
+						{def.render({ x, y, width, height, seed })}
 					</View>
 				</Animated.View>
 			</GestureDetector>
@@ -205,17 +180,24 @@ function clampPct(n: number): number {
 	return Math.min(100, Math.max(0, n));
 }
 
-// ---------------------------------------------------------------------------
-// Layer primitives
-// ---------------------------------------------------------------------------
+const SAMPLER_INDEX: Record<string, string> = {
+	'linear-holo': '01',
+	'rainbow-glitter': '02',
+	'radiant-crosshatch': '03',
+	'cosmos-speckle': '04',
+	'ice-crackle': '13'
+};
 
-/** A worklet factory: slides an oversized layer opposite (or with) the light,
- *  by up to `ampX`/`ampY` px, as the light travels from edge to edge. */
-function slide(ampX: number, ampY: number, invert = true) {
-	const s = invert ? -1 : 1;
-	return (lx: number, ly: number) => {
-		'worklet';
-		return { tx: s * ((lx - 50) / 50) * ampX, ty: s * ((ly - 50) / 50) * ampY };
+export const SAMPLER_SWATCHES: SwatchDef[] = SAMPLER_RECIPE_IDS.map((id) => {
+	const recipe = FOIL_RECIPES[id];
+	return {
+		id,
+		index: SAMPLER_INDEX[id] ?? '··',
+		title: recipe.title,
+		description: recipe.description,
+		tint: recipe.tint,
+		phase: recipe.phase,
+		render: recipe.render
 	};
 }
 
@@ -327,7 +309,7 @@ function GradientLayer({
 	);
 }
 
-interface SvgLayerProps {
+interface TextureLayerProps {
 	x: SharedValue<number>;
 	y: SharedValue<number>;
 	width: number;
@@ -339,9 +321,8 @@ interface SvgLayerProps {
 	render: (w: number, h: number) => ReactNode;
 }
 
-/** Same idea as `GradientLayer`, for the SVG-drawn textures (glitter, stars,
- *  crackle lines) that stand in for the export's raster ones. */
-function SvgLayer({
+/** Same idea as `GradientLayer`, for card-relative raster texture layers. */
+function TextureLayer({
 	x,
 	y,
 	width,
@@ -351,10 +332,9 @@ function SvgLayer({
 	translate,
 	opacity = 1,
 	render
-}: SvgLayerProps) {
-	const safeOverscan = translate ? overscan + 0.7 : overscan;
-	const w = width * safeOverscan;
-	const h = height * safeOverscan;
+}: TextureLayerProps) {
+	const w = width * overscan;
+	const h = height * overscan;
 	const style = useAnimatedStyle(() => {
 		const d = translate ? translate(x.value, y.value) : { tx: 0, ty: 0 };
 		return { transform: [{ translateX: d.tx }, { translateY: d.ty }] };
@@ -377,57 +357,6 @@ function SvgLayer({
 		>
 			{render(w, h)}
 		</Animated.View>
-	);
-}
-
-function DotSpecks({
-	seed,
-	kind,
-	width,
-	height,
-	count
-}: {
-	seed: number;
-	kind: 'glitter' | 'stars';
-	width: number;
-	height: number;
-	count: number;
-}) {
-	const specks = useMemo<Speck[]>(
-		() => (kind === 'glitter' ? glitterField(seed, count) : starField(seed, count)),
-		[seed, kind, count]
-	);
-	return (
-		<Svg width={width} height={height} style={StyleSheet.absoluteFill}>
-			{specks.map((s, i) => (
-				<Circle
-					key={i}
-					cx={s.x * width}
-					cy={s.y * height}
-					r={s.r * width}
-					fill="#ffffff"
-					opacity={s.opacity}
-				/>
-			))}
-		</Svg>
-	);
-}
-
-function CrackleLines({ seed, width, height }: { seed: number; width: number; height: number }) {
-	const lines = useMemo(() => crackleField(seed, 11), [seed]);
-	return (
-		<Svg width={width} height={height} style={StyleSheet.absoluteFill}>
-			{lines.map((l, i) => (
-				<Polyline
-					key={i}
-					points={l.points.map((p) => `${p.x * width},${p.y * height}`).join(' ')}
-					stroke="#ffffff"
-					strokeWidth={l.strokeWidth * width}
-					fill="none"
-					opacity={l.opacity}
-				/>
-			))}
-		</Svg>
 	);
 }
 
@@ -459,6 +388,15 @@ function LinearHoloLayers({ x, y, width, height }: SwatchLight) {
 					blend="overlay"
 					overscan={1.6}
 					translate={slide(width * 0.5, height * 0.6)}
+				/>
+				<TextureLayer
+					x={x}
+					y={y}
+					width={width}
+					height={height}
+					blend="soft-light"
+					opacity={0.55}
+					render={(w, h) => <TiledFoilTexture name="grain" width={w} height={h} tileScale={0.32} />}
 				/>
 			</Group>
 			<Group
@@ -508,7 +446,7 @@ const GLITTER_SHEET_B = rainbowGlitterSheet('-60deg');
 const GLITTER_PASTEL = rainbowGlitterPastelBand();
 const HOTSPOT_WARM = radialHotspot('hsla(50,20%,90%,0.7)', 'rgba(0,0,0,0.85)');
 
-function RainbowGlitterLayers({ x, y, width, height, seed }: SwatchLight & { seed: number }) {
+function RainbowGlitterLayers({ x, y, width, height }: SwatchLight) {
 	return (
 		<>
 			<Group x={x} y={y} filter={[{ contrast: 3 }, { saturate: 1.8 }]}>
@@ -521,14 +459,14 @@ function RainbowGlitterLayers({ x, y, width, height, seed }: SwatchLight & { see
 					overscan={1.7}
 					translate={slide(width * 0.4, height * 0.55)}
 				/>
-				<SvgLayer
+				<TextureLayer
 					x={x}
 					y={y}
 					width={width}
 					height={height}
 					blend="overlay"
 					render={(w, h) => (
-						<DotSpecks seed={seed} kind="glitter" width={w} height={h} count={90} />
+						<TiledFoilTexture name="glitter" width={w} height={h} tileScale={0.25} />
 					)}
 				/>
 				<GradientLayer
@@ -558,14 +496,14 @@ function RainbowGlitterLayers({ x, y, width, height, seed }: SwatchLight & { see
 					overscan={1.7}
 					translate={slide(width * 0.4, height * 0.55, false)}
 				/>
-				<SvgLayer
+				<TextureLayer
 					x={x}
 					y={y}
 					width={width}
 					height={height}
 					blend="overlay"
 					render={(w, h) => (
-						<DotSpecks seed={seed + 1} kind="glitter" width={w} height={h} count={90} />
+						<TiledFoilTexture name="glitter" width={w} height={h} tileScale={0.25} />
 					)}
 				/>
 			</Group>
@@ -628,6 +566,24 @@ function RadiantCrosshatchLayers({ x, y, width, height }: SwatchLight) {
 					translate={slide(width * 0.14, height * 0.14, false)}
 				/>
 			</Group>
+			<TextureLayer
+				x={x}
+				y={y}
+				width={width}
+				height={height}
+				blend="multiply"
+				opacity={0.9}
+				render={(w, h) => <TiledFoilTexture name="trainer" width={w} height={h} tileScale={0.25} />}
+			/>
+			<TextureLayer
+				x={x}
+				y={y}
+				width={width}
+				height={height}
+				blend="overlay"
+				opacity={0.55}
+				render={(w, h) => <TiledFoilTexture name="glitter" width={w} height={h} tileScale={0.15} />}
+			/>
 			<GradientLayer
 				x={x}
 				y={y}
@@ -646,7 +602,7 @@ function RadiantCrosshatchLayers({ x, y, width, height }: SwatchLight) {
 const COSMOS_BAND = cosmosBand();
 const HOTSPOT_COSMOS = radialHotspot('hsla(204,100%,95%,0.9)', 'hsl(250,15%,15%)', 5, 150);
 
-function CosmosSpeckleLayers({ x, y, width, height, seed }: SwatchLight & { seed: number }) {
+function CosmosSpeckleLayers({ x, y, width, height }: SwatchLight) {
 	return (
 		<>
 			<Group
@@ -664,24 +620,31 @@ function CosmosSpeckleLayers({ x, y, width, height, seed }: SwatchLight & { seed
 					overscan={2.2}
 					translate={slide(width * 0.9, height * 0.5)}
 				/>
-				<SvgLayer
+				<TextureLayer
 					x={x}
 					y={y}
 					width={width}
 					height={height}
 					blend="color-burn"
-					render={(w, h) => <DotSpecks seed={seed} kind="stars" width={w} height={h} count={140} />}
+					render={() => <CoverFoilTexture name="cosmosBottom" />}
 				/>
-				<SvgLayer
+				<TextureLayer
+					x={x}
+					y={y}
+					width={width}
+					height={height}
+					blend="overlay"
+					opacity={0.75}
+					render={() => <CoverFoilTexture name="cosmosMiddle" />}
+				/>
+				<TextureLayer
 					x={x}
 					y={y}
 					width={width}
 					height={height}
 					blend="screen"
-					opacity={0.7}
-					render={(w, h) => (
-						<DotSpecks seed={seed + 2} kind="glitter" width={w} height={h} count={60} />
-					)}
+					opacity={0.55}
+					render={() => <CoverFoilTexture name="cosmosTop" />}
 				/>
 			</Group>
 			<GradientLayer
@@ -703,7 +666,7 @@ const ICE_SHEET = iceCrackleSheet();
 const HOTSPOT_ICE_A = radialHotspot('hsla(190,100%,96%,0.85)', 'hsl(210,30%,10%)', 5, 90);
 const HOTSPOT_ICE_B = radialHotspot('hsla(195,100%,92%,0.5)', 'hsl(0,0%,10%)', 8, 70);
 
-function IceCrackleLayers({ x, y, width, height, seed }: SwatchLight & { seed: number }) {
+function IceCrackleLayers({ x, y, width, height }: SwatchLight) {
 	return (
 		<>
 			<Group
@@ -732,13 +695,16 @@ function IceCrackleLayers({ x, y, width, height, seed }: SwatchLight & { seed: n
 					overscan={1.8}
 					translate={slide(width * 0.45, height * 0.45)}
 				/>
-				<SvgLayer
+				<TextureLayer
 					x={x}
 					y={y}
 					width={width}
 					height={height}
 					blend="exclusion"
-					render={(w, h) => <CrackleLines seed={seed} width={w} height={h} />}
+					opacity={0.65}
+					render={(w, h) => (
+						<TiledFoilTexture name="illusion" width={w} height={h} tileScale={0.62} />
+					)}
 				/>
 			</Group>
 			<Group
@@ -757,14 +723,15 @@ function IceCrackleLayers({ x, y, width, height, seed }: SwatchLight & { seed: n
 					overscan={1.5}
 					translate={slide(width * 0.16, height * 0.16, false)}
 				/>
-				<SvgLayer
+				<TextureLayer
 					x={x}
 					y={y}
 					width={width}
 					height={height}
 					blend="color-dodge"
+					opacity={0.5}
 					render={(w, h) => (
-						<DotSpecks seed={seed + 3} kind="glitter" width={w} height={h} count={70} />
+						<TiledFoilTexture name="glitter" width={w} height={h} tileScale={0.28} />
 					)}
 				/>
 			</Group>
@@ -791,7 +758,7 @@ export const SAMPLER_SWATCHES: SwatchDef[] = [
 			'Two counter-sliding rainbow sheets with a glitter fleck field worked between them.',
 		tint: '#14101a',
 		phase: 1.1,
-		render: (l) => <RainbowGlitterLayers {...l} seed={hashSeed('sampler-rainbow-glitter')} />
+		render: (l) => <RainbowGlitterLayers {...l} />
 	},
 	{
 		id: 'radiant-crosshatch',
@@ -811,7 +778,7 @@ export const SAMPLER_SWATCHES: SwatchDef[] = [
 			'A star-speckled field color-burned against a drifting rainbow band, so galaxies glide as the light moves.',
 		tint: '#0d1018',
 		phase: 3.4,
-		render: (l) => <CosmosSpeckleLayers {...l} seed={hashSeed('sampler-cosmos-speckle')} />
+		render: (l) => <CosmosSpeckleLayers {...l} />
 	},
 	{
 		id: 'ice-crackle',
@@ -821,7 +788,7 @@ export const SAMPLER_SWATCHES: SwatchDef[] = [
 			'Fracture lines exclusion-blended into a cool sheet — frost breaking the light instead of a rainbow.',
 		tint: '#0d1216',
 		phase: 5.6,
-		render: (l) => <IceCrackleLayers {...l} seed={hashSeed('sampler-ice-crackle')} />
+		render: (l) => <IceCrackleLayers {...l} />
 	}
 ];
 
@@ -897,8 +864,6 @@ function BlankCardMock({ tint, width, height }: { tint: string; width: number; h
 	);
 }
 
-/** Mix a hex colour toward white by `amount` (0..1). Local to the sampler —
- *  `card-style.ts`'s version isn't exported, and this one only ever lightens. */
 function lighten(hex: string, amount: number): string {
 	const h = hex.replace('#', '');
 	const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));

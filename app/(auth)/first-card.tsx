@@ -12,8 +12,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/auth/AuthProvider';
-import { CardFace } from '@/card/CardFace';
-import { CardShell } from '@/card/CardShell';
+import { Card } from '@/card/Card';
 import { StaticCard } from '@/card/FlipCard';
 import {
 	BGS,
@@ -29,15 +28,11 @@ import {
 	type PhotoShape
 } from '@/card/card-style';
 import { foilForTier } from '@/card/tiers';
-import type { CardView } from '@/card/types';
+import { BIO_MAX, type CardView } from '@/card/types';
 import { requireSupabase } from '@/lib/supabase';
 import { Body, Button, Field, FormError, Heading, Meta } from '@/ui';
 import { palette } from '@/theme/palette';
 import { radius, space, type } from '@/theme/tokens';
-
-/** Design bible §6: 140 characters, "keep it card-sized". The column allows 200
- *  so a value written by the web app is always valid; the app enforces the bible. */
-const BIO_MAX = 140;
 
 /**
  * The forced first card (design bible §10 step 2).
@@ -140,16 +135,14 @@ export default function FirstCardScreen() {
 					<StaticCard
 						width={cardWidth}
 						render={(rx, ry) => (
-							<CardShell
-								style={style}
+							<Card
+								view={view}
 								width={cardWidth}
 								foil={foilForTier(0)}
 								seed={profile?.username ?? 'new'}
 								rx={rx}
 								ry={ry}
-							>
-								<CardFace view={view} width={cardWidth} />
-							</CardShell>
+							/>
 						)}
 					/>
 				</View>

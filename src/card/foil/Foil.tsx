@@ -35,9 +35,10 @@
 import { useMemo } from 'react';
 import { StyleSheet, View, type ViewStyle } from 'react-native';
 import Animated, { interpolate, useAnimatedStyle, type SharedValue } from 'react-native-reanimated';
-import Svg, { Circle, Defs, LinearGradient, Polygon, Stop } from 'react-native-svg';
+import Svg, { Defs, LinearGradient, Polygon, Stop } from 'react-native-svg';
 
 import type { FoilKind } from '../tiers';
+import { CoverFoilTexture, TiledFoilTexture } from './FoilTexture';
 import {
 	HOLO_SPECTRUM,
 	holoWash,
@@ -46,8 +47,13 @@ import {
 	radialGlare,
 	repeatingLinear
 } from './gradients';
+import { FoilV2 } from './FoilV2';
+import type { FoilRecipeId } from './recipes';
 import { facetField, glitterField, hashSeed, starField } from './speckle';
 import { SamplerFoil, type SamplerFoilPreset } from './FoilSwatch';
+
+/** Which foil engine to draw. `v2` is the shine+glare experiment in foil-lab. */
+export type FoilEngine = 'legacy' | 'v2';
 
 /** Every layer the stack can draw, in stacking order. */
 export const FOIL_LAYERS = [
@@ -66,9 +72,10 @@ export type FoilLayerName = (typeof FOIL_LAYERS)[number];
 /**
  * Which layers each foil uses.
  *
- * `none` is tier 0 and is not bare: it gets the holo base every Concard carries.
- * `holo` is the sticker ceiling rather than a card tier, and leans on moving
- * bars because for a sticker, depth is the point.
+ * `none` is tier 0: only the inner edge lip. The web card also runs a hard-light
+ * holo wash + specular over every face, but those blend modes frost text on RN
+ * (and can band/pixelate), so the plain card stays readable here — foil starts
+ * at glitter. `holo` is the sticker ceiling rather than a card tier.
  */
 const RECIPES: Record<FoilKind, readonly FoilLayerName[]> = {
 	none: ['spec', 'edge'],
@@ -86,10 +93,11 @@ const RECIPES: Record<FoilKind, readonly FoilLayerName[]> = {
 const DEFAULTS: Record<FoilLayerName, { blend: ViewStyle['mixBlendMode']; opacity: number }> = {
 	space: { blend: 'normal', opacity: 0.94 },
 	nebula: { blend: 'screen', opacity: 0.8 },
-	wash: { blend: 'hard-light', opacity: 0.2 },
+	// Soft-light + lower alpha: hard-light at 0.2 washed the face into glass on device.
+	wash: { blend: 'soft-light', opacity: 0.14 },
 	bars: { blend: 'color-dodge', opacity: 0.3 },
 	facets: { blend: 'color-dodge', opacity: 0.5 },
-	glitter: { blend: 'color-dodge', opacity: 0.8 },
+	glitter: { blend: 'color-dodge', opacity: 0.55 },
 	stars: { blend: 'plus-lighter', opacity: 0.9 },
 	spec: { blend: 'screen', opacity: 0.42 },
 	edge: { blend: 'normal', opacity: 1 }
@@ -160,6 +168,10 @@ export interface FoilProps {
 	samplerOptions?: SamplerFoilOptions;
 	/** Thumbnails ask for sparser dot fields. */
 	detail?: 'full' | 'thumb';
+	/** `v2` swaps in the shine+glare recipes. Production leaves this unset. */
+	engine?: FoilEngine;
+	/** Foil-lab override: pick a v2 recipe regardless of `kind`. */
+	recipe?: FoilRecipeId;
 }
 
 export function Foil({
@@ -172,12 +184,29 @@ export function Foil({
 	radius = 0,
 	intensity = 1,
 	overrides,
-	samplerOptions,
-	detail = 'full'
+	detail = 'full',
+	engine = 'legacy',
+	recipe
 }: FoilProps) {
 	if (intensity <= 0) return null;
 	const sampler = overrides ? undefined : (samplerOptions?.preset ?? SAMPLER_PRESET[kind]);
 	const recipe = sampler ? (['spec', 'edge'] as const) : RECIPES[kind];
+
+	if (engine === 'v2') {
+		return (
+			<FoilV2
+				kind={kind}
+				width={width}
+				height={height}
+				rx={rx}
+				ry={ry}
+				seed={seed}
+				radius={radius}
+				intensity={intensity}
+				recipe={recipe}
+			/>
+		);
+	}
 
 	return (
 		// `isolation: isolate` is what keeps color-dodge from reaching through the
@@ -306,7 +335,18 @@ function LayerContent({
 				</>
 			);
 		case 'bars':
-			return <View style={[StyleSheet.absoluteFill, { experimental_backgroundImage: BARS }]} />;
+			return (
+				<>
+					<View style={[StyleSheet.absoluteFill, { experimental_backgroundImage: BARS }]} />
+					<TiledFoilTexture
+						name="grain"
+						width={width}
+						height={height}
+						tileScale={0.32}
+						opacity={0.28}
+					/>
+				</>
+			);
 		case 'spec':
 			return <View style={[StyleSheet.absoluteFill, { experimental_backgroundImage: SPEC }]} />;
 		case 'edge':
@@ -328,53 +368,18 @@ function LayerContent({
 			);
 		case 'glitter':
 			return (
-				<DotField seed={numericSeed} kind="glitter" width={width} height={height} thumb={thumb} />
+				<TiledFoilTexture
+					name="glitter"
+					width={width}
+					height={height}
+					tileScale={thumb ? 0.34 : 0.25}
+				/>
 			);
 		case 'stars':
-			return (
-				<DotField seed={numericSeed} kind="stars" width={width} height={height} thumb={thumb} />
-			);
+			return <CoverFoilTexture name="cosmosTop" opacity={0.9} />;
 		case 'facets':
 			return <FacetField seed={numericSeed} width={width} height={height} thumb={thumb} />;
 	}
-}
-
-/** Glitter flecks and starfields. Drawn white and blended, so their colour comes
- *  from the layers underneath — which is what makes the light appear to travel
- *  *across* the glitter rather than the glitter itself moving. */
-function DotField({
-	seed,
-	kind,
-	width,
-	height,
-	thumb
-}: {
-	seed: number;
-	kind: 'glitter' | 'stars';
-	width: number;
-	height: number;
-	thumb: boolean;
-}) {
-	const specks = useMemo(
-		() =>
-			kind === 'glitter' ? glitterField(seed, thumb ? 70 : 220) : starField(seed, thumb ? 45 : 120),
-		[seed, kind, thumb]
-	);
-
-	return (
-		<Svg width={width} height={height} style={StyleSheet.absoluteFill}>
-			{specks.map((s, i) => (
-				<Circle
-					key={i}
-					cx={s.x * width}
-					cy={s.y * height}
-					r={s.r * width}
-					fill="#ffffff"
-					opacity={s.opacity}
-				/>
-			))}
-		</Svg>
-	);
 }
 
 /** The mosaic tier: a jittered lattice of triangles, each sampling the holo
