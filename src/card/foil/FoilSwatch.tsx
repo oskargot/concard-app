@@ -51,54 +51,6 @@ export interface FoilSwatchProps {
 	tilt?: number;
 }
 
-export type SamplerFoilPreset =
-	'linear-holo' | 'rainbow-glitter' | 'radiant-crosshatch' | 'cosmos-speckle' | 'ice-crackle';
-
-/**
- * The sampler techniques adapted for a real card: the card's tilt owns the
- * light position, and a restrained outer opacity keeps copy and artwork clear.
- */
-export function SamplerFoil({
-	preset,
-	width,
-	height,
-	rx,
-	ry,
-	seed,
-	intensity,
-	blend = 'screen'
-}: {
-	preset: SamplerFoilPreset;
-	width: number;
-	height: number;
-	rx: SharedValue<number>;
-	ry: SharedValue<number>;
-	seed: string;
-	intensity: number;
-	blend?: ViewStyle['mixBlendMode'];
-}) {
-	const x = useDerivedValue(() => clampPct(50 + (ry.value / 10) * 44));
-	const y = useDerivedValue(() => clampPct(50 - (rx.value / 10) * 42));
-	const light = { x, y, width, height };
-	const numericSeed = useMemo(() => hashSeed(seed), [seed]);
-
-	return (
-		<View
-			style={[
-				StyleSheet.absoluteFill,
-				{ opacity: intensity, mixBlendMode: blend, isolation: 'isolate' }
-			]}
-			pointerEvents="none"
-		>
-			{preset === 'linear-holo' ? <LinearHoloLayers {...light} /> : null}
-			{preset === 'rainbow-glitter' ? <RainbowGlitterLayers {...light} seed={numericSeed} /> : null}
-			{preset === 'radiant-crosshatch' ? <RadiantCrosshatchLayers {...light} /> : null}
-			{preset === 'cosmos-speckle' ? <CosmosSpeckleLayers {...light} seed={numericSeed} /> : null}
-			{preset === 'ice-crackle' ? <IceCrackleLayers {...light} seed={numericSeed} /> : null}
-		</View>
-	);
-}
-
 export function FoilSwatch({ def, width, now, tilt = 1 }: FoilSwatchProps) {
 	const height = width / SWATCH_ASPECT;
 

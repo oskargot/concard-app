@@ -34,16 +34,7 @@ export interface CardBackProps {
 	ry: SharedValue<number>;
 }
 
-export function CardBack({
-	style,
-	width,
-	variant,
-	url = '',
-	qr,
-	record,
-	rx,
-	ry
-}: CardBackProps) {
+export function CardBack({ style, width, variant, url = '', qr, record, rx, ry }: CardBackProps) {
 	const m = shellMetrics(width, style.shape);
 	const hair = Math.max(m.u(0.5), 1);
 	const lab = {
@@ -95,7 +86,7 @@ export function CardBack({
 					</View>
 				) : record ? (
 					<View style={{ flex: 1, gap: m.u(4.33) }}>
-						<Text style={lab}>collector's record</Text>
+						<Text style={lab}>collector&apos;s record</Text>
 						<View style={{ flex: 1, gap: m.u(4.33) }}>
 							<RecordRow lab={lab} label="collected" value={record.collected} m={m} />
 							<RecordRow lab={lab} label="event" value={record.event} m={m} />
