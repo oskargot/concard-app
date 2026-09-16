@@ -265,7 +265,7 @@ function assembleLayout(
 	};
 }
 
-const CAP_HEIGHT = 0.7;
+const CAP_HEIGHT = 0.72;
 
 /**
  * A bar through the middle of each word, shorter and narrower than the
@@ -281,9 +281,9 @@ function wordBars(
 ): FandomVinylRect[] {
 	const insetX = Math.max(whiteStroke * 0.38, fontSize * 0.16);
 	const cap = fontSize * CAP_HEIGHT;
-	// Sit close to the cap line so side gaps (Zelda L-D) fill; stay short of
-	// the baseline so the rect does not peek under C / S / O.
-	const insetTop = fontSize * 0.05;
+	// Flush with the cap so open letters (L, E) fill; stay short of the
+	// baseline so the rect does not peek under C / S / O.
+	const insetTop = fontSize * 0.02;
 	const insetBottom = fontSize * 0.1;
 	const height = cap - insetTop - insetBottom;
 	if (height < fontSize * 0.14) return [];
