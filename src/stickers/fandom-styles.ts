@@ -4,7 +4,8 @@
  * Each category is a Concard type treatment (bundled font + fill + outline +
  * tracking), not a franchise logo. New fandoms pick a category; they do not
  * bring their own artwork. Recipes stay restrained in Stage 1: typography,
- * stroke, a small rotation/skew bias, and a vinyl join between stacked lines.
+ * stroke, a small rotation/skew bias, a bar behind every word, and a vinyl
+ * join between stacked lines.
  */
 
 import { font } from '@/theme/tokens';

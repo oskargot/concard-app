@@ -23,8 +23,8 @@ export interface FandomLaidLine {
 	baseline: number;
 }
 
-/** White vinyl join between stacked lines. One-liners have none. */
-export interface FandomStackJoin {
+/** White vinyl rectangle — behind a word, or joining stacked lines. */
+export interface FandomVinylRect {
 	x: number;
 	y: number;
 	width: number;
@@ -34,8 +34,13 @@ export interface FandomStackJoin {
 
 export interface FandomLayout {
 	lines: FandomLaidLine[];
-	/** Fills the hole between stacked words. Empty when there is only one line. */
-	joins: FandomStackJoin[];
+	/**
+	 * Smaller than the letters, painted behind every word so gaps inside
+	 * Homestuck / Zelda / etc. fill without reading as a label plate.
+	 */
+	bars: FandomVinylRect[];
+	/** Fills the hole between stacked lines. Empty when there is only one line. */
+	joins: FandomVinylRect[];
 	fontFamily: string;
 	fontSize: number;
 	letterSpacing: number;
@@ -222,6 +227,13 @@ function assembleLayout(
 		};
 	});
 	const joins = stackJoins(lines, fontSize, whiteStroke);
+	const bars = wordBars(
+		lines,
+		fontSize,
+		recipe.fontFamily,
+		recipe.letterSpacingRatio * fontSize,
+		whiteStroke
+	);
 
 	const cx = contentWidth / 2;
 	const cy = contentHeight / 2;
@@ -235,6 +247,7 @@ function assembleLayout(
 
 	return {
 		lines,
+		bars,
 		joins,
 		fontFamily: recipe.fontFamily,
 		fontSize,
@@ -255,20 +268,91 @@ function assembleLayout(
 const CAP_HEIGHT = 0.7;
 
 /**
+ * A bar through the middle of each word, shorter and narrower than the
+ * letter box so it only shows in the holes between glyphs. One-letter marks
+ * (X) skip it — there is no gap to fill.
+ */
+function wordBars(
+	lines: FandomLaidLine[],
+	fontSize: number,
+	fontFamily: string,
+	letterSpacing: number,
+	whiteStroke: number
+): FandomVinylRect[] {
+	const insetX = Math.max(whiteStroke * 0.4, fontSize * 0.18);
+	const cap = fontSize * CAP_HEIGHT;
+	const height = cap * 0.56;
+	const insetTop = (cap - height) / 2;
+	if (height < fontSize * 0.14) return [];
+
+	const bars: FandomVinylRect[] = [];
+	for (const line of lines) {
+		for (const word of wordsOnLine(line, fontSize, fontFamily, letterSpacing)) {
+			const width = word.width - insetX * 2;
+			if (width < fontSize * 0.14) continue;
+			bars.push({
+				x: word.x + insetX,
+				y: line.baseline - cap + insetTop,
+				width,
+				height,
+				rx: Math.min(fontSize * 0.08, Math.min(width, height) * 0.22)
+			});
+		}
+	}
+	return bars;
+}
+
+/** Glyph-advance walk so each word's bar lines up with the SVG `Text` run. */
+function wordsOnLine(
+	line: FandomLaidLine,
+	fontSize: number,
+	fontFamily: string,
+	letterSpacing: number
+): { x: number; width: number }[] {
+	const chars = [...line.text];
+	const words: { x: number; width: number }[] = [];
+	let x = line.x;
+	let i = 0;
+	while (i < chars.length) {
+		const ch = chars[i];
+		if (ch === ' ' || ch === undefined) {
+			if (ch === ' ') {
+				x += glyphAdvance(fontFamily, ch) * fontSize;
+				if (i < chars.length - 1) x += letterSpacing;
+			}
+			i += 1;
+			continue;
+		}
+
+		const startX = x;
+		while (i < chars.length && chars[i] !== ' ') {
+			x += glyphAdvance(fontFamily, chars[i]!) * fontSize;
+			const last = i === chars.length - 1;
+			i += 1;
+			if (!last) x += letterSpacing;
+		}
+		let endX = x;
+		if (i < chars.length && chars[i] === ' ') endX = x - letterSpacing;
+		words.push({ x: startX, width: Math.max(0, endX - startX) });
+	}
+	return words;
+}
+
+/**
  * White vinyl between stacked lines only. Width is the shorter word, inset so
  * the bar stays inside that word's letter stroke instead of poking out as a
- * rectangle. One-liners get nothing — Homestuck stays letter-shaped.
+ * rectangle.
  */
 function stackJoins(
 	lines: FandomLaidLine[],
 	fontSize: number,
 	whiteStroke: number
-): FandomStackJoin[] {
+): FandomVinylRect[] {
 	if (lines.length < 2) return [];
 
 	const inset = Math.max(whiteStroke * 0.32, fontSize * 0.08);
 	const tuck = fontSize * 0.22;
-	const joins: FandomStackJoin[] = [];
+	const joins: FandomVinylRect[] = [];
 
 	for (let i = 1; i < lines.length; i++) {
 		const above = lines[i - 1];

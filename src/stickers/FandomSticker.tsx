@@ -16,7 +16,8 @@ import {
 	layoutFandomSticker,
 	stickerHeight,
 	type FandomLaidLine,
-	type FandomLayout
+	type FandomLayout,
+	type FandomVinylRect
 } from './fandom-layout';
 import type { FandomStickerDefinition } from './types';
 
@@ -54,10 +55,12 @@ export function FandomSticker({
 					transform={`translate(${origin.x} ${origin.y}) rotate(${layout.rotation}) skewX(${layout.skewX}) translate(${-origin.x} ${-origin.y})`}
 				>
 					<G transform={`translate(${layout.shadow.dx} ${layout.shadow.dy})`}>
-						{paintJoins(layout, layout.shadow.color)}
+						{paintVinyl(layout.bars, layout.shadow.color, 'bar')}
+						{paintVinyl(layout.joins, layout.shadow.color, 'join')}
 						{paintLayer(layout, layout.shadow.color, layout.shadow.color, layout.whiteStroke)}
 					</G>
-					{paintJoins(layout, layout.dieCut)}
+					{paintVinyl(layout.bars, layout.dieCut, 'bar')}
+					{paintVinyl(layout.joins, layout.dieCut, 'join')}
 					{paintLayer(layout, layout.dieCut, layout.dieCut, layout.whiteStroke)}
 					{paintLayer(layout, layout.outline, layout.outline, layout.colorStroke)}
 					{paintLayer(layout, layout.fill, 'none', 0)}
@@ -67,15 +70,15 @@ export function FandomSticker({
 	);
 }
 
-function paintJoins(layout: FandomLayout, fill: string) {
-	return layout.joins.map((join, index) => (
+function paintVinyl(rects: FandomVinylRect[], fill: string, key: string) {
+	return rects.map((rect, index) => (
 		<Rect
-			key={`join-${index}`}
-			x={join.x}
-			y={join.y}
-			width={join.width}
-			height={join.height}
-			rx={join.rx}
+			key={`${key}-${index}`}
+			x={rect.x}
+			y={rect.y}
+			width={rect.width}
+			height={rect.height}
+			rx={rect.rx}
 			fill={fill}
 		/>
 	));
