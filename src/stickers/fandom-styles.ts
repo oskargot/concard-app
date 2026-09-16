@@ -4,7 +4,7 @@
  * Each category is a Concard type treatment (bundled font + fill + outline +
  * tracking), not a franchise logo. New fandoms pick a category; they do not
  * bring their own artwork. Recipes stay restrained in Stage 1: typography,
- * a white die-cut stroke, and a small rotation/skew bias.
+ * stroke, a small rotation/skew bias, and a vinyl join between stacked lines.
  */
 
 import { font } from '@/theme/tokens';
@@ -102,12 +102,12 @@ export const FANDOM_STYLE_RECIPES: Record<FandomStyleCategory, FandomStyleRecipe
 		fill: '#F7F0E4',
 		outline: '#1A0B2E',
 		outlineWidthRatio: 0.05,
-		dieCutWidthRatio: 0.12,
-		letterSpacingRatio: 0.16,
+		dieCutWidthRatio: 0.13,
+		letterSpacingRatio: -0.02,
 		case: 'upper',
 		skewX: 0,
 		rotationBias: 7,
-		lineHeightRatio: 1.12,
+		lineHeightRatio: 1.02,
 		maxFontRatio: 0.4
 	},
 	tech: {

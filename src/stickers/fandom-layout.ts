@@ -23,8 +23,19 @@ export interface FandomLaidLine {
 	baseline: number;
 }
 
+/** White vinyl join between stacked lines. One-liners have none. */
+export interface FandomStackJoin {
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+	rx: number;
+}
+
 export interface FandomLayout {
 	lines: FandomLaidLine[];
+	/** Fills the hole between stacked words. Empty when there is only one line. */
+	joins: FandomStackJoin[];
 	fontFamily: string;
 	fontSize: number;
 	letterSpacing: number;
@@ -210,6 +221,7 @@ function assembleLayout(
 			baseline: i * lineHeight + fontSize * ascender
 		};
 	});
+	const joins = stackJoins(lines, fontSize, whiteStroke);
 
 	const cx = contentWidth / 2;
 	const cy = contentHeight / 2;
@@ -223,6 +235,7 @@ function assembleLayout(
 
 	return {
 		lines,
+		joins,
 		fontFamily: recipe.fontFamily,
 		fontSize,
 		letterSpacing: recipe.letterSpacingRatio * fontSize,
@@ -237,6 +250,55 @@ function assembleLayout(
 		viewBox,
 		shadow: { dx: shadowDx, dy: shadowDy, color: 'rgba(18, 7, 32, 0.38)' }
 	};
+}
+
+const CAP_HEIGHT = 0.7;
+
+/**
+ * White vinyl between stacked lines only. Width is the shorter word, inset so
+ * the bar stays inside that word's letter stroke instead of poking out as a
+ * rectangle. One-liners get nothing — Homestuck stays letter-shaped.
+ */
+function stackJoins(
+	lines: FandomLaidLine[],
+	fontSize: number,
+	whiteStroke: number
+): FandomStackJoin[] {
+	if (lines.length < 2) return [];
+
+	const inset = Math.max(whiteStroke * 0.32, fontSize * 0.08);
+	const tuck = fontSize * 0.22;
+	const joins: FandomStackJoin[] = [];
+
+	for (let i = 1; i < lines.length; i++) {
+		const above = lines[i - 1];
+		const below = lines[i];
+		if (!above || !below) continue;
+
+		const overlapLeft = Math.max(above.x, below.x);
+		const overlapRight = Math.min(above.x + above.width, below.x + below.width);
+		const shorter = overlapRight - overlapLeft;
+		const width = shorter - inset * 2;
+		if (width < fontSize * 0.18) continue;
+
+		// Sit on the cap of the lower line and tuck into both letter bodies so
+		// the bar is hidden except where a gap would otherwise show through.
+		const aboveBottom = above.baseline + fontSize * 0.06;
+		const belowTop = below.baseline - fontSize * CAP_HEIGHT;
+		const y = aboveBottom - tuck;
+		const height = belowTop + tuck - y;
+		if (height <= 0) continue;
+
+		joins.push({
+			x: (overlapLeft + overlapRight) / 2 - width / 2,
+			y,
+			width,
+			height,
+			rx: Math.min(fontSize * 0.12, Math.min(width, height) * 0.28)
+		});
+	}
+
+	return joins;
 }
 
 function transformedAabb(

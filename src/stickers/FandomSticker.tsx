@@ -8,7 +8,7 @@
  */
 
 import { View } from 'react-native';
-import Svg, { G, Text as SvgText } from 'react-native-svg';
+import Svg, { G, Rect, Text as SvgText } from 'react-native-svg';
 
 import type { StickerFoil } from '@/card/tiers';
 import { recipeFor } from './fandom-styles';
@@ -54,8 +54,10 @@ export function FandomSticker({
 					transform={`translate(${origin.x} ${origin.y}) rotate(${layout.rotation}) skewX(${layout.skewX}) translate(${-origin.x} ${-origin.y})`}
 				>
 					<G transform={`translate(${layout.shadow.dx} ${layout.shadow.dy})`}>
+						{paintJoins(layout, layout.shadow.color)}
 						{paintLayer(layout, layout.shadow.color, layout.shadow.color, layout.whiteStroke)}
 					</G>
+					{paintJoins(layout, layout.dieCut)}
 					{paintLayer(layout, layout.dieCut, layout.dieCut, layout.whiteStroke)}
 					{paintLayer(layout, layout.outline, layout.outline, layout.colorStroke)}
 					{paintLayer(layout, layout.fill, 'none', 0)}
@@ -63,6 +65,20 @@ export function FandomSticker({
 			</Svg>
 		</View>
 	);
+}
+
+function paintJoins(layout: FandomLayout, fill: string) {
+	return layout.joins.map((join, index) => (
+		<Rect
+			key={`join-${index}`}
+			x={join.x}
+			y={join.y}
+			width={join.width}
+			height={join.height}
+			rx={join.rx}
+			fill={fill}
+		/>
+	));
 }
 
 function paintLayer(layout: FandomLayout, fill: string, stroke: string, strokeWidth: number) {
