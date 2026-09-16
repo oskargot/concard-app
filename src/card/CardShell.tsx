@@ -18,7 +18,7 @@ import Svg, { Polygon } from 'react-native-svg';
 import { BGS, FRAMES, type CardStyle } from './card-style';
 import { CARD_ASPECT } from '../theme/tokens';
 import { Foil } from './foil/Foil';
-import type { FoilEngine, FoilLayerName, FoilOverride } from './foil/Foil';
+import type { FoilEngine, FoilLayerName, FoilOverride, SamplerFoilOptions } from './foil/Foil';
 import type { FoilRecipeId } from './foil/recipes';
 import type { FoilKind } from './tiers';
 

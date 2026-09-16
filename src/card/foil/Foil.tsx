@@ -184,13 +184,14 @@ export function Foil({
 	radius = 0,
 	intensity = 1,
 	overrides,
+	samplerOptions,
 	detail = 'full',
 	engine = 'legacy',
-	recipe
+	recipe: recipeId
 }: FoilProps) {
 	if (intensity <= 0) return null;
 	const sampler = overrides ? undefined : (samplerOptions?.preset ?? SAMPLER_PRESET[kind]);
-	const recipe = sampler ? (['spec', 'edge'] as const) : RECIPES[kind];
+	const layers = sampler ? (['spec', 'edge'] as const) : RECIPES[kind];
 
 	if (engine === 'v2') {
 		return (
@@ -203,7 +204,7 @@ export function Foil({
 				seed={seed}
 				radius={radius}
 				intensity={intensity}
-				recipe={recipe}
+				recipe={recipeId}
 			/>
 		);
 	}
@@ -227,7 +228,7 @@ export function Foil({
 					blend={samplerOptions?.blend}
 				/>
 			) : null}
-			{recipe.map((name) => {
+			{layers.map((name) => {
 				const o = overrides?.[name];
 				if (o?.enabled === false) return null;
 				return (

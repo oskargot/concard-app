@@ -136,33 +136,21 @@ export function CardFace({
 					>
 						@{view.handle}
 					</Text>
-					{view.pronouns ? (
-						<Text
-							numberOfLines={1}
-							style={{
-								fontFamily: font.body,
-								fontSize: Math.max(m.u(2.9), 6.5),
-								color: ink.mute
-							}}
-						>
-							· {view.pronouns}
-						</Text>
-						{view.pronouns || edit?.onChangePronouns ? (
-							<View style={{ flexDirection: 'row', alignItems: 'center', minWidth: 0 }}>
-								<Text style={pronounStyle}>· </Text>
-								<FaceText
-									value={view.pronouns ?? ''}
-									onChangeText={edit?.onChangePronouns}
-									numberOfLines={1}
-									style={pronounStyle}
-									placeholder="pronouns"
-									placeholderColor={ink.mute}
-									maxLength={30}
-								/>
-							</View>
-						) : null}
-					</View>
-				) : null}
+					{view.pronouns || edit?.onChangePronouns ? (
+						<View style={{ flexDirection: 'row', alignItems: 'center', minWidth: 0 }}>
+							<Text style={pronounStyle}>· </Text>
+							<FaceText
+								value={view.pronouns ?? ''}
+								onChangeText={edit?.onChangePronouns}
+								numberOfLines={1}
+								style={pronounStyle}
+								placeholder="pronouns"
+								placeholderColor={ink.mute}
+								maxLength={30}
+							/>
+						</View>
+					) : null}
+				</View>
 			</View>
 
 			<Photo view={view} width={width} ink={ink} compact={compact} />
