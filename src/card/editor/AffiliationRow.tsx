@@ -1,22 +1,26 @@
 /**
- * The fandom badge picker at the foot of the editor.
+ * The fandom affiliation picker at the foot of the editor.
  *
- * Each option is drawn as the badge itself rather than as its name, because the
- * badge is what ends up on the card — picking from a list of words would mean
- * choosing something you can't see until afterwards. `CardOverlay` draws the
- * real thing at `m.u(20)`; these are the same two-tone gradient at a fixed size.
+ * Each option is drawn as the generative sticker itself rather than as a
+ * square badge or a list of words — picking from a preview of what lands on
+ * the card. `CardOverlay` draws the same renderer on the face.
  *
- * "None" leads, since a card without a fandom is the default and getting back to
- * it should not be the hard part.
+ * "None" leads, since a card without a fandom is the default and getting back
+ * to it should not be the hard part.
  */
 
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import type { Database } from '../../lib/database.types';
+import { definitionFromAffiliation, styleCategoryForFandom } from '../../stickers/fandom-styles';
+import { StickerRenderer } from '../../stickers/StickerRenderer';
 import { palette } from '../../theme/palette';
 import { radius, space, type } from '../../theme/tokens';
-import type { Database } from '../../lib/database.types';
+import { AFFILIATION_DEFAULTS } from '../card-view';
 
 type Fandom = Database['public']['Tables']['fandoms']['Row'];
+
+const PICKER_STICKER_WIDTH = 72;
 
 export function AffiliationRow({
 	fandoms,
@@ -51,6 +55,12 @@ export function AffiliationRow({
 
 					{fandoms.map((fandom) => {
 						const on = fandom.id === value;
+						const styleCategory = styleCategoryForFandom(fandom);
+						const definition = definitionFromAffiliation({
+							id: fandom.id,
+							name: fandom.name,
+							style_category: styleCategory
+						});
 						return (
 							<Pressable
 								key={fandom.id}
@@ -64,19 +74,14 @@ export function AffiliationRow({
 									pressed && { opacity: 0.7 }
 								]}
 							>
-								<View
-									style={[
-										styles.badge,
-										{
-											experimental_backgroundImage: `linear-gradient(150deg, ${fandom.color_a}, ${fandom.color_b})`
-										}
-									]}
-								>
-									<Text style={styles.mark}>{fandom.mark}</Text>
+								<View style={styles.stickerSlot}>
+									<StickerRenderer
+										definition={definition}
+										foil={AFFILIATION_DEFAULTS.foil}
+										width={PICKER_STICKER_WIDTH}
+										seed={fandom.id}
+									/>
 								</View>
-								<Text numberOfLines={1} style={styles.name}>
-									{fandom.name}
-								</Text>
 							</Pressable>
 						);
 					})}
@@ -89,27 +94,25 @@ export function AffiliationRow({
 const styles = StyleSheet.create({
 	section: { gap: space.sm },
 	sectionLabel: { ...type.meta, color: palette.creamMute },
-	row: { flexDirection: 'row', gap: space.sm, paddingVertical: 2 },
+	row: { flexDirection: 'row', gap: space.sm, paddingVertical: 2, alignItems: 'stretch' },
 	option: {
-		width: 72,
+		width: 96,
 		alignItems: 'center',
-		gap: space.xs,
+		justifyContent: 'center',
 		paddingVertical: space.sm,
 		paddingHorizontal: space.xs,
 		borderRadius: radius.md,
 		borderWidth: 2,
-		borderColor: 'transparent'
+		borderColor: 'transparent',
+		backgroundColor: palette.raised
 	},
 	optionOn: { borderColor: palette.teal, backgroundColor: palette.raisedHigh },
-	badge: {
-		width: 40,
-		height: 40,
-		borderRadius: radius.sm,
+	stickerSlot: {
+		width: PICKER_STICKER_WIDTH,
+		minHeight: 44,
 		alignItems: 'center',
 		justifyContent: 'center'
 	},
-	mark: { fontFamily: 'SpaceGrotesk-Bold', fontSize: 18, color: '#fbf9f3' },
-	name: { ...type.meta, color: palette.creamMute, maxWidth: '100%' },
-	none: { justifyContent: 'center', minHeight: 40 + space.xs + 14 },
+	none: { justifyContent: 'center', minHeight: 72 },
 	noneText: { ...type.small, color: palette.creamMute }
 });

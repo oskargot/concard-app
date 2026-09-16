@@ -52,7 +52,7 @@ export type StickerDefinition = FandomStickerDefinition | DecoStickerDefinition;
 
 export interface StickerRendererProps {
 	definition: StickerDefinition;
-	/** Accepted and ignored in Stage 1 — foil is an instance property, not art. */
+	/** Accepted; visually ignored until Stage 5 foil rendering. */
 	foil?: StickerFoil;
 	width: number;
 	/** Stable id for later foil fields; unused by the Stage 1 type renderer. */

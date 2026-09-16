@@ -8,11 +8,13 @@
  *
  *  - **Inherit.** `display_name`, `pronouns` and `bio` are null when the card
  *    has nothing of its own to say and the profile's value stands in.
- *  - **The badge.** `cards.affiliation` is a fandom id; the renderer wants the
- *    fandom's art together with the position stored on the card.
+ *  - **The affiliation.** `cards.affiliation` is a fandom id; the renderer
+ *    wants a frozen generative sticker (name + style + finish + placement)
+ *    so a snapshot never depends on a later catalog change.
  */
 
 import type { Database } from '../lib/database.types';
+import { styleCategoryForFandom } from '../stickers/fandom-styles';
 import { BADGE_HOME, normalizeStyle } from './card-style';
 import { normalizeLinks } from './links';
 import type { Affiliation, CardView } from './types';
@@ -21,7 +23,14 @@ type Profile = Database['public']['Tables']['profiles']['Row'];
 type CardRow = Database['public']['Tables']['cards']['Row'];
 type Fandom = Database['public']['Tables']['fandoms']['Row'];
 
-/** The badge as the renderer wants it: the fandom's art, at the card's position. */
+/** Defaults for the affiliation copy until placement/foil editing ships. */
+export const AFFILIATION_DEFAULTS = {
+	rotation: 0,
+	scale: 1,
+	foil: 'none' as const
+};
+
+/** The affiliation as the renderer wants it: frozen sticker art at the card's position. */
 export function affiliationFor(
 	fandomId: string | null,
 	x: number | null,
@@ -31,16 +40,17 @@ export function affiliationFor(
 	if (!fandomId) return null;
 	const fandom = fandoms.find((f) => f.id === fandomId);
 	// An id with no matching fandom — deactivated, or not loaded yet — draws no
-	// badge rather than an empty one.
+	// sticker rather than an empty one.
 	if (!fandom) return null;
 	return {
 		id: fandom.id,
 		name: fandom.name,
-		mark: fandom.mark,
-		color_a: fandom.color_a,
-		color_b: fandom.color_b,
+		style_category: styleCategoryForFandom(fandom),
 		x: x ?? BADGE_HOME.x,
-		y: y ?? BADGE_HOME.y
+		y: y ?? BADGE_HOME.y,
+		rotation: AFFILIATION_DEFAULTS.rotation,
+		scale: AFFILIATION_DEFAULTS.scale,
+		foil: AFFILIATION_DEFAULTS.foil
 	};
 }
 

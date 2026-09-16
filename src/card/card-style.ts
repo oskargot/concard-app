@@ -280,11 +280,11 @@ export function stickerRotation(id: string): number {
 }
 
 /**
- * Where the fandom badge sits when you have not moved it: the spot it occupied
- * back when it was fixed into the card footer, so a card that never touches it
- * looks the same as it always did. Derived from the card's geometry — a 20cqw
- * badge inset by the 4.67cqw body padding, on a 5:7 card. Mirrors the column
- * defaults in the database.
+ * Where the fandom affiliation sits when you have not moved it: the spot the
+ * old square badge occupied in the card footer, so a card that never touches
+ * it still reads in the same corner. Derived from the card's geometry — a
+ * ~20cqw mark inset by the 4.67cqw body padding, on a 5:7 card. Mirrors the
+ * column defaults in the database.
  */
 export const BADGE_HOME = { x: 0.853, y: 0.895 } as const;
 

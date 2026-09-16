@@ -1,9 +1,9 @@
 /**
  * Stage 1 playground: generate fandom text stickers from a name + category.
  *
- * This is the visual test bench for the on-device type renderer. It does not
- * touch production cards, inventory, or the affiliation picker — those wait
- * on product review of whether the stickers read as Concard, not as logos.
+ * This is the visual test bench for the on-device type renderer. Stage 2 wires
+ * the same renderer onto real cards via `CardOverlay` / `AffiliationRow`; this
+ * playground stays the place to tune typography across categories.
  */
 
 import { useMemo, useState } from 'react';

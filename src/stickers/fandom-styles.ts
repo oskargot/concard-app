@@ -9,7 +9,12 @@
  */
 
 import { font } from '@/theme/tokens';
-import { type FandomCase, type FandomStyleCategory, type FandomStickerDefinition } from './types';
+import {
+	FANDOM_STYLE_CATEGORIES,
+	type FandomCase,
+	type FandomStyleCategory,
+	type FandomStickerDefinition
+} from './types';
 
 export interface FandomStyleRecipe {
 	fontFamily: string;
@@ -143,6 +148,43 @@ export function recipeFor(category: FandomStyleCategory): FandomStyleRecipe {
 	return FANDOM_STYLE_RECIPES[category];
 }
 
+/**
+ * Pick a Concard style category for a live fandom row.
+ *
+ * The shared `fandoms` table does not yet carry `style_category`; until that
+ * ships, freeze a stable client-side assignment into `Affiliation` so snapshots
+ * stay reproducible. Keyword hints keep familiar titles in a sensible lane;
+ * everything else hashes the id across the category list.
+ */
+export function styleCategoryForFandom(fandom: { id: string; name: string }): FandomStyleCategory {
+	const hinted = hintStyleCategory(fandom.name);
+	if (hinted) return hinted;
+	return FANDOM_STYLE_CATEGORIES[stableIndex(fandom.id, FANDOM_STYLE_CATEGORIES.length)];
+}
+
+function hintStyleCategory(name: string): FandomStyleCategory | null {
+	const n = name.toLowerCase();
+	if (/\b(trek|who|wars|dune|alien|blade runner|evangelion|cyber|sci-?fi)\b/.test(n)) {
+		return 'retro-sci-fi';
+	}
+	if (/\b(pok[eé]mon|splatoon|sanrio|aggretsuko|cute|kawaii)\b/.test(n)) return 'cute';
+	if (/\b(zelda|fantasy|dnd|d&d|meshi|witch|elf|dragon)\b/.test(n)) return 'fantasy';
+	if (/\b(gate|action|fighter|naruto|one piece|jojo)\b/.test(n)) return 'action';
+	if (/\b(horror|scary|slasher|resident evil|silent hill)\b/.test(n)) return 'horror';
+	if (/\b(tech|robot|cyberpunk|programming|hack)\b/.test(n)) return 'tech';
+	if (/\b(anime|manga|homestuck|doctor)\b/.test(n)) return 'general';
+	return null;
+}
+
+function stableIndex(value: string, modulo: number): number {
+	let hash = 2166136261;
+	for (let i = 0; i < value.length; i++) {
+		hash ^= value.charCodeAt(i);
+		hash = Math.imul(hash, 16777619);
+	}
+	return modulo === 0 ? 0 : (hash >>> 0) % modulo;
+}
+
 /** Stable-enough playground / preview ids; the catalog will own real ids later. */
 export function makeFandomDefinition(
 	label: string,
@@ -155,6 +197,21 @@ export function makeFandomDefinition(
 		kind: 'fandom',
 		label: trimmed,
 		styleCategory
+	};
+}
+
+/** Turn a frozen affiliation into the definition `StickerRenderer` expects. */
+export function definitionFromAffiliation(affiliation: {
+	id: string;
+	name: string;
+	style_category: FandomStyleCategory;
+}): FandomStickerDefinition {
+	return {
+		id: affiliation.id,
+		name: affiliation.name,
+		kind: 'fandom',
+		label: affiliation.name,
+		styleCategory: affiliation.style_category
 	};
 }
 
