@@ -279,10 +279,13 @@ function wordBars(
 	letterSpacing: number,
 	whiteStroke: number
 ): FandomVinylRect[] {
-	const insetX = Math.max(whiteStroke * 0.4, fontSize * 0.18);
+	const insetX = Math.max(whiteStroke * 0.38, fontSize * 0.16);
 	const cap = fontSize * CAP_HEIGHT;
-	const height = cap * 0.56;
-	const insetTop = (cap - height) / 2;
+	// Sit close to the cap line so side gaps (Zelda L-D) fill; stay short of
+	// the baseline so the rect does not peek under C / S / O.
+	const insetTop = fontSize * 0.05;
+	const insetBottom = fontSize * 0.1;
+	const height = cap - insetTop - insetBottom;
 	if (height < fontSize * 0.14) return [];
 
 	const bars: FandomVinylRect[] = [];
@@ -295,7 +298,7 @@ function wordBars(
 				y: line.baseline - cap + insetTop,
 				width,
 				height,
-				rx: Math.min(fontSize * 0.08, Math.min(width, height) * 0.22)
+				rx: Math.min(fontSize * 0.06, Math.min(width, height) * 0.18)
 			});
 		}
 	}
