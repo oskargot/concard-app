@@ -262,7 +262,7 @@ function LayerRow({
 					onPress={() => onPatch({ opacity: clamp((opacity ?? 0.5) + 0.05) })}
 				/>
 			</View>
-		</ScrollView>
+		</View>
 	);
 }
 

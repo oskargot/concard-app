@@ -55,6 +55,7 @@ export default function RootLayout() {
 							<Stack.Screen name="dev/foil-lab" options={{ title: 'Foil lab' }} />
 							<Stack.Screen name="dev/foil-sampler" options={{ title: 'Foil sampler' }} />
 							<Stack.Screen name="dev/cards" options={{ title: 'Card gallery' }} />
+							<Stack.Screen name="dev/stickers" options={{ title: 'Fandom stickers' }} />
 						</Stack>
 					</AuthGate>
 				</AuthProvider>
@@ -91,8 +92,8 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 		// widened here rather than indexed past its declared length.
 		const path = segments as readonly string[];
 		const inAuthFlow = path[0] === '(auth)';
-		// Foil lab / sampler / gallery don't need Supabase — leave them alone so
-		// a designer can tilt cards without finishing auth first.
+		// Foil lab / sampler / gallery / sticker lab don't need Supabase — leave
+		// them alone so a designer can tilt cards without finishing auth first.
 		const inDev = path[0] === 'dev';
 		const target = HOME_FOR[status];
 

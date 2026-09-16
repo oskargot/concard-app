@@ -188,19 +188,6 @@ const SAMPLER_INDEX: Record<string, string> = {
 	'ice-crackle': '13'
 };
 
-export const SAMPLER_SWATCHES: SwatchDef[] = SAMPLER_RECIPE_IDS.map((id) => {
-	const recipe = FOIL_RECIPES[id];
-	return {
-		id,
-		index: SAMPLER_INDEX[id] ?? '··',
-		title: recipe.title,
-		description: recipe.description,
-		tint: recipe.tint,
-		phase: recipe.phase,
-		render: recipe.render
-	};
-}
-
 /** A worklet factory: opacity that rises (or falls) with distance from centre —
  *  the CSS export's `--pfc`, "how far off-centre the light has travelled". */
 function pfcOpacity(base: number, coeff: number) {
