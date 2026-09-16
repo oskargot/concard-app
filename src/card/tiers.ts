@@ -25,9 +25,9 @@ export type StickerFoil = (typeof STICKER_FOILS)[number];
  * Card tier → foil, and the meeting count that earns it.
  *
  * The bible calls these thresholds "a starting point [to] be tuned in
- * playtesting", so they live in exactly one place. Tier 0 keeps only a subtle
- * edge lip — no wash over the face (RN blends frost text). Glitter is the
- * first visible foil effect.
+ * playtesting", so they live in exactly one place. Tier 0 keeps only the clear
+ * surface reflection. Each later tier adds a more legible manufactured foil
+ * structure without turning the card into a self-lit surface.
  */
 export interface TierSpec {
 	tier: number;
@@ -40,7 +40,7 @@ export const CARD_TIERS: readonly TierSpec[] = [
 	{ tier: 0, meetings: 1, foil: 'none', label: 'Plain' },
 	{ tier: 1, meetings: 2, foil: 'glitter', label: 'Glitter' },
 	{ tier: 2, meetings: 4, foil: 'cosmic', label: 'Cosmic' },
-	{ tier: 3, meetings: 8, foil: 'mosaic', label: 'Mosaic' }
+	{ tier: 3, meetings: 8, foil: 'holo', label: 'Holo' }
 ] as const;
 
 export const MAX_TIER = CARD_TIERS[CARD_TIERS.length - 1].tier;

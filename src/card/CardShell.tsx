@@ -37,7 +37,7 @@ export interface CardShellProps {
 	intensity?: number;
 	foilOverrides?: Partial<Record<FoilLayerName, FoilOverride>>;
 	detail?: 'full' | 'thumb';
-	/** `v2` = shine+glare experiment. Production leaves unset (legacy). */
+	/** Override the production v2 foil engine. Kept for the foil lab's legacy comparison. */
 	foilEngine?: FoilEngine;
 	/** Foil-lab: force a specific v2 recipe regardless of `foil` kind. */
 	foilRecipe?: FoilRecipeId;
@@ -196,6 +196,8 @@ const styles = StyleSheet.create({
 	},
 	face: {
 		position: 'absolute',
+		// Keep artwork and reflected light in the same compositing group.
+		isolation: 'isolate',
 		overflow: 'hidden'
 	},
 	overlay: {

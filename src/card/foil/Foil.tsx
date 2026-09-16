@@ -17,10 +17,8 @@
  *  - CSS `background-blend-mode` blends several backgrounds inside one element.
  *    React Native has no equivalent, so every layer is its own View with its own
  *    `mixBlendMode` and the stack does the same job.
- *  - The CSS version animates `background-position` from pointer coordinates.
- *    Here each moving layer is oversized and *translated* by Reanimated instead,
- *    because a transform is driven on the UI thread and a restyle is not. Same
- *    look, and it holds up while the card is being tilted.
+ *  - The production v2 engine translates oversized reflection layers with
+ *    Reanimated. The older named-layer engine remains for foil-lab comparisons.
  *
  * `wash`, `spec` and `edge` are ported from the web card's tuned values
  * (`concard/src/lib/components/CardShell.svelte`) so a card looks the same in
@@ -50,7 +48,7 @@ import { FoilV2 } from './FoilV2';
 import type { FoilRecipeId } from './recipes';
 import { facetField, glitterField, hashSeed, starField } from './speckle';
 
-/** Which foil engine to draw. `v2` is the shine+glare experiment in foil-lab. */
+/** Which foil engine to draw. `v2` is the production shine + reflection engine. */
 export type FoilEngine = 'legacy' | 'v2';
 
 /** Every layer the stack can draw, in stacking order. */
@@ -141,7 +139,7 @@ export interface FoilProps {
 	overrides?: Partial<Record<FoilLayerName, FoilOverride>>;
 	/** Thumbnails ask for sparser dot fields. */
 	detail?: 'full' | 'thumb';
-	/** `v2` swaps in the shine+glare recipes. Production leaves this unset. */
+	/** `v2` is production; `legacy` remains available to the foil lab. */
 	engine?: FoilEngine;
 	/** Foil-lab override: pick a v2 recipe regardless of `kind`. */
 	recipe?: FoilRecipeId;
@@ -158,7 +156,7 @@ export function Foil({
 	intensity = 1,
 	overrides,
 	detail = 'full',
-	engine = 'legacy',
+	engine = 'v2',
 	recipe
 }: FoilProps) {
 	if (intensity <= 0) return null;

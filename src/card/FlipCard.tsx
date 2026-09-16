@@ -14,9 +14,8 @@
  *     `renderToHardwareTextureAndroid`) and *then* apply rotateX/Y. The GPU
  *     warps one bitmap instead of re-compositing text/gradients/stickers under
  *     perspective, which was the glassy pixelation.
- *  3. Foil layer parallax stays frozen while the body tilts (see `Foil.tsx`) so
- *     that bitmap isn't invalidated every frame. The physical tilt *is* the
- *     light cue.
+ *  3. Foil motion is transform-only, so its oversized reflection layers travel
+ *     without rebuilding gradients or SVG textures every frame.
  */
 
 import { type ReactNode, useCallback, useEffect, useState } from 'react';
@@ -137,11 +136,7 @@ export function FlipCard({
 	// One perspective, applied only while live. At rest we return no transform
 	// so the view demotes out of the 3D compositing path (keeps scroll sharp).
 	const stageStyle = useAnimatedStyle(() => {
-		if (
-			live.value === 0 &&
-			Math.abs(rx.value) < REST_EPS &&
-			Math.abs(ry.value) < REST_EPS
-		) {
+		if (live.value === 0 && Math.abs(rx.value) < REST_EPS && Math.abs(ry.value) < REST_EPS) {
 			return {};
 		}
 

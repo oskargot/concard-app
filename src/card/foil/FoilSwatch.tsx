@@ -80,6 +80,9 @@ export function FoilSwatch({ def, width, now, tilt = 1 }: FoilSwatchProps) {
 		if (manual.value) return touchY.value;
 		return 50 + 42 * Math.sin(now.value * 0.63 + def.phase * 1.7 + 1.1);
 	});
+	// Match production: the surface tilts with input, the reflection travels against it.
+	const lightX = useDerivedValue(() => 100 - x.value);
+	const lightY = useDerivedValue(() => 100 - y.value);
 
 	const rotatorStyle = useAnimatedStyle(
 		() => ({
@@ -102,7 +105,7 @@ export function FoilSwatch({ def, width, now, tilt = 1 }: FoilSwatchProps) {
 				>
 					<BlankCardMock tint={def.tint} width={width} height={height} />
 					<View style={[styles.stack, { borderRadius: radius.md }]} pointerEvents="none">
-						{def.render({ x, y, width, height, seed })}
+						{def.render({ x: lightX, y: lightY, width, height, seed })}
 					</View>
 				</Animated.View>
 			</GestureDetector>
@@ -225,6 +228,7 @@ function lighten(hex: string, amount: number): string {
 const styles = StyleSheet.create({
 	col: { gap: space.md },
 	shell: {
+		isolation: 'isolate',
 		boxShadow: '0 18px 32px -16px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.06)'
 	} as ViewStyle,
 	stack: {
@@ -233,8 +237,7 @@ const styles = StyleSheet.create({
 		left: 0,
 		right: 0,
 		bottom: 0,
-		overflow: 'hidden',
-		isolation: 'isolate'
+		overflow: 'hidden'
 	} as ViewStyle,
 	caption: { gap: space.xs },
 	captionRow: { flexDirection: 'row', alignItems: 'baseline', gap: space.xs },

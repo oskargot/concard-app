@@ -43,7 +43,7 @@ import {
 	V2_KIND_RECIPES,
 	type FoilRecipeId
 } from '@/card/foil/recipes';
-import { FOIL_KINDS, type FoilKind } from '@/card/tiers';
+import type { FoilKind } from '@/card/tiers';
 import { palette } from '@/theme/palette';
 import { radius, space, type } from '@/theme/tokens';
 
@@ -67,6 +67,8 @@ const BLEND_MODES: NonNullable<ViewStyle['mixBlendMode']>[] = [
 	'luminosity',
 	'plus-lighter'
 ];
+
+const LAB_FOIL_KINDS: readonly FoilKind[] = ['none', 'glitter', 'cosmic', 'holo'];
 
 export default function FoilLabScreen() {
 	const { width } = useWindowDimensions();
@@ -123,8 +125,8 @@ export default function FoilLabScreen() {
 				/>
 				<Text style={styles.note}>
 					{engine === 'v2'
-						? 'Shine + glare recipes (sampler techniques on a real card). Production still uses legacy.'
-						: 'Production layer stack — toggle layers / blend modes below.'}
+						? 'Production reflection engine — subtle idle shimmer with touch-driven light.'
+						: 'Retired layer stack — retained for comparison and blend-mode debugging.'}
 				</Text>
 				<Link href="/dev/foil-sampler" style={styles.link}>
 					Open blank-card sampler →
@@ -133,7 +135,7 @@ export default function FoilLabScreen() {
 
 			<Section title="Foil kind">
 				<Chips
-					options={FOIL_KINDS}
+					options={LAB_FOIL_KINDS}
 					value={kind}
 					onChange={(k) => {
 						setKind(k);
@@ -280,7 +282,9 @@ function Chips<T extends string>({
 						onPress={() => onChange(opt)}
 						style={[styles.chip, on && styles.chipOn]}
 					>
-						<Text style={[styles.chipText, on && styles.chipTextOn]}>{opt}</Text>
+						<Text style={[styles.chipText, on && styles.chipTextOn]}>
+							{opt === 'none' ? 'plain' : opt}
+						</Text>
 					</Pressable>
 				);
 			})}
