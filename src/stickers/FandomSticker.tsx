@@ -57,7 +57,8 @@ export function FandomSticker({
 						{paintLayer(layout, layout.shadow.color, layout.shadow.color, layout.whiteStroke)}
 					</G>
 					{paintLayer(layout, layout.dieCut, layout.dieCut, layout.whiteStroke)}
-					{paintLayer(layout, layout.fill, layout.outline, layout.colorStroke)}
+					{paintLayer(layout, layout.outline, layout.outline, layout.colorStroke)}
+					{paintLayer(layout, layout.fill, 'none', 0)}
 				</G>
 			</Svg>
 		</View>
