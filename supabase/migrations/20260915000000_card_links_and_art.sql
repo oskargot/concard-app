@@ -8,6 +8,9 @@
 -- Until it is applied, `app/card/edit.tsx` still renders and edits links; the
 -- writes are what fail, and `cards.links` reads as `[]`.
 --
+-- Also apply 20260914000000_card_inherit_text.sql (display_name / pronouns / bio)
+-- or autosave 204s on `display_name` and never reaches this column.
+--
 -- Why a column and not the `style` jsonb: `bio_align` and `link_layout` went
 -- into `style` because they *are* style. Links are content — they belong beside
 -- `bio` and `art_url`, and they need their own size and shape constraints.

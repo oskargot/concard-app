@@ -69,7 +69,9 @@ function toDraft(card: CardRow, profile: Profile): CardDraft {
 		art_y: card.art_y,
 		art_scale: card.art_scale,
 		style: normalizeStyle(card.style),
-		links: normalizeLinks(card.links),
+		links: normalizeLinks(
+			'links' in card && card.links != null ? card.links : (profile.links ?? [])
+		),
 		affiliation: card.affiliation,
 		affiliation_x: card.affiliation_x,
 		affiliation_y: card.affiliation_y
@@ -139,8 +141,8 @@ export function useCardEditor(cardId: string | null, profile: Profile | null): C
 	const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 	/** Suppresses the save that loading the card would otherwise trigger. */
 	const dirty = useRef(false);
-	/** Set once the `links` column turns out to be missing, so we stop sending it. */
-	const noLinksColumn = useRef(false);
+	/** Set once a column turns out to be missing, so we stop sending it. */
+	const missingCardColumns = useRef<Set<string>>(new Set());
 
 	/**
 	 * The profile, read through a ref rather than a dependency.
@@ -207,19 +209,23 @@ export function useCardEditor(cardId: string | null, profile: Profile | null): C
 		dirty.current = false;
 		setSaveState('saving');
 
-		const { links, ...rest } = toRow(current, owner);
-		const payload: CardUpdate = noLinksColumn.current ? rest : { ...rest, links };
+		const row = toRow(current, owner);
+		const payload: CardUpdate = { ...row };
+		for (const col of missingCardColumns.current) {
+			delete payload[col as keyof CardUpdate];
+		}
 
-		let { error: err } = await supabase.from('cards').update(payload).eq('id', cardId);
+		let err = (await supabase.from('cards').update(payload).eq('id', cardId)).error;
 
-		// The `links` column ships in a migration this repo does not own (see
-		// supabase/migrations/20260915000000). Until it is applied, drop that one
-		// field and save the rest rather than failing every write — the editor is
-		// still worth having for style, photo and text on the day before.
-		if (err && isMissingLinksColumn(err)) {
-			setLinksBlocked(true);
-			noLinksColumn.current = true;
-			({ error: err } = await supabase.from('cards').update(rest).eq('id', cardId));
+		// PostgREST 204: a field in the payload is not in the live schema. Drop
+		// that column and retry rather than failing the whole save — the live
+		// project is behind the app types until the inherit/links migrations land.
+		while (err) {
+			const missing = missingCardColumn(err);
+			if (!missing || missingCardColumns.current.has(missing)) break;
+			missingCardColumns.current.add(missing);
+			delete payload[missing as keyof CardUpdate];
+			err = (await supabase.from('cards').update(payload).eq('id', cardId)).error;
 		}
 
 		if (err) {
@@ -230,9 +236,21 @@ export function useCardEditor(cardId: string | null, profile: Profile | null): C
 			return;
 		}
 
+		const profilePatch = profileFallback(current, missingCardColumns.current);
+		if (profilePatch) {
+			const { error: profileErr } = await supabase
+				.from('profiles')
+				.update(profilePatch)
+				.eq('id', owner.id);
+			if (profileErr) {
+				dirty.current = true;
+				setSaveState('error');
+				setError(profileErr.hint ?? profileErr.message);
+				return;
+			}
+		}
+
 		setSaveState('saved');
-		// A save that works clears whatever the last failure said, or the screen
-		// would go on showing an error about work that has since gone through.
 		setError(null);
 	}, [cardId]);
 
@@ -331,8 +349,41 @@ export function useCardEditor(cardId: string | null, profile: Profile | null): C
 	};
 }
 
-/** PostgREST's two ways of saying the column isn't there yet. */
-function isMissingLinksColumn(err: { code?: string; message?: string }): boolean {
-	if (err.code === 'PGRST204' || err.code === '42703') return true;
-	return /column .*links.* does not exist/i.test(err.message ?? '');
+/** PostgREST 204 names the missing column; 42703 is the Postgres equivalent. */
+function missingCardColumn(err: { code?: string; message?: string }): string | null {
+	const named = /Could not find the '([^']+)' column of 'cards'/i.exec(err.message ?? '');
+	if (named) return named[1];
+	const pg = /column ["']?cards\.([^"'\s]+)["']? does not exist/i.exec(err.message ?? '');
+	if (pg) return pg[1];
+	if (err.code === 'PGRST204' || err.code === '42703') {
+		const anyCol = /'([^']+)' column/i.exec(err.message ?? '');
+		return anyCol?.[1] ?? null;
+	}
+	return null;
+}
+
+/**
+ * Fields the card would have stored, written to the profile instead when the
+ * live `cards` table does not have them yet. Name/bio/pronouns already live on
+ * the profile as the inherit defaults; `profiles.links` is the same idea until
+ * `cards.links` exists.
+ */
+function profileFallback(
+	draft: CardDraft,
+	missing: Set<string>
+): Database['public']['Tables']['profiles']['Update'] | null {
+	const patch: Database['public']['Tables']['profiles']['Update'] = {};
+	if (missing.has('display_name') && draft.display_name.trim()) {
+		patch.display_name = draft.display_name.trim();
+	}
+	if (missing.has('pronouns')) {
+		patch.pronouns = draft.pronouns.trim() || null;
+	}
+	if (missing.has('bio')) {
+		patch.bio = draft.bio.trim();
+	}
+	if (missing.has('links')) {
+		patch.links = linksToJson(draft.links);
+	}
+	return Object.keys(patch).length ? patch : null;
 }

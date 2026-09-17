@@ -15,7 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Card } from '@/card/Card';
 import { FlipCard } from '@/card/FlipCard';
 import { DEMO_CARD } from '@/card/demo-card';
-import { BG_KEYS, FRAME_KEYS, type BgKey, type FrameKey } from '@/card/card-style';
+import { BGS, FRAME_KEYS, type BgKey, type FrameKey } from '@/card/card-style';
 import {
 	FOIL_LAYERS,
 	type FoilEngine,
@@ -32,22 +32,25 @@ import { FOIL_KINDS, type FoilKind } from '@/card/tiers';
 import { palette } from '@/theme/palette';
 import { radius, space, type } from '@/theme/tokens';
 
-const PRESETS: { value: SamplerFoilPreset; label: string }[] = [
-	{ value: 'linear-holo', label: 'Linear holo' },
-	{ value: 'rainbow-glitter', label: 'Glitter' },
-	{ value: 'radiant-crosshatch', label: 'Crosshatch' },
-	{ value: 'cosmos-speckle', label: 'Cosmos' },
-	{ value: 'ice-crackle', label: 'Ice crackle' }
-];
-
-const BLENDS: { value: NonNullable<ViewStyle['mixBlendMode']>; label: string }[] = [
-	{ value: 'screen', label: 'Screen' },
-	{ value: 'soft-light', label: 'Soft light' },
-	{ value: 'overlay', label: 'Overlay' },
-	{ value: 'plus-lighter', label: 'Plus lighter' },
-	{ value: 'color-dodge', label: 'Color dodge' },
-	{ value: 'hard-light', label: 'Hard light' },
-	{ value: 'luminosity', label: 'Luminosity' }
+/** Every CSS blend mode React Native 0.86 accepts, in `mixBlendMode`'s order. */
+const BLEND_MODES: NonNullable<ViewStyle['mixBlendMode']>[] = [
+	'normal',
+	'multiply',
+	'screen',
+	'overlay',
+	'darken',
+	'lighten',
+	'color-dodge',
+	'color-burn',
+	'hard-light',
+	'soft-light',
+	'difference',
+	'exclusion',
+	'hue',
+	'saturation',
+	'color',
+	'luminosity',
+	'plus-lighter'
 ];
 
 const FACES: { value: BgKey; label: string }[] = [
@@ -275,35 +278,49 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 	);
 }
 
-function ChoiceGrid<T extends string>({
+function Chips<T extends string>({
 	options,
 	value,
 	onChange
 }: {
-	options: { value: T; label: string }[];
+	options: readonly T[];
 	value: T;
-	onChange: (value: T) => void;
+	onChange: (next: T) => void;
 }) {
 	return (
-		<View style={styles.choices}>
-			{options.map((option) => (
-				<Pressable
-					key={option.value}
-					onPress={() => onChange(option.value)}
-					style={[styles.choice, value === option.value && styles.choiceOn]}
-				>
-					<Text style={[styles.choiceText, value === option.value && styles.choiceTextOn]}>
-						{option.label}
-					</Text>
-				</Pressable>
-			))}
+		<View style={styles.chipWrap}>
+			{options.map((opt) => {
+				const on = opt === value;
+				return (
+					<Pressable
+						key={opt}
+						onPress={() => onChange(opt)}
+						style={[styles.chip, on && styles.chipOn]}
+					>
+						<Text style={[styles.chipText, on && styles.chipTextOn]}>{opt}</Text>
+					</Pressable>
+				);
+			})}
 		</View>
 	);
 }
 
-function Stepper({ label, onPress }: { label: string; onPress: () => void }) {
+function Stepper({
+	label,
+	onPress,
+	wide,
+	small
+}: {
+	label: string;
+	onPress: () => void;
+	wide?: boolean;
+	small?: boolean;
+}) {
 	return (
-		<Pressable style={styles.stepper} onPress={onPress}>
+		<Pressable
+			onPress={onPress}
+			style={[styles.stepper, wide && styles.stepperWide, small && styles.stepperSmall]}
+		>
 			<Text style={styles.stepperText}>{label}</Text>
 		</Pressable>
 	);
@@ -348,10 +365,35 @@ const styles = StyleSheet.create({
 		borderWidth: StyleSheet.hairlineWidth,
 		borderColor: palette.line
 	},
-	choiceOn: { backgroundColor: palette.teal, borderColor: palette.teal },
-	choiceText: { ...type.small, color: palette.creamMute },
-	choiceTextOn: { color: palette.void, fontFamily: 'SpaceGrotesk-Bold' },
-	note: { ...type.small, color: palette.creamMute },
+	chipOn: {
+		backgroundColor: palette.rose,
+		borderColor: palette.rose
+	},
+	chipText: { ...type.small, color: palette.creamMute },
+	chipTextOn: { color: palette.void, fontFamily: 'SpaceGrotesk-Bold' },
+	layerRow: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		gap: space.sm,
+		paddingVertical: space.xs,
+		borderTopWidth: StyleSheet.hairlineWidth,
+		borderTopColor: palette.line
+	},
+	layerRowOff: { opacity: 0.45 },
+	layerToggle: { flexDirection: 'row', alignItems: 'center', gap: space.xs, width: 96 },
+	checkbox: { color: palette.creamFaint, fontSize: 13 },
+	checkboxOn: { color: palette.teal },
+	layerName: { ...type.small, color: palette.cream },
+	blendBtn: {
+		flex: 1,
+		paddingVertical: space.xs,
+		paddingHorizontal: space.sm,
+		borderRadius: radius.sm,
+		backgroundColor: palette.raisedHigh
+	},
+	blendText: { ...type.small, color: palette.butter, fontSize: 11 },
+	opacityGroup: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
+	opacityText: { ...type.small, color: palette.creamMute, width: 38, textAlign: 'center' },
 	stepRow: { flexDirection: 'row', gap: space.sm },
 	stepper: {
 		flex: 1,
@@ -362,6 +404,8 @@ const styles = StyleSheet.create({
 		borderWidth: StyleSheet.hairlineWidth,
 		borderColor: palette.line
 	},
+	stepperWide: { minWidth: 120 },
+	stepperSmall: { flex: 0, minWidth: 30, paddingVertical: 2 },
 	stepperText: { ...type.small, color: palette.butter },
 	faceRow: { flexDirection: 'row', gap: space.sm },
 	faceChoice: { flex: 1, gap: space.xs, padding: 3, borderRadius: radius.md, borderWidth: 2 },

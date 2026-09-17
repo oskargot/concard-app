@@ -50,9 +50,6 @@ export interface CardFaceEdit {
 	bioMax?: number;
 	/** Tap the photo well to pick a new image. */
 	onPressPhoto?: () => void;
-	/** The sticker drawer button, drawn only while editing. */
-	onPressStickers?: () => void;
-	stickersEnabled?: boolean;
 }
 
 export function CardFace({
@@ -69,18 +66,11 @@ export function CardFace({
 	const ink = inkFor(style.bg);
 	const compact = width < COMPACT_BELOW;
 	const micro = width < MICRO_BELOW;
-	const hair = Math.max(m.u(0.5), 1);
-	const borderTint = ink.dark ? 'rgba(247,245,238,0.25)' : 'rgba(23,22,27,0.25)';
-
-	const badgeOverFooter =
-		!!view.affiliation && view.affiliation.x > 0.62 && view.affiliation.y > 0.76;
-
-	const chips = view.links.slice(0, MAX_CHIPS);
-	const more = Math.max(0, view.links.length - MAX_CHIPS);
 
 	// An empty bio normally collapses. While editing it has to stay, or there is
 	// nothing left on screen to tap to write one.
 	const showBio = !compact && (!!view.bio || !!edit?.onChangeBio);
+	const showLinks = !compact && (view.links.length > 0 || !!edit);
 
 	const titleStyle: TextStyle = {
 		fontFamily: font.display,
@@ -112,75 +102,70 @@ export function CardFace({
 	return (
 		<View style={{ flex: 1, padding: m.u(4.67), gap: m.u(2.4) }}>
 			<View style={{ gap: m.u(0.55) }}>
-				<Text
+				<FaceText
+					value={view.title}
+					onChangeText={edit?.onChangeTitle}
 					numberOfLines={1}
 					style={{
-						fontFamily: font.display,
+						...titleStyle,
 						fontSize: m.u(7.2),
-						lineHeight: m.u(7.2) * 1.06,
-						color: ink.ink
+						lineHeight: m.u(7.2) * 1.06
 					}}
-				>
-					{view.title}
-				</Text>
-				<View style={{ flexDirection: 'row', alignItems: 'center', gap: m.u(1.5) }}>
-					<Text
-						numberOfLines={1}
-						style={{
-							fontFamily: font.bodyBold,
-							fontSize: Math.max(m.u(3.17), 7),
-							lineHeight: Math.max(m.u(3.17), 7) * 1.2,
-							letterSpacing: 0.4,
-							color: ink.mute
-						}}
-					>
-						@{view.handle}
-					</Text>
-					{view.pronouns || edit?.onChangePronouns ? (
-						<View style={{ flexDirection: 'row', alignItems: 'center', minWidth: 0 }}>
-							<Text style={pronounStyle}>· </Text>
-							<FaceText
-								value={view.pronouns ?? ''}
-								onChangeText={edit?.onChangePronouns}
-								numberOfLines={1}
-								style={pronounStyle}
-								placeholder="pronouns"
-								placeholderColor={ink.mute}
-								maxLength={30}
-							/>
-						</View>
-					) : null}
-				</View>
+					placeholder="Your name"
+					placeholderColor={ink.mute}
+					maxLength={40}
+				/>
+				{!micro ? (
+					<View style={{ flexDirection: 'row', alignItems: 'center', gap: m.u(1.5) }}>
+						<Text numberOfLines={1} style={handleStyle}>
+							@{view.handle}
+						</Text>
+						{view.pronouns || edit?.onChangePronouns ? (
+							<View style={{ flexDirection: 'row', alignItems: 'center', minWidth: 0 }}>
+								<Text style={pronounStyle}>· </Text>
+								<FaceText
+									value={view.pronouns ?? ''}
+									onChangeText={edit?.onChangePronouns}
+									numberOfLines={1}
+									style={pronounStyle}
+									placeholder="pronouns"
+									placeholderColor={ink.mute}
+									maxLength={30}
+								/>
+							</View>
+						) : null}
+					</View>
+				) : null}
 			</View>
 
-			<Photo view={view} width={width} ink={ink} compact={compact} />
+			<Photo view={view} width={width} ink={ink} compact={compact} edit={edit} />
 
-			{!compact && (view.bio || view.links.length > 0) ? (
-				<View style={{ flex: 1, justifyContent: 'flex-end', gap: m.u(2) }}>
-					{view.bio ? (
+			{showBio || showLinks ? (
+				<View style={{ flex: 1, minHeight: 0, gap: m.u(2) }}>
+					{showBio ? (
 						<View
 							style={{
+								flex: 1,
+								minHeight: 0,
 								backgroundColor: ink.wash,
 								borderRadius: m.u(3.4),
 								paddingVertical: m.u(2.35),
 								paddingHorizontal: m.u(3)
 							}}
 						>
-							<Text
-								numberOfLines={3}
-								style={{
-									fontFamily: font.body,
-									fontSize: Math.max(m.u(3.65), 8),
-									lineHeight: Math.max(m.u(3.65), 8) * 1.36,
-									color: ink.body,
-									textAlign: style.bio_align
-								}}
-							>
-								{view.bio}
-							</Text>
+							<FaceText
+								value={view.bio}
+								onChangeText={edit?.onChangeBio}
+								style={bioStyle}
+								placeholder="Say something card-sized."
+								placeholderColor={ink.mute}
+								maxLength={edit?.bioMax}
+								multiline
+								fill
+							/>
 						</View>
 					) : null}
-					{view.links.length > 0 ? <Links view={view} width={width} ink={ink} /> : null}
+					{showLinks ? <Links view={view} width={width} ink={ink} /> : null}
 				</View>
 			) : null}
 		</View>
@@ -258,16 +243,18 @@ function Photo({
 	view,
 	width,
 	ink,
-	compact
+	compact,
+	edit
 }: {
 	view: CardView;
 	width: number;
 	ink: ReturnType<typeof inkFor>;
 	compact: boolean;
+	edit?: CardFaceEdit;
 }) {
 	const m = shellMetrics(width, view.style.shape);
 	const shape = view.style.photo_shape;
-	const photoSize = compact ? 88 : 58;
+	const photoSize = compact ? 88 : 38;
 
 	// The four photo silhouettes, carried over from the web card.
 	const radius =
@@ -384,6 +371,82 @@ function Photo({
 	);
 }
 
+function Links({
+	view,
+	width,
+	ink
+}: {
+	view: CardView;
+	width: number;
+	ink: ReturnType<typeof inkFor>;
+}) {
+	const m = shellMetrics(width, view.style.shape);
+	const rowFont = Math.max(m.u(3.4), 8);
+	const rowH = rowFont * 1.25 + m.u(1.6);
+	const shown = view.links.slice(0, MAX_CHIPS);
+	const extra = Math.max(0, view.links.length - shown.length);
+
+	return (
+		<View
+			style={{
+				height: rowH * MAX_CHIPS + m.u(2.4) * 2 + m.u(1.1) * (MAX_CHIPS - 1),
+				borderRadius: m.u(4.67),
+				backgroundColor: ink.wash,
+				paddingVertical: m.u(2.4),
+				paddingHorizontal: m.u(3),
+				justifyContent: 'space-between'
+			}}
+		>
+			{Array.from({ length: MAX_CHIPS }, (_, i) => {
+				const link = shown[i];
+				return (
+					<View key={i} style={{ height: rowH, justifyContent: 'center' }}>
+						{link ? (
+							<Text
+								numberOfLines={1}
+								style={{
+									fontFamily: font.bodyMedium,
+									fontSize: rowFont,
+									lineHeight: rowFont * 1.25,
+									color: ink.ink
+								}}
+							>
+								{link.label || displayUrl(link.url)}
+							</Text>
+						) : extra > 0 && i === MAX_CHIPS - 1 ? (
+							<Text
+								style={{
+									fontFamily: font.bodyBold,
+									fontSize: Math.max(m.u(2.67), 6.5),
+									letterSpacing: 1.1,
+									color: ink.mute
+								}}
+							>
+								+{extra} MORE
+							</Text>
+						) : null}
+					</View>
+				);
+			})}
+			{extra > 0 && shown.length === MAX_CHIPS ? (
+				<Text
+					style={{
+						position: 'absolute',
+						right: m.u(3),
+						bottom: m.u(2),
+						fontFamily: font.bodyBold,
+						fontSize: Math.max(m.u(2.2), 6),
+						letterSpacing: 1,
+						color: ink.mute
+					}}
+				>
+					+{extra}
+				</Text>
+			) : null}
+		</View>
+	);
+}
+
 /** Exported so the foil lab can show a face colour swatch without importing BGS. */
 export const faceColorFor = (style: CardStyle) => BGS[style.bg];
 
@@ -408,12 +471,13 @@ export function faceBands(width: number, style: CardStyle): FaceBands {
 	const m = shellMetrics(width, style.shape);
 	const u = m.u;
 	const pad = u(4.67);
-	const gap = u(3);
-	const hair = Math.max(u(0.5), 1);
+	const gap = u(2.4);
 
-	const headerH = u(7.67) + u(1) + Math.max(u(3.17), 7) * 1.2 + u(2) + hair;
-	const photoH = style.photo_shape === 'circle' ? u(49.33) : u(47.33);
-	const chipH = Math.max(u(3.17), 7) * 1.2 + u(1.33) * 2 + hair * 2;
+	const headerH = u(7.2) * 1.06 + u(0.55) + Math.max(u(3.17), 7) * 1.2;
+	const photoH = u(38);
+	const rowFont = Math.max(u(3.4), 8);
+	const rowH = rowFont * 1.25 + u(1.6);
+	const linksH = rowH * MAX_CHIPS + u(2.4) * 2 + u(1.1) * (MAX_CHIPS - 1);
 
 	// The face is inset from the card edge by the metal band, so every offset
 	// below is measured from the card, not from the face.
@@ -421,7 +485,7 @@ export function faceBands(width: number, style: CardStyle): FaceBands {
 	const photoTop = headerTop + headerH + gap;
 	const bioTop = photoTop + photoH + gap;
 	const footerBottom = m.height - m.band - pad;
-	const footerTop = footerBottom - chipH;
+	const footerTop = footerBottom - linksH;
 
 	return {
 		header: headerTop + headerH / 2,
