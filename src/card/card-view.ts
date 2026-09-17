@@ -15,8 +15,10 @@
 
 import type { Database } from '../lib/database.types';
 import { styleCategoryForFandom } from '../stickers/fandom-styles';
+import { FANDOM_STYLE_CATEGORIES, type FandomStyleCategory } from '../stickers/types';
 import { BADGE_HOME, normalizeStyle } from './card-style';
 import { normalizeLinks } from './links';
+import { STICKER_FOILS, type StickerFoil } from './tiers';
 import type { Affiliation, CardView } from './types';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
@@ -51,6 +53,51 @@ export function affiliationFor(
 		rotation: AFFILIATION_DEFAULTS.rotation,
 		scale: AFFILIATION_DEFAULTS.scale,
 		foil: AFFILIATION_DEFAULTS.foil
+	};
+}
+
+function finiteNumber(value: unknown, fallback: number): number {
+	return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+/**
+ * Affiliation from a collection snapshot: a frozen sticker, or a live fandom id
+ * resolved the same way a display screen resolves `cards.affiliation`.
+ */
+export function affiliationFromUnknown(
+	value: unknown,
+	x: unknown,
+	y: unknown,
+	fandoms: Fandom[]
+): Affiliation | null {
+	if (typeof value === 'string') {
+		return affiliationFor(
+			value,
+			typeof x === 'number' ? x : null,
+			typeof y === 'number' ? y : null,
+			fandoms
+		);
+	}
+	if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+	const raw = value as Record<string, unknown>;
+	if (typeof raw.id !== 'string' || typeof raw.name !== 'string') return null;
+	const style_category: FandomStyleCategory = FANDOM_STYLE_CATEGORIES.includes(
+		raw.style_category as FandomStyleCategory
+	)
+		? (raw.style_category as FandomStyleCategory)
+		: styleCategoryForFandom({ id: raw.id, name: raw.name });
+	const foil: StickerFoil = STICKER_FOILS.includes(raw.foil as StickerFoil)
+		? (raw.foil as StickerFoil)
+		: AFFILIATION_DEFAULTS.foil;
+	return {
+		id: raw.id,
+		name: raw.name,
+		style_category,
+		x: finiteNumber(raw.x, BADGE_HOME.x),
+		y: finiteNumber(raw.y, BADGE_HOME.y),
+		rotation: finiteNumber(raw.rotation, AFFILIATION_DEFAULTS.rotation),
+		scale: finiteNumber(raw.scale, AFFILIATION_DEFAULTS.scale),
+		foil
 	};
 }
 

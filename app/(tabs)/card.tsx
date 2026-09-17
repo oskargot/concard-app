@@ -1,19 +1,15 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { SharedValue } from 'react-native-reanimated';
 
 import { useAuth } from '@/auth/AuthProvider';
-import { CardFace } from '@/card/CardFace';
-import { CardShell } from '@/card/CardShell';
+import { Card } from '@/card/Card';
 import { FlipCard } from '@/card/FlipCard';
-import { StickerLayer } from '@/card/StickerLayer';
-import { normalizeStyle } from '@/card/card-style';
 import { foilForTier } from '@/card/tiers';
-import type { CardLink, PlacedSticker } from '@/card/types';
-import { supabase } from '@/lib/supabase';
+import { useCard, useSyncActiveCard } from '@/card/use-card';
 import { useConcardStore } from '@/store/useConcardStore';
 import { Button } from '@/ui';
 import { palette } from '@/theme/palette';
@@ -27,39 +23,25 @@ export default function CardScreen() {
 	const router = useRouter();
 	const { profile } = useAuth();
 	const [mode, setMode] = useState<Mode>('card');
-	const card = useConcardStore((state) => state.active_card);
-	const updateCard = useConcardStore((state) => state.updateActiveCard);
+	const stored = useConcardStore((state) => state.active_card);
 	const cardWidth = Math.min(width - space.xl * 2, 320);
+	const cardId = profile?.active_card_id ?? null;
 
-	useEffect(() => {
-		if (!supabase || !profile?.active_card_id) return;
-		Promise.all([
-			supabase.from('cards').select('*').eq('id', profile.active_card_id).maybeSingle(),
-			supabase
-				.from('sticker_placements')
-				.select('*')
-				.eq('card_id', profile.active_card_id)
-				.order('z_index')
-		]).then(([cardResult, stickerResult]) => {
-			if (!cardResult.data) return;
-			const row = cardResult.data;
-			updateCard({
-				id: row.id,
-				title: row.display_name ?? profile.display_name,
-				handle: profile.username,
-				pronouns: row.pronouns ?? profile.pronouns,
-				bio: row.bio ?? profile.bio,
-				label: row.label,
-				art_url: row.art_url,
-				art_x: row.art_x,
-				art_y: row.art_y,
-				art_scale: row.art_scale,
-				style: normalizeStyle(row.style),
-				links: Array.isArray(profile.links) ? (profile.links as unknown as CardLink[]) : [],
-				stickers: (stickerResult.data ?? []) as PlacedSticker[]
-			});
-		});
-	}, [profile, updateCard]);
+	const skipFirstFocus = useRef(true);
+	const [refreshKey, setRefreshKey] = useState(0);
+	useFocusEffect(
+		useCallback(() => {
+			if (skipFirstFocus.current) {
+				skipFirstFocus.current = false;
+				return;
+			}
+			setRefreshKey((n) => n + 1);
+		}, [])
+	);
+
+	const { view } = useCard(cardId, profile, refreshKey);
+	useSyncActiveCard(view, cardId);
+	const card = view ? { id: cardId ?? stored.id, ...view } : stored;
 
 	const qrPayload = useMemo(
 		() => JSON.stringify({ username: card.handle, card_id: card.id }),
@@ -67,17 +49,7 @@ export default function CardScreen() {
 	);
 
 	const renderCard = (rx: SharedValue<number>, ry: SharedValue<number>) => (
-		<CardShell
-			style={card.style}
-			width={cardWidth}
-			foil={foilForTier(0)}
-			seed={card.id}
-			rx={rx}
-			ry={ry}
-			overlay={<StickerLayer stickers={card.stickers} width={cardWidth} />}
-		>
-			<CardFace view={card} width={cardWidth} />
-		</CardShell>
+		<Card view={card} width={cardWidth} foil={foilForTier(0)} seed={card.id} rx={rx} ry={ry} />
 	);
 
 	return (
@@ -136,11 +108,6 @@ export default function CardScreen() {
 						}
 					/>
 					<Button label="Show my QR" variant="secondary" onPress={() => setMode('share')} />
-					<Button
-						label="Open holo lab"
-						variant="ghost"
-						onPress={() => router.push('/dev/foil-lab')}
-					/>
 				</View>
 			) : null}
 		</ScrollView>
