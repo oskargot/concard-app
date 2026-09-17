@@ -27,7 +27,7 @@ export const DEMO_STICKER_GLYPHS: Record<string, string> = {
 
 /**
  * The card on the home gallery. Gold on butter with stickers and a fandom
- * badge — matches the web demo fixture so both renderers can be compared.
+ * affiliation sticker — matches the web demo fixture for style comparison.
  */
 export const DEMO_CARD: CardView = {
 	title: 'Oskar',
@@ -43,10 +43,11 @@ export const DEMO_CARD: CardView = {
 	affiliation: {
 		id: 'anime',
 		name: 'Anime',
-		mark: 'ANI',
-		color_a: '#ff7eb6',
-		color_b: '#7c4dff',
-		...BADGE_HOME
+		style_category: 'cute',
+		...BADGE_HOME,
+		rotation: 0,
+		scale: 1,
+		foil: 'none'
 	},
 	links: [
 		{ label: 'bsky', url: 'https://bsky.app/profile/oskar' },

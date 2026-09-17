@@ -45,12 +45,18 @@ export default function SetupScreen() {
 
 			<Panel>
 				<Text style={styles.label}>Meanwhile</Text>
-				<Body>The foil screens work without Supabase — open them to tilt cards now.</Body>
+				<Body>
+					The foil and sticker lab screens work without Supabase — open them to tilt cards or tune
+					fandom type now.
+				</Body>
 				<Link href="/dev/foil-lab" style={styles.link}>
 					Open the foil lab →
 				</Link>
 				<Link href="/dev/foil-sampler" style={styles.link}>
 					Open the foil sampler →
+				</Link>
+				<Link href="/dev/stickers" style={styles.link}>
+					Open the fandom sticker lab →
 				</Link>
 			</Panel>
 		</ScrollView>

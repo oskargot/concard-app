@@ -1,18 +1,24 @@
 /**
- * Everything that sits outside the face clip: the fandom badge and stickers.
+ * Everything that sits outside the face clip: the fandom affiliation and stickers.
  *
  * Ported from the overlay snippet in the web app's `Card.svelte`. These hang
  * over the metal frame, so they live in CardShell's `overlay` slot rather than
- * inside the face.
+ * inside the face. Affiliation art goes through `StickerRenderer`; deco glyphs
+ * remain a Stage 1/2 prototype until the unified sticker pass.
  */
 
 import { Text, View } from 'react-native';
 
-import { font } from '../theme/tokens';
+import { layoutFandomSticker, stickerHeight } from '../stickers/fandom-layout';
+import { definitionFromAffiliation, recipeFor } from '../stickers/fandom-styles';
+import { StickerRenderer } from '../stickers/StickerRenderer';
 import { BADGE_HOME, stickerRotation } from './card-style';
 import { shellMetrics } from './CardShell';
 import { DEMO_STICKER_GLYPHS } from './demo-card';
-import type { CardView, PlacedSticker } from './types';
+import type { Affiliation, CardView, PlacedSticker } from './types';
+
+/** Base width of the affiliation sticker in card units (cqw), before `scale`. */
+const AFFILIATION_WIDTH_U = 28;
 
 export function CardOverlay({
 	view,
@@ -28,17 +34,7 @@ export function CardOverlay({
 
 	return (
 		<>
-			{view.affiliation ? (
-				<Badge
-					mark={view.affiliation.mark}
-					name={view.affiliation.name}
-					colorA={view.affiliation.color_a}
-					colorB={view.affiliation.color_b}
-					x={view.affiliation.x ?? BADGE_HOME.x}
-					y={view.affiliation.y ?? BADGE_HOME.y}
-					width={width}
-				/>
-			) : null}
+			{view.affiliation ? <AffiliationMark affiliation={view.affiliation} width={width} /> : null}
 
 			{stickers.map((s) => (
 				<StickerMark
@@ -52,68 +48,36 @@ export function CardOverlay({
 	);
 }
 
-function Badge({
-	mark,
-	name,
-	colorA,
-	colorB,
-	x,
-	y,
-	width
-}: {
-	mark: string;
-	name: string;
-	colorA: string;
-	colorB: string;
-	x: number;
-	y: number;
-	width: number;
-}) {
+function AffiliationMark({ affiliation, width }: { affiliation: Affiliation; width: number }) {
 	const m = shellMetrics(width, 'rounded');
-	const size = m.u(20);
+	const size = m.u(AFFILIATION_WIDTH_U);
+	const x = affiliation.x ?? BADGE_HOME.x;
+	const y = affiliation.y ?? BADGE_HOME.y;
+	const definition = definitionFromAffiliation(affiliation);
+	const layout = layoutFandomSticker(definition.label, recipeFor(definition.styleCategory), size);
+	const height = layout ? stickerHeight(layout, size) : size * 0.55;
 
 	return (
 		<View
 			pointerEvents="none"
 			style={{
 				position: 'absolute',
-				// Pixel positions (not %) stay sharp under the card's 3D tilt.
 				left: m.width * x - size / 2,
-				top: m.height * y - size / 2,
+				top: m.height * y - height / 2,
 				width: size,
-				height: size,
-				borderRadius: m.u(4.67),
-				experimental_backgroundImage: `linear-gradient(150deg, ${colorA}, ${colorB})`,
+				height,
+				zIndex: 20,
+				transform: [{ rotate: `${affiliation.rotation}deg` }, { scale: affiliation.scale }],
 				alignItems: 'center',
-				justifyContent: 'center',
-				gap: m.u(1),
-				padding: m.u(1)
+				justifyContent: 'center'
 			}}
 		>
-			<Text
-				style={{
-					fontFamily: font.bodyBold,
-					fontSize: m.u(5),
-					lineHeight: m.u(5),
-					color: '#fbf9f3'
-				}}
-			>
-				{mark}
-			</Text>
-			<Text
-				numberOfLines={1}
-				style={{
-					fontFamily: font.bodyBold,
-					fontSize: m.u(1.83),
-					lineHeight: m.u(1.83) * 1.1,
-					letterSpacing: 0.6,
-					textTransform: 'uppercase',
-					color: '#fbf9f3',
-					maxWidth: '100%'
-				}}
-			>
-				{name}
-			</Text>
+			<StickerRenderer
+				definition={definition}
+				foil={affiliation.foil}
+				width={size}
+				seed={affiliation.id}
+			/>
 		</View>
 	);
 }

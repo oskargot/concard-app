@@ -1,15 +1,10 @@
 /**
  * The editor's centrepiece: the card, with its controls in the margins.
  *
- * Design bible §12 puts the card above the chrome, and the editor takes that
- * literally — there are no option panels. Every style axis is an arrow pair in
- * the gutter beside the part of the card it changes, and the eighteen face
- * colours are swatch rails down the outer edges. Nothing here opens, expands or
- * covers the card, so what you are editing is on screen the whole time.
- *
- * The one thing the arrows can't teach on their own is what they just did, so a
- * change prints its axis and value in a caption under the card for a moment.
- * Without it, cycling `shaved → rect` reads as the card twitching.
+ * Face colours sit in a grid above the card so the gutters stay for the style
+ * arrows only. Each arrow pair still parks beside the band it changes. A change
+ * prints its axis and value in a caption under the card for a moment — without
+ * it, cycling `shaved → rect` reads as the card twitching.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -39,53 +34,39 @@ export interface StyleAxis<T extends string = string> {
 	band: BandKey;
 }
 
-const RAIL_WIDTH = 28;
-const SWATCH = 22;
 const ARROW = 30;
 const COLUMN_GAP = 4;
+const GRID_COLS = 9;
+const SWATCH = 16;
 
-/** Below this the card stops being the focus, so the rails move under it instead. */
-const CARD_MIN = 200;
 /** How long a change stays named under the card. */
 const CAPTION_MS = 1600;
 
 export interface StageLayout {
 	cardWidth: number;
-	/** False when the screen is too narrow for side rails; they go below instead. */
-	railsBeside: boolean;
 }
 
 /**
  * How wide the card can be, given the screen.
  *
- * The gutters are claimed in priority order: arrows first, because they are the
- * only way to reach four of the style axes, then the swatch rails, which have a
- * perfectly good fallback below the card. A phone narrow enough to force that
- * fallback still gets a card wider than `COMPACT_BELOW`, so the face keeps its
- * bio and links rather than collapsing to a thumbnail mid-edit.
+ * Gutters are reserved for the arrows only — colours live above the card, so
+ * they never steal width from the face.
  */
 export function stageLayout(screenWidth: number, pagePadding: number, max = 320): StageLayout {
 	const arrows = 2 * (ARROW + COLUMN_GAP);
-	const rails = 2 * (RAIL_WIDTH + COLUMN_GAP);
 	const available = screenWidth - pagePadding * 2;
-
-	const withRails = Math.min(available - arrows - rails, max);
-	if (withRails >= CARD_MIN) return { cardWidth: withRails, railsBeside: true };
-
-	return { cardWidth: Math.min(available - arrows, max), railsBeside: false };
+	return { cardWidth: Math.min(available - arrows, max) };
 }
 
 export function EditorStage({
 	style,
 	cardWidth,
-	railsBeside,
 	axes,
 	onPickBackground,
 	renderCard
 }: {
 	style: CardStyle;
 	cardWidth: number;
-	railsBeside: boolean;
 	axes: StyleAxis[];
 	onPickBackground: (bg: BgKey) => void;
 	renderCard: (rx: SharedValue<number>, ry: SharedValue<number>) => React.ReactNode;
@@ -122,25 +103,19 @@ export function EditorStage({
 	);
 
 	const bgKeys = Object.keys(BGS) as BgKey[];
-	const half = Math.ceil(bgKeys.length / 2);
-
-	const rail = (keys: BgKey[]) => (
-		<SwatchRail
-			keys={keys}
-			value={style.bg}
-			height={cardHeight}
-			vertical
-			onPick={(bg) => {
-				onPickBackground(bg);
-				announce(`Face · ${BG_LABEL[bg]}`);
-			}}
-		/>
-	);
 
 	return (
 		<View style={styles.stage}>
+			<SwatchGrid
+				keys={bgKeys}
+				value={style.bg}
+				onPick={(bg) => {
+					onPickBackground(bg);
+					announce(`Face · ${BG_LABEL[bg]}`);
+				}}
+			/>
+
 			<View style={styles.row}>
-				{railsBeside ? rail(bgKeys.slice(0, half)) : null}
 				<ArrowColumn side="left" axes={axes} bands={bands} height={cardHeight} onStep={step} />
 
 				<View style={{ width: cardWidth, height: cardHeight }}>
@@ -148,24 +123,12 @@ export function EditorStage({
 				</View>
 
 				<ArrowColumn side="right" axes={axes} bands={bands} height={cardHeight} onStep={step} />
-				{railsBeside ? rail(bgKeys.slice(half)) : null}
 			</View>
 
 			{/* Reserved whether or not there is a caption, so the card never shifts. */}
 			<Text style={styles.caption} numberOfLines={1} accessibilityLiveRegion="polite">
 				{caption ?? ''}
 			</Text>
-
-			{!railsBeside ? (
-				<SwatchRail
-					keys={bgKeys}
-					value={style.bg}
-					onPick={(bg) => {
-						onPickBackground(bg);
-						announce(`Face · ${BG_LABEL[bg]}`);
-					}}
-				/>
-			) : null}
 		</View>
 	);
 }
@@ -209,30 +172,18 @@ function ArrowColumn({
 	);
 }
 
-/**
- * The face colours. Vertical beside the card when there is room for it, and a
- * wrapped block underneath when there isn't.
- */
-function SwatchRail({
+/** Eighteen face colours in an even grid so no rail is longer than another. */
+function SwatchGrid({
 	keys,
 	value,
-	height,
-	vertical,
 	onPick
 }: {
 	keys: BgKey[];
 	value: BgKey;
-	height?: number;
-	vertical?: boolean;
 	onPick: (bg: BgKey) => void;
 }) {
 	return (
-		<View
-			style={[
-				vertical ? { width: RAIL_WIDTH, height, justifyContent: 'space-between' } : styles.railWrap
-			]}
-			accessibilityRole="radiogroup"
-		>
+		<View style={styles.grid} accessibilityRole="radiogroup">
 			{keys.map((key) => {
 				const on = key === value;
 				return (
@@ -242,7 +193,7 @@ function SwatchRail({
 						accessibilityRole="radio"
 						accessibilityState={{ selected: on }}
 						accessibilityLabel={BG_LABEL[key]}
-						hitSlop={4}
+						hitSlop={8}
 						style={({ pressed }) => [
 							styles.swatch,
 							on && styles.swatchOn,
@@ -258,8 +209,16 @@ function SwatchRail({
 }
 
 const styles = StyleSheet.create({
-	stage: { alignItems: 'center', gap: space.sm },
+	stage: { alignItems: 'center', gap: space.sm, alignSelf: 'stretch' },
 	row: { flexDirection: 'row', alignItems: 'center', gap: COLUMN_GAP },
+	grid: {
+		flexDirection: 'row',
+		flexWrap: 'wrap',
+		justifyContent: 'center',
+		width: GRID_COLS * SWATCH + (GRID_COLS - 1) * 2,
+		alignSelf: 'center',
+		gap: 2
+	},
 	arrow: {
 		position: 'absolute',
 		width: ARROW,
@@ -278,18 +237,11 @@ const styles = StyleSheet.create({
 		lineHeight: 24,
 		color: palette.cream
 	},
-	railWrap: {
-		flexDirection: 'row',
-		flexWrap: 'wrap',
-		justifyContent: 'center',
-		gap: space.sm,
-		paddingHorizontal: space.sm
-	},
 	swatch: {
-		width: SWATCH + 6,
-		height: SWATCH + 6,
-		borderRadius: radius.sm,
-		padding: 3,
+		width: SWATCH,
+		height: SWATCH,
+		padding: 1,
+		borderRadius: 4,
 		borderWidth: 2,
 		borderColor: 'transparent'
 	},

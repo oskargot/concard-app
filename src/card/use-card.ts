@@ -15,6 +15,7 @@ import { useEffect, useState } from 'react';
 
 import type { Database } from '../lib/database.types';
 import { supabase } from '../lib/supabase';
+import { useConcardStore } from '../store/useConcardStore';
 import { cardViewFrom } from './card-view';
 import type { CardView } from './types';
 
@@ -63,4 +64,13 @@ export function useCard(
 	}, [cardId, profile, refreshKey]);
 
 	return enabled ? { view, loading } : { view: null, loading: false };
+}
+
+/** Copy a loaded display view into the active-card store so Home can reuse it. */
+export function useSyncActiveCard(view: CardView | null, cardId: string | null) {
+	const updateActiveCard = useConcardStore((state) => state.updateActiveCard);
+	useEffect(() => {
+		if (!view || !cardId) return;
+		updateActiveCard({ id: cardId, ...view });
+	}, [view, cardId, updateActiveCard]);
 }

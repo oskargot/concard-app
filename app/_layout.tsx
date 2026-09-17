@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
+import { Outfit_400Regular, Outfit_600SemiBold, Outfit_700Bold } from '@expo-google-fonts/outfit';
 import { SplashScreen, Stack, useRouter, useSegments } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -9,7 +10,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth, type AuthStatus } from '@/auth/AuthProvider';
 import { ConcardSync } from '@/store/ConcardSync';
 import { palette } from '@/theme/palette';
-import { font } from '@/theme/tokens';
+import { font, uiFont } from '@/theme/tokens';
 
 SplashScreen.preventAutoHideAsync().catch(() => {
 	/* already hidden — not worth failing a launch over */
@@ -19,6 +20,9 @@ export default function RootLayout() {
 	// Self-hosted rather than fetched: a con hall is exactly where a request to a
 	// third-party font CDN fails, and the web app made the same call.
 	const [fontsLoaded, fontError] = useFonts({
+		[uiFont.regular]: Outfit_400Regular,
+		[uiFont.semibold]: Outfit_600SemiBold,
+		[uiFont.bold]: Outfit_700Bold,
 		[font.display]: require('../assets/fonts/Fredoka-Bold.ttf'),
 		[font.displaySemi]: require('../assets/fonts/Fredoka-SemiBold.ttf'),
 		[font.body]: require('../assets/fonts/SpaceGrotesk-Regular.ttf'),
@@ -45,7 +49,7 @@ export default function RootLayout() {
 							screenOptions={{
 								headerStyle: { backgroundColor: palette.base },
 								headerTintColor: palette.cream,
-								headerTitleStyle: { fontFamily: font.display },
+								headerTitleStyle: { fontFamily: uiFont.bold },
 								contentStyle: { backgroundColor: palette.base }
 							}}
 						>
@@ -55,6 +59,7 @@ export default function RootLayout() {
 							<Stack.Screen name="dev/foil-lab" options={{ title: 'Foil lab' }} />
 							<Stack.Screen name="dev/foil-sampler" options={{ title: 'Foil sampler' }} />
 							<Stack.Screen name="dev/cards" options={{ title: 'Card gallery' }} />
+							<Stack.Screen name="dev/stickers" options={{ title: 'Fandom stickers' }} />
 						</Stack>
 					</AuthGate>
 				</AuthProvider>
@@ -91,8 +96,8 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 		// widened here rather than indexed past its declared length.
 		const path = segments as readonly string[];
 		const inAuthFlow = path[0] === '(auth)';
-		// Foil lab / sampler / gallery don't need Supabase — leave them alone so
-		// a designer can tilt cards without finishing auth first.
+		// Foil lab / sampler / gallery / sticker lab don't need Supabase — leave
+		// them alone so a designer can tilt cards without finishing auth first.
 		const inDev = path[0] === 'dev';
 		const target = HOME_FOR[status];
 

@@ -1,11 +1,14 @@
 import * as FileSystem from 'expo-file-system/legacy';
 
 import { normalizeStyle } from '@/card/card-style';
+import { affiliationFromUnknown } from '@/card/card-view';
 import { DEMO_CARD } from '@/card/demo-card';
 import type { CardView, CollectedCard } from '@/card/types';
 import { supabase } from '@/lib/supabase';
-import type { Json } from '@/lib/database.types';
+import type { Database, Json } from '@/lib/database.types';
 import { useConcardStore, type PendingScan } from './useConcardStore';
+
+type Fandom = Database['public']['Tables']['fandoms']['Row'];
 
 let syncing = false;
 
@@ -15,7 +18,7 @@ function record(input: Json | undefined): Record<string, unknown> {
 		: {};
 }
 
-function snapshotToView(snapshot: Json, username: string): CardView {
+function snapshotToView(snapshot: Json, username: string, fandoms: Fandom[]): CardView {
 	const value = record(snapshot);
 	const profile = record(value.profile as Json);
 	const card = record((value.card as Json) ?? snapshot);
@@ -32,7 +35,12 @@ function snapshotToView(snapshot: Json, username: string): CardView {
 		art_y: Number(card.art_y ?? 0.5),
 		art_scale: Number(card.art_scale ?? 1),
 		style: normalizeStyle(card.style),
-		affiliation: null,
+		affiliation: affiliationFromUnknown(
+			value.affiliation ?? card.affiliation,
+			card.affiliation_x ?? value.affiliation_x,
+			card.affiliation_y ?? value.affiliation_y,
+			fandoms
+		),
 		links: Array.isArray(profile.links) ? (profile.links as CardView['links']) : [],
 		stickers: Array.isArray(value.stickers) ? (value.stickers as CardView['stickers']) : []
 	};
@@ -89,6 +97,16 @@ export async function syncPendingScans() {
 	syncing = true;
 	const store = useConcardStore.getState();
 	try {
+		let fandoms: Fandom[] = [];
+		if (supabase) {
+			const fandomList = await supabase
+				.from('fandoms')
+				.select('*')
+				.eq('is_active', true)
+				.order('sort_order');
+			if (!fandomList.error && fandomList.data) fandoms = fandomList.data;
+		}
+
 		for (const scan of [...store.scan_queue]) {
 			if (!supabase) {
 				store.cacheCard(demoCardFor(scan));
@@ -112,7 +130,7 @@ export async function syncPendingScans() {
 			if (!data) throw new Error('The collected card was not returned by Supabase.');
 
 			const view = await cachePhoto(
-				snapshotToView(data.card_snapshot, scan.username),
+				snapshotToView(data.card_snapshot, scan.username, fandoms),
 				scan.card_id
 			);
 			store.cacheCard({

@@ -1,5 +1,12 @@
 import type { StickerFoil } from '@/card/tiers';
 
+/**
+ * Prototype glyph catalog used by the stickers tab and `StickerLayer`.
+ *
+ * This is not the Stage 1 generative definition (`types.ts`). It stays until a
+ * later stage replaces glyphs with fandom/deco definitions; do not import this
+ * `StickerDefinition` from new sticker rendering code.
+ */
 export interface StickerDefinition {
 	id: string;
 	name: string;

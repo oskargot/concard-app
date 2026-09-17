@@ -78,7 +78,7 @@ export type FoilLayerName = (typeof FOIL_LAYERS)[number];
  * at glitter. `holo` is the sticker ceiling rather than a card tier.
  */
 const RECIPES: Record<FoilKind, readonly FoilLayerName[]> = {
-	none: ['edge'],
+	none: ['spec', 'edge'],
 	glitter: ['wash', 'glitter', 'spec', 'edge'],
 	holo: ['wash', 'bars', 'spec', 'edge'],
 	cosmic: ['space', 'nebula', 'stars', 'bars', 'spec', 'edge'],
@@ -99,19 +99,35 @@ const DEFAULTS: Record<FoilLayerName, { blend: ViewStyle['mixBlendMode']; opacit
 	facets: { blend: 'color-dodge', opacity: 0.5 },
 	glitter: { blend: 'color-dodge', opacity: 0.55 },
 	stars: { blend: 'plus-lighter', opacity: 0.9 },
-	spec: { blend: 'screen', opacity: 0.55 },
+	spec: { blend: 'screen', opacity: 0.42 },
 	edge: { blend: 'normal', opacity: 1 }
 };
 
-/**
- * How far a layer slides per degree of tilt, as a fraction of card size.
- *
- * Deliberately empty while FlipCard owns the physical 3D tilt: translating foil
- * layers every frame invalidates the hardware texture the body tilt depends on,
- * and that was the glassy pixelation. The card tilting in perspective *is* the
- * light cue; foil-lab's v2 engine still does its own motion for experiments.
- */
-const PARALLAX: Partial<Record<FoilLayerName, number>> = {};
+const SAMPLER_PRESET: Partial<Record<FoilKind, SamplerFoilPreset>> = {
+	glitter: 'rainbow-glitter',
+	holo: 'linear-holo',
+	cosmic: 'cosmos-speckle',
+	mosaic: 'radiant-crosshatch'
+};
+
+/** Sampler recipes are intentionally accents, not translucent curtains. */
+const SAMPLER_INTENSITY: Partial<Record<FoilKind, number>> = {
+	glitter: 0.2,
+	holo: 0.22,
+	cosmic: 0.24,
+	mosaic: 0.22
+};
+
+/** How far a layer slides per degree of tilt, as a fraction of card size.
+ *  Bigger reads as deeper — right for a starfield, wrong for a card face. */
+const PARALLAX: Partial<Record<FoilLayerName, number>> = {
+	wash: 0.0022,
+	bars: 0.0016,
+	spec: 0.0024,
+	nebula: 0.0009,
+	stars: 0.0014,
+	facets: 0.0006
+};
 
 /** Oversize for translated layers, so sliding never exposes an edge. */
 const OVERSCAN = 1.4;
@@ -168,13 +184,14 @@ export function Foil({
 	radius = 0,
 	intensity = 1,
 	overrides,
+	samplerOptions,
 	detail = 'full',
 	engine = 'legacy',
-	recipe
+	recipe: recipeId
 }: FoilProps) {
 	if (intensity <= 0) return null;
 	const sampler = overrides ? undefined : (samplerOptions?.preset ?? SAMPLER_PRESET[kind]);
-	const recipe = sampler ? (['spec', 'edge'] as const) : RECIPES[kind];
+	const layers = sampler ? (['spec', 'edge'] as const) : RECIPES[kind];
 
 	if (engine === 'v2') {
 		return (
@@ -187,7 +204,7 @@ export function Foil({
 				seed={seed}
 				radius={radius}
 				intensity={intensity}
-				recipe={recipe}
+				recipe={recipeId}
 			/>
 		);
 	}
@@ -211,7 +228,7 @@ export function Foil({
 					blend={samplerOptions?.blend}
 				/>
 			) : null}
-			{recipe.map((name) => {
+			{layers.map((name) => {
 				const o = overrides?.[name];
 				if (o?.enabled === false) return null;
 				return (

@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
 
 import type { StickerFoil } from '@/card/tiers';
 import { STICKER_CATALOG, type StickerDefinition } from '@/stickers/catalog';
@@ -20,7 +19,6 @@ const FILTERS: { value: Filter; label: string }[] = [
 export default function StickersScreen() {
 	const insets = useSafeAreaInsets();
 	const { width } = useWindowDimensions();
-	const router = useRouter();
 	const [filter, setFilter] = useState<Filter>('all');
 	const [selected, setSelected] = useState<StickerDefinition | null>(null);
 	const visible = useMemo(
@@ -144,9 +142,13 @@ export default function StickersScreen() {
 							: 'Keep meeting people. Some encounters carry secret drops.'}
 					</Text>
 					{selected.unlocked ? (
-						<Pressable style={styles.useButton} onPress={() => router.push('/card' as never)}>
-							<Text style={styles.useButtonText}>USE ON MY CARD</Text>
-						</Pressable>
+						<View
+							style={styles.useButton}
+							accessibilityRole="button"
+							accessibilityState={{ disabled: true }}
+						>
+							<Text style={styles.useButtonText}>EQUIP — COMING SOON</Text>
+						</View>
 					) : null}
 				</View>
 			) : null}
@@ -268,8 +270,11 @@ const styles = StyleSheet.create({
 		marginTop: space.sm,
 		paddingVertical: space.md,
 		paddingHorizontal: space.xl,
-		backgroundColor: palette.rose,
-		borderRadius: radius.md
+		backgroundColor: palette.raised,
+		borderRadius: radius.md,
+		borderWidth: 1,
+		borderColor: palette.line,
+		opacity: 0.62
 	},
-	useButtonText: { ...type.meta, color: palette.void }
+	useButtonText: { ...type.meta, color: palette.creamFaint }
 });

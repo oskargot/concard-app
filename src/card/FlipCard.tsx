@@ -19,7 +19,14 @@
  *     light cue.
  */
 
-import { type ReactNode, useCallback, useEffect, useState } from 'react';
+import {
+	forwardRef,
+	type ReactNode,
+	useCallback,
+	useEffect,
+	useImperativeHandle,
+	useState
+} from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -34,8 +41,8 @@ import Animated, {
 
 import { CARD_ASPECT } from '../theme/tokens';
 
-/** Maximum tilt in degrees. Matches the range Foil used to map parallax across. */
-const TILT_RANGE = 16;
+/** Maximum tilt in degrees. Matches the range Foil maps its parallax across. */
+const TILT_RANGE = 10;
 
 /** How much of the card you have to drag across to reach full tilt. */
 const DRAG_TO_FULL = 0.55;
@@ -53,13 +60,15 @@ export interface FlipCardProps {
 	onFlipChange?: (showingBack: boolean) => void;
 }
 
-export function FlipCard({
-	width,
-	renderFront,
-	renderBack,
-	flippable = true,
-	onFlipChange
-}: FlipCardProps) {
+export interface FlipCardHandle {
+	/** Request the same guarded flip used by a card tap. */
+	flip: () => void;
+}
+
+export const FlipCard = forwardRef<FlipCardHandle, FlipCardProps>(function FlipCard(
+	{ width, renderFront, renderBack, flippable = true, onFlipChange },
+	ref
+) {
 	const height = width / CARD_ASPECT;
 
 	const rx = useSharedValue(0);
@@ -123,8 +132,11 @@ export function FlipCard({
 		});
 
 	const requestFlip = useCallback(() => {
+		if (!renderBack || flipTarget != null) return;
 		setFlipTarget(showingBack ? 0 : 1);
-	}, [showingBack]);
+	}, [flipTarget, renderBack, showingBack]);
+
+	useImperativeHandle(ref, () => ({ flip: requestFlip }), [requestFlip]);
 
 	const tap = Gesture.Tap()
 		.enabled(flippable && !!renderBack && flipTarget == null)
@@ -137,11 +149,7 @@ export function FlipCard({
 	// One perspective, applied only while live. At rest we return no transform
 	// so the view demotes out of the 3D compositing path (keeps scroll sharp).
 	const stageStyle = useAnimatedStyle(() => {
-		if (
-			live.value === 0 &&
-			Math.abs(rx.value) < REST_EPS &&
-			Math.abs(ry.value) < REST_EPS
-		) {
+		if (live.value === 0 && Math.abs(rx.value) < REST_EPS && Math.abs(ry.value) < REST_EPS) {
 			return {};
 		}
 
@@ -201,7 +209,7 @@ export function FlipCard({
 			</Animated.View>
 		</GestureDetector>
 	);
-}
+});
 
 /** A tilt-only card: no gestures, no flip. For grids and pickers. */
 export function StaticCard({

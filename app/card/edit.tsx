@@ -3,10 +3,10 @@ import {
 	ActivityIndicator,
 	KeyboardAvoidingView,
 	Platform,
+	Pressable,
 	ScrollView,
 	StyleSheet,
 	Text,
-	TextInput,
 	View,
 	useWindowDimensions
 } from 'react-native';
@@ -45,14 +45,15 @@ const PAGE_PADDING = space.md;
  * The card is the interface. Name, pronouns and bio are edited on the face
  * itself (`CardFace`'s `edit` prop), the style axes are arrow pairs in the
  * gutters beside the part of the card each one changes, and the eighteen face
- * colours are swatch rails down the outer edges. Nothing covers the card while
- * you work on it, which is the point — every change is visible on the object
- * being changed, at the size it will actually be seen.
+ * colours are a grid above the card. Nothing covers the card while you work
+ * on it, which is the point — every change is visible on the object being
+ * changed, at the size it will actually be seen.
  *
  * Links sit below the card rather than on it: they are the one part of a card
- * that is a list, and a list does not edit in place. Everything autosaves
- * (`useCardEditor`), so there is no save button to reach for and no way to leave
- * with unsaved work.
+ * that is a list, and a list does not edit in place. A sticker button sits
+ * between the card and those rows; the drawer behind it comes later.
+ * Everything autosaves (`useCardEditor`), so there is no save button to reach
+ * for and no way to leave with unsaved work.
  *
  * Reached from My Card. Takes `?id=` so the switcher can hand it a specific
  * card; without one it edits whichever card is currently active.
@@ -70,7 +71,7 @@ export default function EditCardScreen() {
 	const [photoBusy, setPhotoBusy] = useState(false);
 	const [photoError, setPhotoError] = useState<string | null>(null);
 
-	const { cardWidth, railsBeside } = useMemo(() => stageLayout(width, PAGE_PADDING), [width]);
+	const { cardWidth } = useMemo(() => stageLayout(width, PAGE_PADDING), [width]);
 
 	const pickPhoto = useCallback(async () => {
 		if (!draft || !session || !cardId || photoBusy) return;
@@ -173,26 +174,9 @@ export default function EditCardScreen() {
 					contentContainerStyle={[styles.page, { paddingBottom: insets.bottom + space.xxl }]}
 					keyboardShouldPersistTaps="handled"
 				>
-					{/* The card's own name — the user's label for it in the switcher, never
-					    drawn on the face, so it cannot be edited in place like the rest. */}
-					<View style={styles.nameRow}>
-						<Text style={styles.nameLabel}>Card name</Text>
-						<TextInput
-							value={draft.label}
-							onChangeText={(label) => set({ label })}
-							placeholder="Cosplay"
-							placeholderTextColor={palette.creamFaint}
-							selectionColor={palette.teal}
-							maxLength={24}
-							accessibilityLabel="Card name, only you see this"
-							style={styles.nameInput}
-						/>
-					</View>
-
 					<EditorStage
 						style={draft.style}
 						cardWidth={cardWidth}
-						railsBeside={railsBeside}
 						axes={axes}
 						onPickBackground={(bg) => setStyle({ bg })}
 						renderCard={(rx, ry) => (
@@ -208,11 +192,7 @@ export default function EditCardScreen() {
 									onChangePronouns: (pronouns) => set({ pronouns }),
 									onChangeBio: (bio) => set({ bio: bio.slice(0, BIO_MAX) }),
 									bioMax: BIO_MAX,
-									onPressPhoto: pickPhoto,
-									// Stickers are a later phase; the button is drawn so the
-									// face is finished, but there is no drawer behind it yet.
-									onPressStickers: () => {},
-									stickersEnabled: false
+									onPressPhoto: pickPhoto
 								}}
 							/>
 						)}
@@ -221,6 +201,15 @@ export default function EditCardScreen() {
 					<Text style={styles.hint}>
 						Tap the card to edit its words · arrows change the part beside them
 					</Text>
+
+					<Pressable
+						onPress={() => {}}
+						accessibilityRole="button"
+						accessibilityLabel="Stickers — coming soon"
+						style={({ pressed }) => [styles.stickerBtn, pressed && styles.stickerBtnPressed]}
+					>
+						<Text style={styles.stickerGlyph}>✦</Text>
+					</Pressable>
 
 					<FormError message={photoError ?? editor.error} />
 
@@ -269,24 +258,19 @@ const styles = StyleSheet.create({
 		paddingTop: space.md,
 		gap: space.lg
 	},
-	nameRow: {
-		flexDirection: 'row',
-		alignItems: 'center',
-		gap: space.sm,
-		paddingHorizontal: space.xs
-	},
-	nameLabel: { ...type.meta, color: palette.creamMute },
-	nameInput: {
-		flex: 1,
-		minHeight: 40,
-		backgroundColor: palette.raisedHigh,
+	stickerBtn: {
+		alignSelf: 'center',
+		width: 52,
+		height: 52,
 		borderRadius: radius.md,
+		alignItems: 'center',
+		justifyContent: 'center',
+		backgroundColor: palette.raisedHigh,
 		borderWidth: StyleSheet.hairlineWidth,
-		borderColor: palette.line,
-		paddingHorizontal: space.md,
-		...type.small,
-		color: palette.cream
+		borderColor: palette.line
 	},
+	stickerBtnPressed: { opacity: 0.75 },
+	stickerGlyph: { fontSize: 22, color: palette.cream },
 	hint: { ...type.small, color: palette.creamFaint, textAlign: 'center' },
 	blocked: { ...type.small, color: palette.butter },
 	code: { fontFamily: 'SpaceGrotesk-Bold', color: palette.cream },

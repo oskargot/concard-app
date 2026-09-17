@@ -8,7 +8,7 @@
  * touched.
  */
 
-import { type ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -20,6 +20,8 @@ import Animated, {
 
 import { repeatingLinear } from './gradients';
 import { CoverFoilTexture, TiledFoilTexture } from './FoilTexture';
+import type { FoilRecipeId } from './recipes';
+import { hashSeed } from './speckle';
 import {
 	cosmosBand,
 	crosshatchBars,
@@ -35,6 +37,14 @@ import { palette } from '../../theme/palette';
 import { radius, space, type as t } from '../../theme/tokens';
 
 const SWATCH_ASPECT = 0.718;
+
+type SwatchLight = {
+	x: SharedValue<number>;
+	y: SharedValue<number>;
+	width: number;
+	height: number;
+	seed?: number;
+};
 
 export interface SwatchDef {
 	id: FoilRecipeId;
@@ -180,6 +190,15 @@ function clampPct(n: number): number {
 	return Math.min(100, Math.max(0, n));
 }
 
+/** Slides an oversized layer opposite (or with) the light. */
+function slide(ampX: number, ampY: number, invert = true): Translate {
+	const s = invert ? -1 : 1;
+	return (lx, ly) => {
+		'worklet';
+		return { tx: s * ((lx - 50) / 50) * ampX, ty: s * ((ly - 50) / 50) * ampY };
+	};
+}
+
 const SAMPLER_INDEX: Record<string, string> = {
 	'linear-holo': '01',
 	'rainbow-glitter': '02',
@@ -187,19 +206,6 @@ const SAMPLER_INDEX: Record<string, string> = {
 	'cosmos-speckle': '04',
 	'ice-crackle': '13'
 };
-
-export const SAMPLER_SWATCHES: SwatchDef[] = SAMPLER_RECIPE_IDS.map((id) => {
-	const recipe = FOIL_RECIPES[id];
-	return {
-		id,
-		index: SAMPLER_INDEX[id] ?? '··',
-		title: recipe.title,
-		description: recipe.description,
-		tint: recipe.tint,
-		phase: recipe.phase,
-		render: recipe.render
-	};
-}
 
 /** A worklet factory: opacity that rises (or falls) with distance from centre —
  *  the CSS export's `--pfc`, "how far off-centre the light has travelled". */
@@ -276,8 +282,12 @@ function GradientLayer({
 	opacity = 1,
 	opacityFn
 }: GradientLayerProps) {
-	const w = width * overscan;
-	const h = height * overscan;
+	// Several source recipes move farther than their original CSS background
+	// overscan. Native Views expose that boundary, so translated layers reserve
+	// an additional 70% in both dimensions.
+	const safeOverscan = translate ? overscan + 0.7 : overscan;
+	const w = width * safeOverscan;
+	const h = height * safeOverscan;
 	const style = useAnimatedStyle(() => {
 		const d = translate ? translate(x.value, y.value) : { tx: 0, ty: 0 };
 		return {

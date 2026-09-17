@@ -10,10 +10,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { CardFace } from '@/card/CardFace';
-import { CardShell } from '@/card/CardShell';
+import { Card } from '@/card/Card';
 import { FlipCard, StaticCard } from '@/card/FlipCard';
-import { StickerLayer } from '@/card/StickerLayer';
 import { foilForTier, meetingsToNextTier, tierLabel } from '@/card/tiers';
 import type { CollectedCard } from '@/card/types';
 import { useConcardStore } from '@/store/useConcardStore';
@@ -82,19 +80,15 @@ export default function BinderScreen() {
 							<StaticCard
 								width={cardWidth}
 								render={(rx, ry) => (
-									<CardShell
-										style={card.view.style}
+									<Card
+										view={card.view}
 										width={cardWidth}
 										foil={foilForTier(card.tier)}
 										seed={card.card_id ?? card.id}
 										rx={rx}
 										ry={ry}
 										detail="thumb"
-										overlay={<StickerLayer stickers={card.view.stickers} width={cardWidth} />}
-									>
-										<CardFace view={card.view} width={cardWidth} />
-										{!card.view.art_url ? <View style={styles.pendingPhoto} /> : null}
-									</CardShell>
+									/>
 								)}
 							/>
 							<Text numberOfLines={1} style={styles.cardName}>
@@ -141,19 +135,14 @@ export default function BinderScreen() {
 									width={detailCardWidth}
 									flippable={false}
 									renderFront={(rx, ry) => (
-										<CardShell
-											style={selected.view.style}
+										<Card
+											view={selected.view}
 											width={detailCardWidth}
 											foil={foilForTier(selected.tier)}
 											seed={selected.card_id ?? selected.id}
 											rx={rx}
 											ry={ry}
-											overlay={
-												<StickerLayer stickers={selected.view.stickers} width={detailCardWidth} />
-											}
-										>
-											<CardFace view={selected.view} width={detailCardWidth} />
-										</CardShell>
+										/>
 									)}
 								/>
 							</View>
@@ -216,17 +205,6 @@ const styles = StyleSheet.create({
 	queueDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: palette.teal },
 	queueText: { ...type.small, color: palette.teal },
 	grid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, alignItems: 'flex-start' },
-	pendingPhoto: {
-		position: 'absolute',
-		top: '5%',
-		left: '7%',
-		right: '7%',
-		height: '34%',
-		borderRadius: radius.sm,
-		backgroundColor: 'rgba(247,240,228,0.08)',
-		borderWidth: StyleSheet.hairlineWidth,
-		borderColor: 'rgba(247,240,228,0.18)'
-	},
 	cardName: { ...type.small, color: palette.cream, marginTop: space.xs },
 	tierRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
 	tier: { ...type.meta, color: palette.butter, fontSize: 8 },

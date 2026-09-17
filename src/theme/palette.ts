@@ -12,39 +12,39 @@
  */
 
 export const palette = {
-	/** Deepest ground: behind sheets and modals. */
-	void: '#120720',
-	/** Base background — the dark room itself. */
-	base: '#1A0B2E',
-	/** Raised surface: panels, tab bar, list rows. */
-	raised: '#241340',
-	/** Raised one more step: pressed states, inset wells. */
-	raisedHigh: '#2E1A50',
-	/** Hairlines and dividers. */
-	line: 'rgba(247, 240, 228, 0.12)',
-	lineStrong: 'rgba(247, 240, 228, 0.22)',
+	/** Scan-only ground. */
+	void: '#0e0d12',
+	/** App ground. */
+	base: '#121116',
+	/** Navigation, cards, sheets and quiet panels. */
+	raised: '#1c1b22',
+	/** Inputs, inset wells and photo placeholders. */
+	raisedHigh: '#26242e',
+	/** Borders and dividers. */
+	line: '#34323d',
+	lineStrong: '#3d3a47',
 
-	/** Hero accent — neon rose, magenta-leaning. Primary actions, the wordmark. */
-	rose: '#FF4D97',
-	roseDim: '#C93878',
-	roseGlow: 'rgba(255, 77, 151, 0.45)',
+	/** Primary holo tint. Legacy names remain as compatibility aliases. */
+	rose: '#b9c9ff',
+	roseDim: '#9aa9dc',
+	roseGlow: 'rgba(185, 201, 255, 0.30)',
 
-	/** Secondary — ice teal. Selection, links, the scan reticle. */
-	teal: '#45E5D5',
-	tealDim: '#2FAEA2',
-	tealGlow: 'rgba(69, 229, 213, 0.40)',
+	/** Secondary mint tint. */
+	teal: '#9ff0dc',
+	tealDim: '#72c7b2',
+	tealGlow: 'rgba(159, 240, 220, 0.28)',
 
-	/** Warm accent, used sparingly — butter. Tier badges, celebration. */
-	butter: '#FFD98A',
+	/** Warm stop used by holo treatments and tier details. */
+	butter: '#ffe7a8',
 
-	/** Text and lighter UI. */
-	cream: '#F7F0E4',
-	creamMute: 'rgba(247, 240, 228, 0.66)',
-	creamFaint: 'rgba(247, 240, 228, 0.38)',
+	/** Text hierarchy. */
+	cream: '#efedf2',
+	creamMute: '#a9a4b8',
+	creamFaint: '#8a8898',
 
 	/** Semantic. */
-	danger: '#FF5C5C',
-	success: '#6BE39A'
+	danger: '#ff7b88',
+	success: '#9ff0dc'
 } as const;
 
 /**
@@ -52,9 +52,9 @@ export const palette = {
  * top foils and celebration — never as a background for ordinary chrome, or it
  * stops reading as special.
  */
-export const HOLO_STOPS = ['#FF7EC7', '#A97BFF', '#45E5D5', '#9FFFD2'] as const;
+export const HOLO_STOPS = ['#ffb3e0', '#b9c9ff', '#9ff0dc', '#ffe7a8', '#ffb3e0'] as const;
 
 /** The same gradient as a CSS string for `experimental_backgroundImage`. */
-export const HOLO_GRADIENT = `linear-gradient(110deg, ${HOLO_STOPS.join(', ')})`;
+export const HOLO_GRADIENT = `linear-gradient(118deg, ${HOLO_STOPS.join(', ')})`;
 
 export type PaletteKey = keyof typeof palette;

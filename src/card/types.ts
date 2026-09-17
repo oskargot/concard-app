@@ -12,6 +12,7 @@
  * rather than two more columns.
  */
 
+import type { FandomStyleCategory } from '../stickers/types';
 import type { CardStyle } from './card-style';
 import type { StickerFoil } from './tiers';
 
@@ -32,16 +33,24 @@ export interface CardLink {
 	icon?: string | null;
 }
 
-/** The fandom badge as rendered on a card; frozen into snapshots. */
+/**
+ * The fandom affiliation as rendered on a card; frozen into snapshots.
+ *
+ * Enough to redraw the generative sticker forever without a live fandoms
+ * lookup — name + style category are the art, foil/placement are the copy.
+ * Still stored on the card as `affiliation` id + x/y until a later stage
+ * migrates it into sticker placements.
+ */
 export interface Affiliation {
 	id: string;
 	name: string;
-	mark: string;
-	color_a: string;
-	color_b: string;
-	/** Placed on the face like a sticker: 0..1 of the card, centre of the badge. */
+	style_category: FandomStyleCategory;
+	/** Placed on the face like a sticker: 0..1 of the card, centre of the sticker. */
 	x: number;
 	y: number;
+	rotation: number;
+	scale: number;
+	foil: StickerFoil;
 }
 
 /** A sticker as positioned on a card face. Positions are 0..1 of the card size. */
