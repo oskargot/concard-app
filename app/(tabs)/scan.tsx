@@ -57,7 +57,6 @@ export default function ScanScreen() {
 				</Pressable>
 				{message ? <Text style={styles.permissionSuccess}>{message}</Text> : null}
 				{error ? <Text style={styles.permissionError}>{error}</Text> : null}
-				<DemoScan onPress={() => onScan({ data: demoPayload } as BarcodeScanningResult)} />
 			</View>
 		);
 	}
@@ -108,19 +107,8 @@ export default function ScanScreen() {
 						</Text>
 					</View>
 				)}
-				<DemoScan onPress={() => onScan({ data: demoPayload } as BarcodeScanningResult)} />
 			</View>
 		</View>
-	);
-}
-
-const demoPayload = JSON.stringify({ username: 'pixel-pal', card_id: 'demo-scan-card' });
-
-function DemoScan({ onPress }: { onPress: () => void }) {
-	return (
-		<Pressable onPress={onPress} style={styles.demoButton}>
-			<Text style={styles.demoText}>Preview with a demo scan</Text>
-		</Pressable>
 	);
 }
 
@@ -275,7 +263,5 @@ const styles = StyleSheet.create({
 		backgroundColor: 'rgba(255,92,92,0.18)',
 		borderRadius: radius.md
 	},
-	errorText: { ...type.small, color: palette.cream, textAlign: 'center' },
-	demoButton: { paddingVertical: space.sm, paddingHorizontal: space.md },
-	demoText: { ...type.small, color: palette.teal, textDecorationLine: 'underline' }
+	errorText: { ...type.small, color: palette.cream, textAlign: 'center' }
 });

@@ -1,24 +1,34 @@
-import { Tabs } from 'expo-router';
+import { Tabs, useSegments } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, { Defs, LinearGradient, Path, Polygon, Rect, Stop } from 'react-native-svg';
 
 import { palette } from '@/theme/palette';
-import { font, radius } from '@/theme/tokens';
+import { uiFont } from '@/theme/tokens';
+
+type IconName = 'home' | 'card' | 'stickers' | 'binder';
 
 export default function TabsLayout() {
+	const insets = useSafeAreaInsets();
+	const segments = useSegments() as readonly string[];
+	const scanActive = segments.includes('scan');
+
 	return (
 		<Tabs
 			screenOptions={{
 				headerShown: false,
+				tabBarHideOnKeyboard: true,
 				tabBarStyle: {
 					backgroundColor: palette.raised,
 					borderTopColor: palette.line,
-					height: 76,
-					paddingTop: 7,
-					paddingBottom: 8
+					borderTopWidth: 1,
+					height: 64 + insets.bottom,
+					paddingTop: 0,
+					paddingBottom: insets.bottom + 4
 				},
+				tabBarItemStyle: styles.tabItem,
 				tabBarActiveTintColor: palette.rose,
 				tabBarInactiveTintColor: palette.creamFaint,
-				tabBarLabelStyle: { fontFamily: font.bodyMedium, fontSize: 11 },
 				sceneStyle: { backgroundColor: palette.base }
 			}}
 		>
@@ -26,84 +36,201 @@ export default function TabsLayout() {
 				name="index"
 				options={{
 					title: 'Home',
-					tabBarIcon: ({ focused }) => <Glyph focused={focused}>⌂</Glyph>
+					tabBarIcon: ({ focused }) => <TabIcon name="home" focused={focused} />,
+					tabBarLabel: ({ focused }) => <TabLabel label="Home" focused={focused} />
 				}}
 			/>
 			<Tabs.Screen
 				name="card"
 				options={{
 					title: 'Card',
-					tabBarIcon: ({ focused }) => <Glyph focused={focused}>▯</Glyph>
+					tabBarIcon: ({ focused }) => <TabIcon name="card" focused={focused} />,
+					tabBarLabel: ({ focused }) => <TabLabel label="Card" focused={focused} />
 				}}
 			/>
 			<Tabs.Screen
 				name="scan"
 				options={{
 					title: 'Scan',
-					tabBarLabel: '',
-					tabBarButton: ({ onPress, accessibilityState }) => (
-						<View style={styles.scanSlot}>
-							<Pressable
-								onPress={onPress}
-								accessibilityRole="button"
-								accessibilityLabel="Scan a Concard"
-								accessibilityState={accessibilityState}
-								style={({ pressed }) => [styles.scanButton, pressed && styles.pressed]}
-							>
-								<Text style={styles.scanGlyph}>⌁</Text>
-							</Pressable>
-							<Text style={styles.scanLabel}>SCAN</Text>
-						</View>
-					)
+					tabBarLabel: () => null,
+					tabBarButton: ({ onPress, onLongPress, accessibilityState }) => {
+						return (
+							<View style={styles.scanSlot}>
+								<Pressable
+									onPress={onPress}
+									onLongPress={onLongPress}
+									accessibilityRole="tab"
+									accessibilityLabel="Scan"
+									accessibilityState={{ ...accessibilityState, selected: scanActive }}
+									aria-selected={scanActive}
+									style={({ pressed }) => [
+										styles.scanButton,
+										scanActive && styles.scanButtonFocused,
+										pressed && styles.pressed
+									]}
+								>
+									<ScanGradient />
+									<Text style={styles.scanLabel}>SCAN</Text>
+								</Pressable>
+							</View>
+						);
+					}
 				}}
 			/>
 			<Tabs.Screen
 				name="stickers"
 				options={{
 					title: 'Stickers',
-					tabBarIcon: ({ focused }) => <Glyph focused={focused}>✦</Glyph>
+					tabBarIcon: ({ focused }) => <TabIcon name="stickers" focused={focused} />,
+					tabBarLabel: ({ focused }) => <TabLabel label="Stickers" focused={focused} />
 				}}
 			/>
 			<Tabs.Screen
 				name="binder"
 				options={{
 					title: 'Binder',
-					tabBarIcon: ({ focused }) => <Glyph focused={focused}>▦</Glyph>
+					tabBarIcon: ({ focused }) => <TabIcon name="binder" focused={focused} />,
+					tabBarLabel: ({ focused }) => <TabLabel label="Binder" focused={focused} />
 				}}
 			/>
 		</Tabs>
 	);
 }
 
-function Glyph({ children, focused }: { children: string; focused: boolean }) {
+function ScanGradient() {
 	return (
-		<Text style={{ color: focused ? palette.rose : palette.creamMute, fontSize: 21 }}>
-			{children}
-		</Text>
+		<Svg width="100%" height="100%" style={StyleSheet.absoluteFill}>
+			<Defs>
+				<LinearGradient id="scan-holo" x1="0%" y1="0%" x2="100%" y2="100%">
+					<Stop offset="0%" stopColor="#ffb3e0" />
+					<Stop offset="25%" stopColor="#b9c9ff" />
+					<Stop offset="50%" stopColor="#9ff0dc" />
+					<Stop offset="75%" stopColor="#ffe7a8" />
+					<Stop offset="100%" stopColor="#ffb3e0" />
+				</LinearGradient>
+			</Defs>
+			<Rect width="100%" height="100%" fill="url(#scan-holo)" />
+		</Svg>
+	);
+}
+
+function TabLabel({ label, focused }: { label: string; focused: boolean }) {
+	return <Text style={[styles.tabLabel, focused && styles.tabLabelFocused]}>{label}</Text>;
+}
+
+function TabIcon({ name, focused }: { name: IconName; focused: boolean }) {
+	const color = focused ? palette.rose : palette.lineStrong;
+	const fill = focused ? color : 'none';
+
+	return (
+		<Svg width={19} height={19} viewBox="0 0 20 20">
+			{name === 'home' ? (
+				<Path
+					d="M3 9.2 10 3l7 6.2v7.3a.5.5 0 0 1-.5.5h-4.2v-5H7.7v5H3.5a.5.5 0 0 1-.5-.5Z"
+					fill={fill}
+					stroke={color}
+					strokeWidth={1.5}
+					strokeLinejoin="round"
+				/>
+			) : null}
+			{name === 'card' ? (
+				<Rect
+					x={4}
+					y={2.5}
+					width={12}
+					height={15}
+					rx={2}
+					fill={fill}
+					stroke={color}
+					strokeWidth={1.5}
+				/>
+			) : null}
+			{name === 'stickers' ? (
+				<Polygon
+					points="10,2.3 12.2,7.2 17.5,7.8 13.5,11.4 14.6,16.7 10,14 5.4,16.7 6.5,11.4 2.5,7.8 7.8,7.2"
+					fill={fill}
+					stroke={color}
+					strokeWidth={1.5}
+					strokeLinejoin="round"
+				/>
+			) : null}
+			{name === 'binder' ? (
+				<>
+					<Rect
+						x={2.5}
+						y={3}
+						width={6.2}
+						height={6.2}
+						rx={1.2}
+						fill={fill}
+						stroke={color}
+						strokeWidth={1.4}
+					/>
+					<Rect
+						x={11.3}
+						y={3}
+						width={6.2}
+						height={6.2}
+						rx={1.2}
+						fill={fill}
+						stroke={color}
+						strokeWidth={1.4}
+					/>
+					<Rect
+						x={2.5}
+						y={11}
+						width={6.2}
+						height={6.2}
+						rx={1.2}
+						fill={fill}
+						stroke={color}
+						strokeWidth={1.4}
+					/>
+					<Rect
+						x={11.3}
+						y={11}
+						width={6.2}
+						height={6.2}
+						rx={1.2}
+						fill={fill}
+						stroke={color}
+						strokeWidth={1.4}
+					/>
+				</>
+			) : null}
+		</Svg>
 	);
 }
 
 const styles = StyleSheet.create({
-	scanSlot: { flex: 1, alignItems: 'center' },
+	tabItem: { height: 60, paddingTop: 7 },
+	tabLabel: {
+		fontFamily: uiFont.regular,
+		fontSize: 10,
+		lineHeight: 13,
+		color: palette.creamFaint,
+		marginTop: 2
+	},
+	tabLabelFocused: { fontFamily: uiFont.semibold, color: palette.rose },
+	scanSlot: { flex: 1, alignItems: 'center', justifyContent: 'flex-start' },
 	scanButton: {
-		width: 64,
-		height: 64,
-		borderRadius: radius.xl,
-		marginTop: -27,
-		backgroundColor: palette.rose,
-		borderWidth: 5,
-		borderColor: palette.raised,
+		minWidth: 68,
+		marginTop: -6,
+		paddingVertical: 9,
+		paddingHorizontal: 18,
+		borderRadius: 22,
+		boxShadow: '0 4px 18px rgba(185,201,255,0.30)',
 		alignItems: 'center',
 		justifyContent: 'center',
-		boxShadow: `0 0 20px ${palette.roseGlow}`
+		overflow: 'hidden'
 	},
-	scanGlyph: { color: palette.void, fontFamily: font.display, fontSize: 33, lineHeight: 38 },
+	scanButtonFocused: { boxShadow: '0 4px 20px rgba(185,201,255,0.40)' },
 	scanLabel: {
-		color: palette.creamMute,
-		fontFamily: font.bodyMedium,
-		fontSize: 9,
-		letterSpacing: 1,
-		marginTop: 1
+		fontFamily: uiFont.bold,
+		fontSize: 12,
+		lineHeight: 15,
+		letterSpacing: 0.72,
+		color: palette.base
 	},
-	pressed: { transform: [{ scale: 0.94 }] }
+	pressed: { opacity: 0.82, transform: [{ scale: 0.97 }] }
 });
