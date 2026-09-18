@@ -277,7 +277,12 @@ function Photo({
 		borderBottomLeftRadius: shape === 'arch' ? m.u(4.67) : radius,
 		borderBottomRightRadius: shape === 'arch' ? m.u(4.67) : radius,
 		overflow: 'hidden' as const,
-		backgroundColor: ink.hatchA
+		backgroundColor: ink.hatchA,
+		// Lift the photo onto its own layer, closer to the viewer, so it composites
+		// as one stable surface during the flip instead of flickering as the card
+		// rotates. (`elevation` is the Android draw-order lever; `zIndex` the iOS one.)
+		zIndex: 1,
+		elevation: 2
 	};
 
 	const label = (
