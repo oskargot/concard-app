@@ -144,9 +144,16 @@ const styles = StyleSheet.create({
 		alignItems: 'center',
 		justifyContent: 'center',
 		gap: space.lg,
-		minHeight: 400
+		minHeight: 400,
+		// Bias the centred card upward so it sits higher on screen, clear of the
+		// ambient glow behind it.
+		paddingBottom: 96
 	},
-	glow: { top: '50%', marginTop: -190 },
+	// Centred on the (lifted) card so the glow reads as a symmetric backlight
+	// behind it. The old offset pushed the glow up ~30px, so its soft gradient
+	// edge cut across the lower face as a stray diagonal seam; centring removes
+	// it. -208 = the glow's own half-height (160) plus the 48px the card is lifted.
+	glow: { top: '50%', marginTop: -208 },
 	actions: { alignItems: 'center', gap: space.md, paddingBottom: space.lg },
 	hint: { ...type.small, fontSize: 13, color: palette.textFaint, textAlign: 'center' }
 });

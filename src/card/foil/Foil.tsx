@@ -39,14 +39,7 @@ import Svg, { Defs, LinearGradient, Polygon, Stop } from 'react-native-svg';
 
 import type { FoilKind } from '../tiers';
 import { CoverFoilTexture, TiledFoilTexture } from './FoilTexture';
-import {
-	HOLO_SPECTRUM,
-	holoWash,
-	nebula,
-	nebulaSecondary,
-	radialGlare,
-	repeatingLinear
-} from './gradients';
+import { HOLO_SPECTRUM, holoWash, nebula, nebulaSecondary, repeatingLinear } from './gradients';
 import { FoilV2 } from './FoilV2';
 import type { FoilRecipeId } from './recipes';
 import { facetField, glitterField, hashSeed, starField } from './speckle';
@@ -99,7 +92,9 @@ const DEFAULTS: Record<FoilLayerName, { blend: ViewStyle['mixBlendMode']; opacit
 	facets: { blend: 'color-dodge', opacity: 0.5 },
 	glitter: { blend: 'color-dodge', opacity: 0.55 },
 	stars: { blend: 'plus-lighter', opacity: 0.9 },
-	spec: { blend: 'screen', opacity: 0.42 },
+	// The circular specular shine. See SPEC below for why it fades all the way
+	// out rather than ramping down mid-face.
+	spec: { blend: 'screen', opacity: 0.5 },
 	edge: { blend: 'normal', opacity: 1 }
 };
 
@@ -443,7 +438,21 @@ const FACET_ANGLES = [0, 45, 90, 135, 180, 225, 270, 315] as const;
 // what the transform-based approach exists to avoid.
 const WASH = holoWash('118deg', 1);
 const BARS = repeatingLinear('102deg', HOLO_SPECTRUM, 4.5, 100);
-const SPEC = radialGlare(50, 38, { core: 0.3, mid: 0.08 });
+// A soft circular shine that fades smoothly to fully transparent at the far
+// corner. The old `radialGlare` ramped its highlight down to opaque black over
+// the 42%–78% band; under `screen` the black is a no-op, so all that ever
+// showed was the highlight *ending* mid-face — a steep brightness step that the
+// eye reads as a horizontal line across the card (a Mach band), most visible
+// near the vertical centre once the shine is bright. Spreading the fade across
+// the whole radius keeps the highlight but removes the edge. No dark stops.
+const SPEC =
+	'radial-gradient(circle farthest-corner at 50% 40%, ' +
+	'rgba(255,255,255,0.55) 0%, ' +
+	'rgba(255,255,255,0.32) 16%, ' +
+	'rgba(255,255,255,0.16) 34%, ' +
+	'rgba(255,255,255,0.07) 54%, ' +
+	'rgba(255,255,255,0.02) 76%, ' +
+	'rgba(255,255,255,0) 100%)';
 const NEBULA_A = nebula();
 const NEBULA_B = nebulaSecondary();
 
