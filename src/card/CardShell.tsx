@@ -12,10 +12,11 @@
 import type { ReactNode } from 'react';
 import { StyleSheet, View, type ViewStyle } from 'react-native';
 import MaskedView from '@react-native-masked-view/masked-view';
-import type { SharedValue } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, type SharedValue } from 'react-native-reanimated';
 import Svg, { Polygon } from 'react-native-svg';
 
 import { BGS, FRAMES, type CardStyle } from './card-style';
+import { TILT_RANGE } from './FlipCard';
 import { CARD_ASPECT } from '../theme/tokens';
 import { Foil } from './foil/Foil';
 import type { FoilEngine, FoilLayerName, FoilOverride, SamplerFoilOptions } from './foil/Foil';
@@ -77,9 +78,10 @@ export function shellMetrics(width: number, shape: CardStyle['shape']): ShellMet
  * A soft round light on the face: brightest at the centre, fading to nothing by
  * ~68% out. `circle` (not `ellipse`) keeps it round on the 5:7 face instead of
  * stretching to the box, so the edges stay faint and even all the way around.
+ * Centred at rest — it slides off centre as the card tilts (see `lightShift`).
  */
 const FACE_LIGHT =
-	'radial-gradient(circle at 50% 42%, rgba(255,255,255,0.38) 0%, rgba(255,255,255,0.14) 34%, transparent 68%)';
+	'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.38) 0%, rgba(255,255,255,0.14) 34%, transparent 68%)';
 
 export function CardShell({
 	style,
@@ -102,6 +104,19 @@ export function CardShell({
 	const m = shellMetrics(width, style.shape);
 	const shaved = style.shape === 'shaved';
 	const foilKind = style.frame === 'holo' && foil === 'none' ? 'holo' : foil;
+
+	// The light glides opposite the drag, like a fixed source reflecting off a
+	// card you tilt: drag right and it slides left, drag down and it slides up.
+	// This deliberately departs from the foil's frozen-parallax rule (see
+	// FlipCard) — here the moving light *is* the point. The layer is oversized by
+	// its own max travel so it always covers the face as it slides.
+	const lightTravel = m.u(12);
+	const lightShift = useAnimatedStyle(() => ({
+		transform: [
+			{ translateX: -(ry.value / TILT_RANGE) * lightTravel },
+			{ translateY: (rx.value / TILT_RANGE) * lightTravel }
+		]
+	}));
 
 	const band = (
 		<View
@@ -135,11 +150,18 @@ export function CardShell({
 				{/* content sits under the light, so the foil plays over the face */}
 				<View style={StyleSheet.absoluteFill}>{children}</View>
 				{light ? (
-					<View
+					<Animated.View
 						pointerEvents="none"
 						style={[
-							StyleSheet.absoluteFill,
-							{ experimental_backgroundImage: FACE_LIGHT } as ViewStyle
+							{
+								position: 'absolute',
+								top: -lightTravel,
+								bottom: -lightTravel,
+								left: -lightTravel,
+								right: -lightTravel,
+								experimental_backgroundImage: FACE_LIGHT
+							} as ViewStyle,
+							lightShift
 						]}
 					/>
 				) : null}
