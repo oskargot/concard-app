@@ -2,7 +2,9 @@ import * as FileSystem from 'expo-file-system/legacy';
 
 import { normalizeStyle } from '@/card/card-style';
 import { DEMO_CARD } from '@/card/demo-card';
+import { tierForMeetings } from '@/card/tiers';
 import type { CardView, CollectedCard } from '@/card/types';
+import { parseCollectError } from '@/lib/collect';
 import { supabase } from '@/lib/supabase';
 import type { Json } from '@/lib/database.types';
 import { useConcardStore, type PendingScan } from './useConcardStore';
@@ -15,27 +17,35 @@ function record(input: Json | undefined): Record<string, unknown> {
 		: {};
 }
 
-function snapshotToView(snapshot: Json, username: string): CardView {
-	const value = record(snapshot);
-	const profile = record(value.profile as Json);
-	const card = record((value.card as Json) ?? snapshot);
-	return {
-		title:
-			String(card.display_name ?? profile.display_name ?? value.display_name ?? username) ||
-			username,
-		handle: String(profile.username ?? value.username ?? username),
-		pronouns: (card.pronouns ?? profile.pronouns ?? null) as string | null,
-		bio: String(card.bio ?? profile.bio ?? ''),
-		label: (card.label ?? null) as string | null,
-		art_url: (card.art_url ?? null) as string | null,
-		art_x: Number(card.art_x ?? 0.5),
-		art_y: Number(card.art_y ?? 0.5),
-		art_scale: Number(card.art_scale ?? 1),
-		style: normalizeStyle(card.style),
+/**
+ * Reads a `collect_card()` snapshot (version 2, `concard/.../collect_card()`)
+ * into a `CardView`. The snapshot's keys sit at the top level — `title`,
+ * `bio`, `pronouns`, `art_*`, `style`, `links`, `stickers`, `owner` — there is
+ * no separate `card`/`profile` split.
+ */
+function snapshotToView(snapshot: Json): { view: CardView; ownerId: string } {
+	const s = record(snapshot);
+	const owner = record(s.owner as Json);
+	const view: CardView = {
+		title: String(s.title ?? owner.display_name ?? owner.username ?? 'Someone'),
+		handle: String(owner.username ?? ''),
+		pronouns: (s.pronouns ?? null) as string | null,
+		bio: String(s.bio ?? ''),
+		label: null,
+		art_url: (s.art_url ?? null) as string | null,
+		art_x: Number(s.art_x ?? 0.5),
+		art_y: Number(s.art_y ?? 0.5),
+		art_scale: Number(s.art_scale ?? 1),
+		style: normalizeStyle(s.style),
+		// The snapshot's affiliation carries a fandom id/mark/colors, not the
+		// app's generative `style_category` — drawing it needs a fandoms-table
+		// lookup this drain doesn't do, so a collected card's badge is left off
+		// rather than drawn wrong. Out of scope for the meet loop.
 		affiliation: null,
-		links: Array.isArray(profile.links) ? (profile.links as CardView['links']) : [],
-		stickers: Array.isArray(value.stickers) ? (value.stickers as CardView['stickers']) : []
+		links: Array.isArray(s.links) ? (s.links as CardView['links']) : [],
+		stickers: Array.isArray(s.stickers) ? (s.stickers as CardView['stickers']) : []
 	};
+	return { view, ownerId: String(owner.id ?? '') };
 }
 
 function safeName(value: string) {
@@ -58,6 +68,9 @@ async function cachePhoto(view: CardView, cardId: string): Promise<CardView> {
 	}
 }
 
+/** Dev-only fallback when Supabase isn't configured — never used in a build
+ *  that could ship, since `syncPendingScans` only takes this path when
+ *  `supabase` is null. */
 function demoCardFor(scan: PendingScan): CollectedCard {
 	const view: CardView = {
 		...DEMO_CARD,
@@ -69,20 +82,44 @@ function demoCardFor(scan: PendingScan): CollectedCard {
 		bio: 'Met offline at the convention. Details will refresh on the next sync.'
 	};
 	return {
-		id: `local-${scan.id}`,
-		card_id: scan.card_id,
+		id: `local-demo-${scan.id}`,
+		card_id: null,
+		owner_id: null,
 		view,
 		tier: 0,
 		meeting_count: 1,
 		revealed: true,
+		pending: false,
 		first_scanned_at: scan.scanned_at,
 		last_scanned_at: scan.scanned_at
 	};
 }
 
+/** How many times I've collected this person before, for `tiers.ts`'s ladder.
+ *  `collect_card()` records one row per collect, not a running total. */
+async function meetingCountFor(collectorId: string, ownerId: string): Promise<number> {
+	if (!supabase) return 1;
+	const { count } = await supabase
+		.from('collections')
+		.select('id', { count: 'exact', head: true })
+		.eq('collector_id', collectorId)
+		.eq('owner_id', ownerId);
+	return count ?? 1;
+}
+
+/** Permanent for this scan — retrying without a new attempt by the user can't
+ *  succeed, so the queue must not jam waiting on it. */
+const TERMINAL_CODES = new Set([
+	'profile_not_found',
+	'cannot_collect_self',
+	'no_active_card',
+	'cooldown'
+]);
+
 /**
  * Drains scans in order. Each entry is removed only after it has become a
- * complete binder snapshot, so interruption or app termination is safe.
+ * complete binder snapshot (or been rejected as unrecoverable), so
+ * interruption or app termination is safe.
  */
 export async function syncPendingScans() {
 	if (syncing) return;
@@ -91,44 +128,137 @@ export async function syncPendingScans() {
 	try {
 		for (const scan of [...store.scan_queue]) {
 			if (!supabase) {
-				store.cacheCard(demoCardFor(scan));
-				store.removeScan(scan.id);
+				store.resolvePendingScan(scan.id, demoCardFor(scan), { live: false });
 				continue;
 			}
 
-			const { error: collectError } = await supabase.rpc('collect_card', {
-				target_username: scan.username
-			});
-			if (collectError) throw collectError;
+			try {
+				const {
+					data: { session }
+				} = await supabase.auth.getSession();
+				const collectorId = session?.user.id;
+				if (!collectorId) {
+					store.setSyncError({
+						username: scan.username,
+						code: 'not_authenticated',
+						hint: 'Sign in to collect cards.',
+						retryAt: null
+					});
+					// No point trying the rest of the queue without a session.
+					break;
+				}
 
-			const { data, error } = await supabase
-				.from('collections')
-				.select('*')
-				.eq('card_id', scan.card_id)
-				.order('collected_at', { ascending: false })
-				.limit(1)
-				.maybeSingle();
-			if (error) throw error;
-			if (!data) throw new Error('The collected card was not returned by Supabase.');
+				const { data, error: collectError } = await supabase.rpc('collect_card', {
+					target_username: scan.username
+				});
 
-			const view = await cachePhoto(
-				snapshotToView(data.card_snapshot, scan.username),
-				scan.card_id
-			);
-			store.cacheCard({
-				id: data.id,
-				card_id: data.card_id,
-				view,
-				tier: 0,
-				meeting_count: 1,
-				revealed: true,
-				first_scanned_at: data.collected_at,
-				last_scanned_at: data.collected_at
-			});
-			store.removeScan(scan.id);
+				if (collectError) {
+					const parsed = parseCollectError(collectError);
+					store.setSyncError({ username: scan.username, ...parsed });
+					if (parsed.code === 'not_authenticated') break;
+					if (TERMINAL_CODES.has(parsed.code) || parsed.code === 'unknown') {
+						store.rejectPendingScan(scan.id);
+					}
+					continue;
+				}
+
+				const result = record(data as Json);
+				const { view, ownerId } = snapshotToView(result.card_snapshot as Json);
+				const cardId = record(result.card_snapshot as Json).card_id;
+				const cachedView = await cachePhoto(
+					view,
+					typeof cardId === 'string' ? cardId : scan.username
+				);
+				const meetingCount = await meetingCountFor(collectorId, ownerId);
+				const collectedAt =
+					typeof result.collected_at === 'string' ? result.collected_at : scan.scanned_at;
+
+				store.resolvePendingScan(
+					scan.id,
+					{
+						id:
+							typeof result.collection_id === 'string' ? result.collection_id : `synced-${scan.id}`,
+						card_id: typeof cardId === 'string' ? cardId : null,
+						owner_id: ownerId || null,
+						view: cachedView,
+						tier: tierForMeetings(meetingCount),
+						meeting_count: meetingCount,
+						revealed: true,
+						pending: false,
+						first_scanned_at: collectedAt,
+						last_scanned_at: collectedAt
+					},
+					{ live: true }
+				);
+				if (store.sync_error?.username === scan.username) store.setSyncError(null);
+			} catch (err) {
+				store.setSyncError({
+					username: scan.username,
+					code: 'unknown',
+					hint: err instanceof Error ? err.message : 'Something went wrong. Try again.',
+					retryAt: null
+				});
+				// Likely a connectivity blip mid-request — leave this and later
+				// scans queued for the next connectivity event rather than
+				// evicting them over a transient failure.
+				break;
+			}
 		}
 		store.markSynced();
 	} finally {
 		syncing = false;
 	}
+}
+
+/**
+ * Replaces the binder with a live read of `collections`, grouped by owner
+ * (design bible §7: tier and meeting count are per collector-owner pair, not
+ * per row — one row exists per collect). Called once real data is available
+ * so the starter demo cards never sit beside genuine meets.
+ */
+export async function fetchMyCollections() {
+	if (!supabase) return;
+	const {
+		data: { session }
+	} = await supabase.auth.getSession();
+	const collectorId = session?.user.id;
+	if (!collectorId) return;
+
+	const { data, error } = await supabase
+		.from('collections')
+		.select('*')
+		.eq('collector_id', collectorId)
+		.order('collected_at', { ascending: false });
+	if (error || !data) return;
+
+	const byOwner = new Map<string, typeof data>();
+	for (const row of data) {
+		const list = byOwner.get(row.owner_id);
+		if (list) list.push(row);
+		else byOwner.set(row.owner_id, [row]);
+	}
+
+	const cards: CollectedCard[] = [];
+	for (const [ownerId, rows] of byOwner) {
+		// Rows arrive newest-first from the query above.
+		const latest = rows[0];
+		const oldest = rows[rows.length - 1];
+		const { view } = snapshotToView(latest.card_snapshot);
+		const cachedView = await cachePhoto(view, latest.card_id ?? ownerId);
+		const meetingCount = rows.length;
+		cards.push({
+			id: ownerId,
+			card_id: latest.card_id,
+			owner_id: ownerId,
+			view: cachedView,
+			tier: tierForMeetings(meetingCount),
+			meeting_count: meetingCount,
+			revealed: true,
+			pending: false,
+			first_scanned_at: oldest.collected_at,
+			last_scanned_at: latest.collected_at
+		});
+	}
+
+	useConcardStore.getState().replaceBinderWithLive(cards);
 }

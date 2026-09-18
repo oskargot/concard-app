@@ -170,11 +170,40 @@ app is the source of truth:
 
 ## Status
 
-Phase 2 of 7, plus the card editor. In: card renderer, foil lab, email/password auth, username claim,
-forced first card, card editor (text in place, style, per-card links, affiliation, photo upload). Not
-in: QR back, card switcher, stickers, photo pan/zoom, scanner + offline queue, binder, settings — Scan
-and Binder tabs are currently placeholders. Nothing has been exercised against a live Supabase project
-yet.
+Phase 2 of 7, plus the card editor and the meet loop (My Card QR → Scan → `collect_card` → Binder).
+In: card renderer, foil lab, email/password auth, username claim, forced first card, card editor (text
+in place, style, per-card links, affiliation, photo upload), and the meet loop end to end — see "The
+meet loop" below. Not in: card switcher, stickers inventory/combine/placement UI, photo pan/zoom,
+events, friends, DMs, purchases, settings. Nothing has been exercised against a live Supabase project
+on a device yet — the code paths are wired, but no one has run the scan → collect → binder loop between
+two real accounts.
+
+### The meet loop (`app/(tabs)/card.tsx`, `scan.tsx`, `binder.tsx`, `src/store/`)
+
+My Card's `FlipCard` back is a real QR (`react-native-qrcode-svg`) encoding `profileUrl(SITE_ORIGIN,
+username)` — a stable profile URL, never a session token, matching exactly what the web app's own QR
+and scanner use. `src/lib/username.ts`'s `usernameFromScan` (ported verbatim from the web app) is the
+single parser both the scanner and any manual "type a username" fallback go through; it accepts a
+URL on an allowed host (`src/lib/env.ts`'s `ALLOWED_QR_HOSTS`, which includes whatever
+`EXPO_PUBLIC_SITE_URL` is set to) or a bare username.
+
+A scan enqueues into `useConcardStore`'s `scan_queue` and immediately adds an optimistic, `pending`
+binder card so the queue is visible before it syncs. `ConcardSync` drains the queue through
+`src/store/sync.ts`'s `syncPendingScans` whenever connectivity returns, calling the shared
+`collect_card` RPC and resolving each scan into the real snapshot it returns — never a client-guessed
+shape. `collect_card` returns a snapshot directly (no follow-up `collections` select keyed on a
+scan-time `card_id`, since the QR no longer carries one); `tier`/`meeting_count` are not columns the
+schema tracks, so they come from a count of `collections` rows for that (collector, owner) pair,
+mapped through `src/card/tiers.ts`. Errors from `collect_card` (cooldown, cannot-collect-self, no
+active card, not authenticated) are parsed by `src/lib/collect.ts` (also ported from web) and surfaced
+in the scan and binder screens rather than silently dropped; only permanent failures evict the queued
+scan, and `not_authenticated` pauses the whole drain rather than losing anything.
+
+The binder's starter demo cards (`DEMO_BINDER`) are a first-run fixture, not a fallback that coexists
+with real data forever: the first successful live `collections` fetch (`fetchMyCollections`, run once
+per signed-in session by `ConcardSync`) or synced scan clears them. A collected card's back is always
+`CardBack`'s `record` variant — no QR — so a binder card can never be re-scanned remotely; only my own
+active card's back is `qr`.
 
 **The editor needs a migration this repo does not own.** `supabase/migrations/20260915000000_card_links_and_art.sql`
 adds `cards.links` and the `card-art` storage bucket; copy it into the `concard` web repo and apply it

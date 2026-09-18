@@ -6,14 +6,17 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { SharedValue } from 'react-native-reanimated';
 
 import { useAuth } from '@/auth/AuthProvider';
+import { CardBack } from '@/card/CardBack';
 import { CardFace } from '@/card/CardFace';
-import { CardShell } from '@/card/CardShell';
+import { CardShell, shellMetrics } from '@/card/CardShell';
 import { FlipCard } from '@/card/FlipCard';
 import { StickerLayer } from '@/card/StickerLayer';
 import { normalizeStyle } from '@/card/card-style';
 import { foilForTier } from '@/card/tiers';
 import type { CardLink, PlacedSticker } from '@/card/types';
+import { SITE_ORIGIN } from '@/lib/env';
 import { supabase } from '@/lib/supabase';
+import { profileUrl } from '@/lib/username';
 import { useConcardStore } from '@/store/useConcardStore';
 import { Button } from '@/ui';
 import { palette } from '@/theme/palette';
@@ -61,10 +64,14 @@ export default function CardScreen() {
 		});
 	}, [profile, updateCard]);
 
-	const qrPayload = useMemo(
-		() => JSON.stringify({ username: card.handle, card_id: card.id }),
-		[card.handle, card.id]
-	);
+	// The stable profile URL, not a session token — a live card and the web
+	// scanner have to agree on this contract (`usernameFromScan` on the web).
+	const qrUrl = useMemo(() => profileUrl(SITE_ORIGIN, card.handle), [card.handle]);
+	const readableUrl = qrUrl.replace(/^https?:\/\//, '');
+	const qrBoxSize = useMemo(() => {
+		const m = shellMetrics(cardWidth, card.style.shape);
+		return m.u(60) - 2 * m.u(3.33);
+	}, [cardWidth, card.style.shape]);
 
 	const renderCard = (rx: SharedValue<number>, ry: SharedValue<number>) => (
 		<CardShell
@@ -78,6 +85,18 @@ export default function CardScreen() {
 		>
 			<CardFace view={card} width={cardWidth} />
 		</CardShell>
+	);
+
+	const renderBack = (rx: SharedValue<number>, ry: SharedValue<number>) => (
+		<CardBack
+			style={card.style}
+			width={cardWidth}
+			variant="qr"
+			url={readableUrl}
+			qr={<QRCode value={qrUrl} size={qrBoxSize} backgroundColor="#fbf9f3" color="#17161b" />}
+			rx={rx}
+			ry={ry}
+		/>
 	);
 
 	return (
@@ -110,17 +129,18 @@ export default function CardScreen() {
 			{mode === 'share' ? (
 				<View style={styles.shareCard}>
 					<View style={styles.qrFrame}>
-						<QRCode value={qrPayload} size={210} backgroundColor="#F7F0E4" color="#1A0B2E" />
+						<QRCode value={qrUrl} size={210} backgroundColor="#F7F0E4" color="#1A0B2E" />
 					</View>
 					<Text style={styles.shareTitle}>Let them scan this</Text>
 					<Text style={styles.shareBody}>
-						Your tiny card payload works even when the venue network doesn’t.
+						Same code as the flip side, just bigger — good for low light or a tired arm.
 					</Text>
 					<Text style={styles.handle}>@{card.handle}</Text>
 				</View>
 			) : (
 				<View style={styles.stage}>
-					<FlipCard width={cardWidth} renderFront={renderCard} flippable={false} />
+					<FlipCard width={cardWidth} renderFront={renderCard} renderBack={renderBack} />
+					<Text style={styles.tapHint}>TAP THE CARD TO SHOW YOUR QR</Text>
 				</View>
 			)}
 
@@ -163,6 +183,7 @@ const styles = StyleSheet.create({
 	modeText: { ...type.meta, color: palette.creamFaint },
 	modeTextOn: { color: palette.rose },
 	stage: { alignItems: 'center', gap: space.md },
+	tapHint: { ...type.meta, color: palette.teal, fontSize: 9 },
 	viewActions: { gap: space.sm },
 	shareCard: {
 		alignItems: 'center',

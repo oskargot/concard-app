@@ -10,21 +10,32 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { CardBack } from '@/card/CardBack';
 import { CardFace } from '@/card/CardFace';
 import { CardShell } from '@/card/CardShell';
 import { FlipCard, StaticCard } from '@/card/FlipCard';
 import { StickerLayer } from '@/card/StickerLayer';
 import { foilForTier, meetingsToNextTier, tierLabel } from '@/card/tiers';
 import type { CollectedCard } from '@/card/types';
+import { formatRetryIn } from '@/lib/collect';
 import { useConcardStore } from '@/store/useConcardStore';
 import { palette } from '@/theme/palette';
 import { radius, space, type } from '@/theme/tokens';
+
+function formatCollectedDate(iso: string): string {
+	return new Date(iso).toLocaleDateString(undefined, {
+		month: 'short',
+		day: 'numeric',
+		year: 'numeric'
+	});
+}
 
 export default function BinderScreen() {
 	const insets = useSafeAreaInsets();
 	const { width } = useWindowDimensions();
 	const cards = useConcardStore((state) => state.binder_cache);
 	const pending = useConcardStore((state) => state.scan_queue.length);
+	const syncError = useConcardStore((state) => state.sync_error);
 	const [sort, setSort] = useState<'recent' | 'tier'>('recent');
 	const [selected, setSelected] = useState<CollectedCard | null>(null);
 	const cardWidth = (width - space.xl * 2 - space.sm * 2) / 3;
@@ -76,6 +87,17 @@ export default function BinderScreen() {
 					</View>
 				) : null}
 
+				{syncError ? (
+					<View style={styles.syncErrorBanner}>
+						<Text style={styles.syncErrorText}>
+							@{syncError.username}:{' '}
+							{syncError.code === 'cooldown' && syncError.retryAt
+								? `already collected — try again in ${formatRetryIn(syncError.retryAt)}.`
+								: syncError.hint || 'Could not collect that card.'}
+						</Text>
+					</View>
+				) : null}
+
 				<View style={styles.grid}>
 					{sorted.map((card) => (
 						<Pressable key={card.id} onPress={() => setSelected(card)} style={{ width: cardWidth }}>
@@ -97,6 +119,11 @@ export default function BinderScreen() {
 									</CardShell>
 								)}
 							/>
+							{card.pending ? (
+								<View style={styles.pendingBadge}>
+									<Text style={styles.pendingBadgeText}>SYNCING…</Text>
+								</View>
+							) : null}
 							<Text numberOfLines={1} style={styles.cardName}>
 								@{card.view.handle}
 							</Text>
@@ -139,7 +166,6 @@ export default function BinderScreen() {
 							<View style={[styles.detailCardStage, { height: detailCardWidth * 1.4 }]}>
 								<FlipCard
 									width={detailCardWidth}
-									flippable={false}
 									renderFront={(rx, ry) => (
 										<CardShell
 											style={selected.view.style}
@@ -155,9 +181,28 @@ export default function BinderScreen() {
 											<CardFace view={selected.view} width={detailCardWidth} />
 										</CardShell>
 									)}
+									// A collected card carries no code — no remote re-scan — so
+									// the back is always the collector's record, never QR.
+									renderBack={(rx, ry) => (
+										<CardBack
+											style={selected.view.style}
+											width={detailCardWidth}
+											variant="record"
+											record={{
+												collected: formatCollectedDate(selected.first_scanned_at),
+												event: selected.pending ? 'Pending sync' : 'In person',
+												note:
+													selected.meeting_count > 1
+														? `Met ${selected.meeting_count} times · last on ${formatCollectedDate(selected.last_scanned_at)}`
+														: 'First meeting logged.'
+											}}
+											rx={rx}
+											ry={ry}
+										/>
+									)}
 								/>
 							</View>
-							<Text style={styles.tiltHint}>DRAG TO MOVE THE LIGHT</Text>
+							<Text style={styles.tiltHint}>DRAG TO MOVE THE LIGHT · TAP TO FLIP</Text>
 							<View style={styles.progress}>
 								<View style={styles.progressHead}>
 									<Text style={styles.progressTier}>{tierLabel(selected.tier)} tier</Text>
@@ -215,6 +260,14 @@ const styles = StyleSheet.create({
 	},
 	queueDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: palette.teal },
 	queueText: { ...type.small, color: palette.teal },
+	syncErrorBanner: {
+		padding: space.md,
+		borderRadius: radius.md,
+		backgroundColor: 'rgba(255,92,92,0.14)',
+		borderWidth: 1,
+		borderColor: 'rgba(255,92,92,0.3)'
+	},
+	syncErrorText: { ...type.small, color: palette.cream },
 	grid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, alignItems: 'flex-start' },
 	pendingPhoto: {
 		position: 'absolute',
@@ -227,6 +280,18 @@ const styles = StyleSheet.create({
 		borderWidth: StyleSheet.hairlineWidth,
 		borderColor: 'rgba(247,240,228,0.18)'
 	},
+	pendingBadge: {
+		position: 'absolute',
+		top: space.xs,
+		left: space.xs,
+		paddingVertical: 3,
+		paddingHorizontal: space.xs,
+		borderRadius: radius.pill,
+		backgroundColor: 'rgba(18,7,32,0.85)',
+		borderWidth: StyleSheet.hairlineWidth,
+		borderColor: palette.teal
+	},
+	pendingBadgeText: { ...type.meta, color: palette.teal, fontSize: 8 },
 	cardName: { ...type.small, color: palette.cream, marginTop: space.xs },
 	tierRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
 	tier: { ...type.meta, color: palette.butter, fontSize: 8 },
