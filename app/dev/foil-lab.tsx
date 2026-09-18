@@ -103,7 +103,7 @@ export default function FoilLabScreen() {
 						<Card
 							view={view}
 							width={cardWidth}
-							foil="holo"
+							foil={kind}
 							seed="production-holo-lab"
 							rx={rx}
 							ry={ry}
@@ -119,18 +119,20 @@ export default function FoilLabScreen() {
 
 			<Section title="Engine">
 				<Chips
-					options={['v2', 'legacy'] as const}
+					options={['v2', 'pokemon', 'legacy'] as const}
 					value={engine}
 					onChange={(next) => {
 						setEngine(next);
 						setOverrides({});
-						if (next === 'legacy') setRecipeOverride(null);
+						if (next !== 'v2') setRecipeOverride(null);
 					}}
 				/>
 				<Text style={styles.note}>
 					{engine === 'v2'
 						? 'Shine + glare recipes (sampler techniques on a real card). Production still uses legacy.'
-						: 'Production layer stack — toggle layers / blend modes below.'}
+						: engine === 'pokemon'
+							? 'Structural port of pokemon-cards-css: one color-dodge shine + one overlay glare per card.'
+							: 'Production layer stack — toggle layers / blend modes below.'}
 				</Text>
 				<Link href="/dev/foil-sampler" style={styles.link}>
 					Open blank-card sampler →
