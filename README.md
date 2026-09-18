@@ -116,13 +116,28 @@ resolvable.
 
 ## Status
 
-Phase 2 of 7 done.
+Phase 2 of 7, plus the card editor and the meet loop.
 
 - **In:** the card renderer and foil lab; email/password auth, the username claim
-  and the forced first card.
-- **Not in:** the QR back, the card switcher and editor, photo upload, stickers,
-  the scanner with its offline queue, the binder, settings. The Scan and Binder
-  tabs are placeholders.
+  and the forced first card; the card editor (text in place, style, per-card
+  links, affiliation, photo upload); the meet loop end to end — My Card flips to
+  a real QR (`EXPO_PUBLIC_SITE_URL || 'https://concard.me'` + username, the same
+  contract the web scanner reads), the scanner parses that same URL (or a bare
+  username) via `src/lib/username.ts`'s `usernameFromScan`, scans queue offline
+  in `useConcardStore` and drain through `collect_card` in `src/store/sync.ts`,
+  and the binder replaces its starter demo cards with a live `collections` read
+  the first time a signed-in user is seen.
+- **Not in:** the QR back on other card looks under `/dev/cards`, the card
+  switcher, stickers inventory/combine/placement UI, photo pan/zoom, events,
+  friends, DMs, purchases, settings.
+- **Known gaps in the meet loop:** `tier`/`meeting_count` are computed
+  client-side from `collections` rows (the schema has no running total, so this
+  is a count query per owner, not a server-authoritative field); a collected
+  card's fandom badge is dropped rather than rendered, since the snapshot's
+  affiliation shape doesn't carry the app's `style_category` and drawing it
+  needs a fandoms-table lookup this drain doesn't do; the events feature isn't
+  wired, so a binder card's back shows "in person" rather than a venue.
 
-Nothing has been run against a live Supabase project yet — that needs a real
-`.env` and a device.
+Nothing has been run against a live Supabase project on a device yet — that
+needs a real `.env` and two accounts to test the scan → collect → binder loop
+end to end (see the handoff's manual test script).

@@ -137,11 +137,7 @@ export function FlipCard({
 	// One perspective, applied only while live. At rest we return no transform
 	// so the view demotes out of the 3D compositing path (keeps scroll sharp).
 	const stageStyle = useAnimatedStyle(() => {
-		if (
-			live.value === 0 &&
-			Math.abs(rx.value) < REST_EPS &&
-			Math.abs(ry.value) < REST_EPS
-		) {
+		if (live.value === 0 && Math.abs(rx.value) < REST_EPS && Math.abs(ry.value) < REST_EPS) {
 			return {};
 		}
 

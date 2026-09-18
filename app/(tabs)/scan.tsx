@@ -3,6 +3,9 @@ import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'ex
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { formatRetryIn } from '@/lib/collect';
+import { ALLOWED_QR_HOSTS, SITE_ORIGIN } from '@/lib/env';
+import { profileUrl, usernameFromScan } from '@/lib/username';
 import { useConcardStore } from '@/store/useConcardStore';
 import { palette } from '@/theme/palette';
 import { radius, space, type } from '@/theme/tokens';
@@ -12,6 +15,7 @@ export default function ScanScreen() {
 	const [permission, requestPermission] = useCameraPermissions();
 	const enqueue = useConcardStore((state) => state.enqueueScan);
 	const pending = useConcardStore((state) => state.scan_queue.length);
+	const syncError = useConcardStore((state) => state.sync_error);
 	const [locked, setLocked] = useState(false);
 	const [message, setMessage] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
@@ -19,18 +23,16 @@ export default function ScanScreen() {
 	const onScan = useCallback(
 		(result: BarcodeScanningResult) => {
 			if (locked) return;
-			const payload = parsePayload(result.data);
-			if (!payload) {
-				setError('That isn’t a Concard code. Look for a code with a username and card ID.');
+			const username = usernameFromScan(result.data, ALLOWED_QR_HOSTS);
+			if (!username) {
+				setError('That isn’t a Concard code. Look for a code pointing at someone’s profile.');
 				setLocked(true);
 				setTimeout(() => setLocked(false), 1600);
 				return;
 			}
-			const added = enqueue({ ...payload, scanned_at: new Date().toISOString() });
+			const added = enqueue({ username, scanned_at: new Date().toISOString() });
 			setError(null);
-			setMessage(
-				added ? `Got @${payload.username}! Saved to your binder.` : 'Already got that one.'
-			);
+			setMessage(added ? `Got @${username}! Saved to your binder.` : 'Already got that one.');
 			setLocked(true);
 			setTimeout(() => {
 				setLocked(false);
@@ -39,6 +41,12 @@ export default function ScanScreen() {
 		},
 		[enqueue, locked]
 	);
+
+	const syncErrorText = syncError
+		? syncError.code === 'cooldown' && syncError.retryAt
+			? `@${syncError.username}: already collected — try again in ${formatRetryIn(syncError.retryAt)}.`
+			: `@${syncError.username}: ${syncError.hint || 'Could not collect that card.'}`
+		: null;
 
 	if (!permission) return <View style={styles.page} />;
 
@@ -57,6 +65,9 @@ export default function ScanScreen() {
 				</Pressable>
 				{message ? <Text style={styles.permissionSuccess}>{message}</Text> : null}
 				{error ? <Text style={styles.permissionError}>{error}</Text> : null}
+				{!message && !error && syncErrorText ? (
+					<Text style={styles.permissionError}>{syncErrorText}</Text>
+				) : null}
 				<DemoScan onPress={() => onScan({ data: demoPayload } as BarcodeScanningResult)} />
 			</View>
 		);
@@ -100,6 +111,10 @@ export default function ScanScreen() {
 					<View style={styles.error}>
 						<Text style={styles.errorText}>{error}</Text>
 					</View>
+				) : syncErrorText ? (
+					<View style={styles.error}>
+						<Text style={styles.errorText}>{syncErrorText}</Text>
+					</View>
 				) : (
 					<View style={styles.offlinePill}>
 						<View style={styles.statusDot} />
@@ -114,7 +129,8 @@ export default function ScanScreen() {
 	);
 }
 
-const demoPayload = JSON.stringify({ username: 'pixel-pal', card_id: 'demo-scan-card' });
+/** Same shape a QR on someone's My Card screen encodes — a profile URL. */
+const demoPayload = profileUrl(SITE_ORIGIN, 'pixel-pal');
 
 function DemoScan({ onPress }: { onPress: () => void }) {
 	return (
@@ -122,26 +138,6 @@ function DemoScan({ onPress }: { onPress: () => void }) {
 			<Text style={styles.demoText}>Preview with a demo scan</Text>
 		</Pressable>
 	);
-}
-
-function parsePayload(data: string): { username: string; card_id: string } | null {
-	try {
-		const value = JSON.parse(data) as Record<string, unknown>;
-		if (typeof value.username === 'string' && typeof value.card_id === 'string') {
-			return { username: value.username.replace(/^@/, '').trim(), card_id: value.card_id.trim() };
-		}
-	} catch {
-		try {
-			const url = new URL(data);
-			const username =
-				url.searchParams.get('username') ?? url.pathname.split('/').filter(Boolean)[0];
-			const card_id = url.searchParams.get('card_id');
-			if (username && card_id) return { username: username.replace(/^@/, ''), card_id };
-		} catch {
-			return null;
-		}
-	}
-	return null;
 }
 
 const styles = StyleSheet.create({
