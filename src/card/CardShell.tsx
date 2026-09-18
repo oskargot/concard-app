@@ -42,6 +42,12 @@ export interface CardShellProps {
 	foilEngine?: FoilEngine;
 	/** Foil-lab: force a specific v2 recipe regardless of `foil` kind. */
 	foilRecipe?: FoilRecipeId;
+	/**
+	 * Draw a soft circular light over the face — bright at the centre, faint at
+	 * its edges. Opt-in so a collected card's frozen snapshot stays pixel-identical
+	 * to the web card; used on the home hero card, which is app chrome, not data.
+	 */
+	light?: boolean;
 	children?: ReactNode;
 	/** Drawn outside the face clip, so stickers can hang over the card edge. */
 	overlay?: ReactNode;
@@ -67,6 +73,14 @@ export function shellMetrics(width: number, shape: CardStyle['shape']): ShellMet
 	return { width, height, band, outerRadius, faceRadius: outerRadius - band, u };
 }
 
+/**
+ * A soft round light on the face: brightest at the centre, fading to nothing by
+ * ~68% out. `circle` (not `ellipse`) keeps it round on the 5:7 face instead of
+ * stretching to the box, so the edges stay faint and even all the way around.
+ */
+const FACE_LIGHT =
+	'radial-gradient(circle at 50% 42%, rgba(255,255,255,0.38) 0%, rgba(255,255,255,0.14) 34%, transparent 68%)';
+
 export function CardShell({
 	style,
 	width,
@@ -81,6 +95,7 @@ export function CardShell({
 	detail = 'full',
 	foilEngine,
 	foilRecipe,
+	light,
 	children,
 	overlay
 }: CardShellProps) {
@@ -119,6 +134,15 @@ export function CardShell({
 			>
 				{/* content sits under the light, so the foil plays over the face */}
 				<View style={StyleSheet.absoluteFill}>{children}</View>
+				{light ? (
+					<View
+						pointerEvents="none"
+						style={[
+							StyleSheet.absoluteFill,
+							{ experimental_backgroundImage: FACE_LIGHT } as ViewStyle
+						]}
+					/>
+				) : null}
 				{foilKind ? (
 					<Foil
 						kind={foilKind}

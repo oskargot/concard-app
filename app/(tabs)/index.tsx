@@ -56,6 +56,7 @@ export default function HomeScreen() {
 			seed={card.id}
 			rx={rx}
 			ry={ry}
+			light
 			overlay={<StickerLayer stickers={card.stickers} width={cardWidth} />}
 		>
 			<CardFace view={card} width={cardWidth} />
