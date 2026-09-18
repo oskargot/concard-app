@@ -76,12 +76,14 @@ export function shellMetrics(width: number, shape: CardStyle['shape']): ShellMet
 
 /**
  * A soft round light on the face: brightest at the centre, fading to nothing by
- * ~68% out. `circle` (not `ellipse`) keeps it round on the 5:7 face instead of
+ * ~52% out. `circle` (not `ellipse`) keeps it round on the 5:7 face instead of
  * stretching to the box, so the edges stay faint and even all the way around.
- * Centred at rest — it slides off centre as the card tilts (see `lightShift`).
+ * Biased up to 30% so its core sits over the photo (which lives in the upper
+ * third of the face) rather than over the bio below it; it slides off this rest
+ * position as the card tilts (see `lightShift`).
  */
 const FACE_LIGHT =
-	'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.38) 0%, rgba(255,255,255,0.14) 34%, transparent 68%)';
+	'radial-gradient(circle at 50% 30%, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0.2) 26%, transparent 52%)';
 
 export function CardShell({
 	style,
@@ -108,9 +110,10 @@ export function CardShell({
 	// The light glides opposite the drag, like a fixed source reflecting off a
 	// card you tilt: drag right and it slides left, drag down and it slides up.
 	// This deliberately departs from the foil's frozen-parallax rule (see
-	// FlipCard) — here the moving light *is* the point. The layer is oversized by
-	// its own max travel so it always covers the face as it slides.
-	const lightTravel = m.u(12);
+	// FlipCard) — here the moving light *is* the point, so the travel is generous
+	// enough to read. As the face-sized layer slides, the edge it leaves bare is
+	// already in the gradient's transparent tail, so no seam shows.
+	const lightTravel = m.u(20);
 	const lightShift = useAnimatedStyle(() => ({
 		transform: [
 			{ translateX: -(ry.value / TILT_RANGE) * lightTravel },
@@ -153,12 +156,13 @@ export function CardShell({
 					<Animated.View
 						pointerEvents="none"
 						style={[
+							StyleSheet.absoluteFill,
 							{
-								position: 'absolute',
-								top: -lightTravel,
-								bottom: -lightTravel,
-								left: -lightTravel,
-								right: -lightTravel,
+								// The photo lifts itself onto its own layer for flip stability
+								// (zIndex/elevation in CardFace); the light has to sit above it
+								// or it paints under the picture on Android.
+								zIndex: 4,
+								elevation: 4,
 								experimental_backgroundImage: FACE_LIGHT
 							} as ViewStyle,
 							lightShift
