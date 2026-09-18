@@ -7,6 +7,7 @@ import type { StickerFoil } from '@/card/tiers';
 import { STICKER_CATALOG, type StickerDefinition } from '@/stickers/catalog';
 import { palette } from '@/theme/palette';
 import { radius, space, type } from '@/theme/tokens';
+import { Button, Chip, CountBadge, IconCircle, ScreenHeader } from '@/ui';
 
 type Filter = 'all' | StickerFoil;
 
@@ -27,97 +28,87 @@ export default function StickersScreen() {
 		() => STICKER_CATALOG.filter((sticker) => filter === 'all' || sticker.foil === filter),
 		[filter]
 	);
-	const tileWidth = (width - space.xl * 2 - space.sm * 3) / 4;
+	const owned = STICKER_CATALOG.filter((item) => item.unlocked).length;
+	// 3-column grid, 24px gutters, 12px gap.
+	const tileWidth = (width - space.xl * 2 - space.md * 2) / 3;
 
 	return (
 		<ScrollView
 			contentContainerStyle={[
 				styles.page,
-				{ paddingTop: insets.top + space.xl, paddingBottom: insets.bottom + space.xxl }
+				{ paddingTop: insets.top, paddingBottom: insets.bottom + space.xxl }
 			]}
 		>
-			<View style={styles.header}>
-				<View>
-					<Text style={styles.eyebrow}>YOUR LOOT</Text>
-					<Text style={styles.title}>Sticker stash</Text>
-				</View>
-				<View style={styles.counter}>
-					<Text style={styles.counterValue}>
-						{STICKER_CATALOG.filter((item) => item.unlocked).length}
-					</Text>
-					<Text style={styles.counterLabel}>FOUND</Text>
-				</View>
-			</View>
-
-			<Text style={styles.intro}>
-				Decorate your card with convention drops, from base finds to full holo.
-			</Text>
+			<ScreenHeader
+				title="Stickers"
+				right={
+					<View style={styles.headerRight}>
+						<CountBadge>{owned} owned</CountBadge>
+						<IconCircle label="Grid layout">
+							<View style={styles.gridGlyph}>
+								<View style={styles.gridDot} />
+								<View style={styles.gridDot} />
+								<View style={styles.gridDot} />
+								<View style={styles.gridDot} />
+							</View>
+						</IconCircle>
+					</View>
+				}
+			/>
 
 			<ScrollView horizontal showsHorizontalScrollIndicator={false}>
-				<View style={styles.filters}>
+				<View style={styles.chips}>
 					{FILTERS.map((item) => (
-						<Pressable
+						<Chip
 							key={item.value}
+							label={item.label}
+							active={filter === item.value}
 							onPress={() => setFilter(item.value)}
-							style={[styles.filter, filter === item.value && styles.filterOn]}
-						>
-							<Text style={[styles.filterText, filter === item.value && styles.filterTextOn]}>
-								{item.label.toUpperCase()}
-							</Text>
-						</Pressable>
+						/>
 					))}
 				</View>
 			</ScrollView>
 
 			<View style={styles.grid}>
-				{visible.map((sticker) => {
-					const count = sticker.unlocked ? (sticker.foil === 'none' ? 3 : 1) : 0;
-					return (
-						<Pressable
-							key={sticker.id}
-							style={({ pressed }) => [
-								styles.tile,
-								{ width: tileWidth },
-								pressed && styles.pressed
-							]}
-							onPress={() => setSelected(sticker)}
-						>
-							<View
+				{visible.map((sticker) => (
+					<Pressable
+						key={sticker.id}
+						style={({ pressed }) => [
+							styles.tile,
+							{ width: tileWidth },
+							sticker.unlocked ? styles.tileOwned : styles.tileLocked,
+							pressed && styles.pressed
+						]}
+						onPress={() => setSelected(sticker)}
+					>
+						<View style={styles.tileImage}>
+							<Text
 								style={[
-									styles.sticker,
-									{ backgroundColor: sticker.unlocked ? sticker.color : palette.raisedHigh },
-									sticker.foil === 'holo' && styles.holo
+									styles.glyph,
+									{ color: sticker.unlocked ? sticker.color : palette.textFaint }
 								]}
 							>
-								<Text style={[styles.glyph, !sticker.unlocked && styles.lockedGlyph]}>
-									{sticker.unlocked ? sticker.glyph : '?'}
-								</Text>
-								{sticker.unlocked ? (
-									<View style={styles.quantityBadge}>
-										<Text style={styles.quantity}>×{count}</Text>
-									</View>
-								) : null}
-							</View>
-							<Text numberOfLines={1} style={styles.name}>
+								{sticker.unlocked ? sticker.glyph : '?'}
+							</Text>
+						</View>
+						<View style={styles.tileLabel}>
+							<Text numberOfLines={1} style={styles.tileTitle}>
 								{sticker.unlocked ? sticker.name : '???'}
 							</Text>
-							<Text style={[styles.foil, sticker.foil === 'holo' && styles.foilHolo]}>
-								{sticker.foil === 'none' ? 'BASE' : sticker.foil.toUpperCase()}
+							<Text
+								style={[
+									styles.tileStatus,
+									sticker.unlocked ? styles.statusOwned : styles.statusLocked
+								]}
+							>
+								{sticker.unlocked ? 'Owned' : 'Locked'}
 							</Text>
-						</Pressable>
-					);
-				})}
+						</View>
+					</Pressable>
+				))}
 			</View>
 
-			<View style={styles.combine}>
-				<Text style={styles.combineGlyph}>✦</Text>
-				<View style={styles.combineCopy}>
-					<Text style={styles.combineTitle}>Duplicates become foil</Text>
-					<Text style={styles.combineBody}>
-						Collect two matching stickers to combine them: base → glitter → holo.
-					</Text>
-				</View>
-			</View>
+			<Text style={styles.bottomHint}>Scan cards to unlock new stickers ✦</Text>
 
 			{selected ? (
 				<View style={styles.detail}>
@@ -127,7 +118,7 @@ export default function StickersScreen() {
 					<View
 						style={[
 							styles.detailSticker,
-							{ backgroundColor: selected.unlocked ? selected.color : palette.raisedHigh }
+							{ backgroundColor: selected.unlocked ? selected.color : palette.raised }
 						]}
 					>
 						<Text style={styles.detailGlyph}>{selected.unlocked ? selected.glyph : '?'}</Text>
@@ -135,7 +126,7 @@ export default function StickersScreen() {
 					<Text style={styles.detailTitle}>
 						{selected.unlocked ? selected.name : 'Undiscovered'}
 					</Text>
-					<Text style={[styles.detailFoil, selected.foil === 'holo' && styles.foilHolo]}>
+					<Text style={styles.detailFoil}>
 						{selected.foil === 'none' ? 'BASE' : selected.foil.toUpperCase()}
 					</Text>
 					<Text style={styles.detailBody}>
@@ -144,9 +135,7 @@ export default function StickersScreen() {
 							: 'Keep meeting people. Some encounters carry secret drops.'}
 					</Text>
 					{selected.unlocked ? (
-						<Pressable style={styles.useButton} onPress={() => router.push('/card' as never)}>
-							<Text style={styles.useButtonText}>USE ON MY CARD</Text>
-						</Pressable>
+						<Button label="Use on my card" onPress={() => router.push('/card' as never)} />
 					) : null}
 				</View>
 			) : null}
@@ -156,120 +145,65 @@ export default function StickersScreen() {
 
 const styles = StyleSheet.create({
 	page: { paddingHorizontal: space.xl, gap: space.lg },
-	header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-	eyebrow: { ...type.meta, color: palette.teal },
-	title: { ...type.hero, color: palette.cream },
-	counter: {
-		width: 64,
-		height: 64,
-		borderRadius: radius.lg,
-		alignItems: 'center',
-		justifyContent: 'center',
-		backgroundColor: palette.raised,
-		borderWidth: 1,
-		borderColor: palette.lineStrong
-	},
-	counterValue: { ...type.title, color: palette.butter },
-	counterLabel: { ...type.meta, color: palette.creamFaint, fontSize: 8 },
-	intro: { ...type.body, color: palette.creamMute },
-	filters: { flexDirection: 'row', gap: space.sm },
-	filter: {
-		paddingVertical: space.sm,
-		paddingHorizontal: space.md,
-		borderRadius: radius.pill,
-		backgroundColor: palette.raised,
-		borderWidth: StyleSheet.hairlineWidth,
-		borderColor: palette.line
-	},
-	filterOn: { backgroundColor: palette.teal, borderColor: palette.teal },
-	filterText: { ...type.meta, color: palette.creamFaint, fontSize: 9 },
-	filterTextOn: { color: palette.void },
-	grid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
-	tile: {
-		padding: 6,
-		gap: space.xs,
-		aspectRatio: 0.9,
-		backgroundColor: palette.raised,
-		borderRadius: radius.lg,
-		borderWidth: StyleSheet.hairlineWidth,
-		borderColor: palette.line
-	},
-	sticker: {
-		width: 42,
-		height: 42,
-		alignSelf: 'center',
-		borderRadius: 21,
-		alignItems: 'center',
-		justifyContent: 'center',
-		borderWidth: 3,
-		borderColor: 'rgba(247,240,228,0.68)'
-	},
-	holo: { boxShadow: `0 0 18px ${palette.tealGlow}` },
-	glyph: { ...type.hero, color: palette.void, fontSize: 32 },
-	lockedGlyph: { color: palette.creamFaint },
-	name: { ...type.small, color: palette.cream, minHeight: 18 },
-	foil: { ...type.meta, color: palette.creamFaint, fontSize: 8 },
-	foilHolo: { color: palette.teal },
-	quantityBadge: {
-		position: 'absolute',
-		right: -7,
-		top: -5,
-		minWidth: 23,
-		height: 18,
-		paddingHorizontal: 4,
-		borderRadius: radius.pill,
-		backgroundColor: palette.void,
-		alignItems: 'center',
-		justifyContent: 'center',
-		borderWidth: 1,
-		borderColor: palette.lineStrong
-	},
-	quantity: { ...type.meta, color: palette.cream, fontSize: 8, letterSpacing: 0 },
-	pressed: { opacity: 0.74, transform: [{ scale: 0.98 }] },
-	combine: {
+	headerRight: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+	gridGlyph: {
+		width: 14,
+		height: 14,
 		flexDirection: 'row',
-		gap: space.md,
-		padding: space.lg,
-		borderRadius: radius.lg,
-		backgroundColor: 'rgba(255,217,138,0.1)',
-		borderWidth: 1,
-		borderColor: 'rgba(255,217,138,0.28)'
+		flexWrap: 'wrap',
+		justifyContent: 'space-between',
+		alignContent: 'space-between'
 	},
-	combineGlyph: { ...type.hero, color: palette.butter },
-	combineCopy: { flex: 1, gap: 2 },
-	combineTitle: { ...type.bodyStrong, color: palette.butter },
-	combineBody: { ...type.small, color: palette.creamMute },
+	gridDot: { width: 5, height: 5, borderRadius: 1.5, backgroundColor: palette.textFaint },
+	pressed: { opacity: 0.74 },
+	chips: { flexDirection: 'row', gap: space.sm },
+	grid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.md },
+	tile: {
+		backgroundColor: palette.surface,
+		borderRadius: radius.md,
+		overflow: 'hidden'
+	},
+	tileOwned: { borderWidth: 1, borderColor: palette.line },
+	tileLocked: { borderWidth: 1, borderColor: palette.line, opacity: 0.5 },
+	tileImage: {
+		height: 90,
+		backgroundColor: palette.raised,
+		alignItems: 'center',
+		justifyContent: 'center'
+	},
+	glyph: { fontSize: 34 },
+	tileLabel: { padding: space.sm, gap: 2 },
+	tileTitle: {
+		fontFamily: 'Outfit-SemiBold',
+		fontSize: 11,
+		lineHeight: 14,
+		color: palette.textPrimary
+	},
+	tileStatus: { fontFamily: 'Outfit-Regular', fontSize: 10 },
+	statusOwned: { color: palette.textDim },
+	statusLocked: { color: palette.textFaint },
+	bottomHint: { ...type.small, color: palette.textGhost, textAlign: 'center', marginTop: space.sm },
 	detail: {
 		position: 'relative',
 		alignItems: 'center',
 		gap: space.sm,
 		padding: space.xl,
-		borderRadius: radius.xl,
-		backgroundColor: palette.raisedHigh,
+		borderRadius: radius.lg,
+		backgroundColor: palette.surface,
 		borderWidth: 1,
-		borderColor: palette.tealDim
+		borderColor: palette.line
 	},
 	close: { position: 'absolute', top: space.md, right: space.md, zIndex: 2, padding: space.xs },
-	closeText: { fontSize: 24, color: palette.creamMute },
+	closeText: { fontSize: 24, color: palette.textDim },
 	detailSticker: {
 		width: 110,
 		height: 110,
 		borderRadius: 55,
 		alignItems: 'center',
-		justifyContent: 'center',
-		borderWidth: 3,
-		borderColor: palette.cream
+		justifyContent: 'center'
 	},
-	detailGlyph: { ...type.hero, fontSize: 56, color: palette.void },
-	detailTitle: { ...type.title, color: palette.cream },
-	detailFoil: { ...type.meta, color: palette.creamMute },
-	detailBody: { ...type.small, color: palette.creamMute, textAlign: 'center' },
-	useButton: {
-		marginTop: space.sm,
-		paddingVertical: space.md,
-		paddingHorizontal: space.xl,
-		backgroundColor: palette.rose,
-		borderRadius: radius.md
-	},
-	useButtonText: { ...type.meta, color: palette.void }
+	detailGlyph: { fontSize: 56, color: palette.ground },
+	detailTitle: { ...type.title, color: palette.textPrimary },
+	detailFoil: { ...type.meta, color: palette.textDim },
+	detailBody: { ...type.small, color: palette.textDim, textAlign: 'center' }
 });

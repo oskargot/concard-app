@@ -20,7 +20,16 @@ import type { CollectedCard } from '@/card/types';
 import { formatRetryIn } from '@/lib/collect';
 import { useConcardStore } from '@/store/useConcardStore';
 import { palette } from '@/theme/palette';
-import { radius, space, type } from '@/theme/tokens';
+import { radius, shadow, space, type } from '@/theme/tokens';
+import { Chip, CountBadge, IconCircle, ScreenHeader } from '@/ui';
+
+type Sort = 'recent' | 'az' | 'holo';
+
+const SORTS: { value: Sort; label: string }[] = [
+	{ value: 'recent', label: 'Recent' },
+	{ value: 'az', label: 'A–Z' },
+	{ value: 'holo', label: 'Holo only' }
+];
 
 function formatCollectedDate(iso: string): string {
 	return new Date(iso).toLocaleDateString(undefined, {
@@ -36,47 +45,60 @@ export default function BinderScreen() {
 	const cards = useConcardStore((state) => state.binder_cache);
 	const pending = useConcardStore((state) => state.scan_queue.length);
 	const syncError = useConcardStore((state) => state.sync_error);
-	const [sort, setSort] = useState<'recent' | 'tier'>('recent');
+	const [sort, setSort] = useState<Sort>('recent');
 	const [selected, setSelected] = useState<CollectedCard | null>(null);
-	const cardWidth = (width - space.xl * 2 - space.sm * 2) / 3;
-	const detailCardWidth = Math.min(width - space.xl * 4, 310);
-	const sorted = useMemo(
-		() =>
-			[...cards].sort((a, b) =>
-				sort === 'tier'
-					? b.tier - a.tier
-					: Date.parse(b.last_scanned_at) - Date.parse(a.last_scanned_at)
-			),
-		[cards, sort]
-	);
+
+	// 2-column grid, 24px gutters, 12px gap.
+	const cardWidth = (width - space.xl * 2 - space.md) / 2;
+	const detailCardWidth = Math.min(width - space.xl * 4, 266);
+
+	const shown = useMemo(() => {
+		const base = sort === 'holo' ? cards.filter((c) => c.view.style.frame === 'holo') : [...cards];
+		return base.sort((a, b) =>
+			sort === 'az'
+				? a.view.handle.localeCompare(b.view.handle)
+				: Date.parse(b.last_scanned_at) - Date.parse(a.last_scanned_at)
+		);
+	}, [cards, sort]);
 
 	return (
 		<>
 			<ScrollView
 				contentContainerStyle={[
 					styles.page,
-					{ paddingTop: insets.top + space.xl, paddingBottom: insets.bottom + space.xxl }
+					{ paddingTop: insets.top, paddingBottom: insets.bottom + space.xxl }
 				]}
 			>
-				<View style={styles.header}>
-					<View>
-						<Text style={styles.eyebrow}>COLLECTION / {cards.length}</Text>
-						<Text style={styles.title}>Your binder</Text>
-					</View>
-					<View style={styles.sort}>
-						{(['recent', 'tier'] as const).map((item) => (
-							<Pressable
-								key={item}
-								onPress={() => setSort(item)}
-								style={[styles.sortChoice, sort === item && styles.sortOn]}
-							>
-								<Text style={[styles.sortText, sort === item && styles.sortTextOn]}>
-									{item.toUpperCase()}
-								</Text>
-							</Pressable>
+				<ScreenHeader
+					title="Binder"
+					right={
+						<View style={styles.headerRight}>
+							<CountBadge>
+								{cards.length} card{cards.length === 1 ? '' : 's'}
+							</CountBadge>
+							<IconCircle label="Sort">
+								<View style={styles.sortGlyph}>
+									<View style={[styles.sortBar, { width: 14 }]} />
+									<View style={[styles.sortBar, { width: 10 }]} />
+									<View style={[styles.sortBar, { width: 6 }]} />
+								</View>
+							</IconCircle>
+						</View>
+					}
+				/>
+
+				<ScrollView horizontal showsHorizontalScrollIndicator={false}>
+					<View style={styles.chips}>
+						{SORTS.map((item) => (
+							<Chip
+								key={item.value}
+								label={item.label}
+								active={sort === item.value}
+								onPress={() => setSort(item.value)}
+							/>
 						))}
 					</View>
-				</View>
+				</ScrollView>
 
 				{pending ? (
 					<View style={styles.queue}>
@@ -99,8 +121,12 @@ export default function BinderScreen() {
 				) : null}
 
 				<View style={styles.grid}>
-					{sorted.map((card) => (
-						<Pressable key={card.id} onPress={() => setSelected(card)} style={{ width: cardWidth }}>
+					{shown.map((card) => (
+						<Pressable
+							key={card.id}
+							onPress={() => setSelected(card)}
+							style={[styles.cell, { width: cardWidth }]}
+						>
 							<StaticCard
 								width={cardWidth}
 								render={(rx, ry) => (
@@ -124,12 +150,13 @@ export default function BinderScreen() {
 									<Text style={styles.pendingBadgeText}>SYNCING…</Text>
 								</View>
 							) : null}
-							<Text numberOfLines={1} style={styles.cardName}>
-								@{card.view.handle}
-							</Text>
-							<View style={styles.tierRow}>
-								<Text style={styles.tier}>{tierLabel(card.tier).toUpperCase()}</Text>
-								<Text style={styles.meetings}>×{card.meeting_count}</Text>
+							<View style={styles.cellFooter}>
+								<Text numberOfLines={1} style={styles.cardName}>
+									@{card.view.handle}
+								</Text>
+								<Text style={styles.tier}>
+									{tierLabel(card.tier)} · ×{card.meeting_count}
+								</Text>
 							</View>
 						</Pressable>
 					))}
@@ -137,9 +164,13 @@ export default function BinderScreen() {
 
 				{cards.length === 0 ? (
 					<View style={styles.empty}>
-						<Text style={styles.emptyGlyph}>▦</Text>
 						<Text style={styles.emptyTitle}>Your first page is waiting</Text>
 						<Text style={styles.body}>Scan someone’s Concard and they’ll land right here.</Text>
+					</View>
+				) : shown.length === 0 ? (
+					<View style={styles.empty}>
+						<Text style={styles.emptyTitle}>No holo cards yet</Text>
+						<Text style={styles.body}>Meet someone a few more times to earn a holo frame.</Text>
 					</View>
 				) : null}
 			</ScrollView>
@@ -155,10 +186,7 @@ export default function BinderScreen() {
 					{selected ? (
 						<View style={styles.detail}>
 							<View style={styles.detailTop}>
-								<View>
-									<Text style={styles.eyebrow}>BINDER CARD</Text>
-									<Text style={styles.detailTitle}>@{selected.view.handle}</Text>
-								</View>
+								<Text style={styles.detailTitle}>@{selected.view.handle}</Text>
 								<Pressable onPress={() => setSelected(null)} style={styles.close}>
 									<Text style={styles.closeText}>×</Text>
 								</Pressable>
@@ -212,9 +240,7 @@ export default function BinderScreen() {
 									<View
 										style={[
 											styles.progressFill,
-											{
-												width: `${Math.min(100, (selected.meeting_count / 8) * 100)}%`
-											}
+											{ width: `${Math.min(100, (selected.meeting_count / 8) * 100)}%` }
 										]}
 									/>
 								</View>
@@ -234,29 +260,19 @@ export default function BinderScreen() {
 
 const styles = StyleSheet.create({
 	page: { paddingHorizontal: space.xl, gap: space.lg },
-	header: { gap: space.md },
-	eyebrow: { ...type.meta, color: palette.teal },
-	title: { ...type.hero, color: palette.cream },
-	sort: {
-		flexDirection: 'row',
-		alignSelf: 'flex-start',
-		padding: 3,
-		borderRadius: radius.md,
-		backgroundColor: palette.raised
-	},
-	sortChoice: { paddingVertical: space.sm, paddingHorizontal: space.md, borderRadius: radius.sm },
-	sortOn: { backgroundColor: palette.raisedHigh },
-	sortText: { ...type.meta, color: palette.creamFaint, fontSize: 9 },
-	sortTextOn: { color: palette.rose },
+	headerRight: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+	sortGlyph: { gap: 3, alignItems: 'flex-start' },
+	sortBar: { height: 1.5, borderRadius: 1, backgroundColor: palette.textFaint },
+	chips: { flexDirection: 'row', gap: space.sm },
 	queue: {
 		flexDirection: 'row',
 		alignItems: 'center',
 		gap: space.sm,
 		padding: space.md,
 		borderRadius: radius.md,
-		backgroundColor: 'rgba(69,229,213,0.1)',
+		backgroundColor: 'rgba(159,240,220,0.08)',
 		borderWidth: 1,
-		borderColor: 'rgba(69,229,213,0.25)'
+		borderColor: 'rgba(159,240,220,0.22)'
 	},
 	queueDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: palette.teal },
 	queueText: { ...type.small, color: palette.teal },
@@ -267,8 +283,17 @@ const styles = StyleSheet.create({
 		borderWidth: 1,
 		borderColor: 'rgba(255,92,92,0.3)'
 	},
-	syncErrorText: { ...type.small, color: palette.cream },
-	grid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, alignItems: 'flex-start' },
+	syncErrorText: { ...type.small, color: palette.textPrimary },
+	grid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.md, alignItems: 'flex-start' },
+	cell: {
+		backgroundColor: palette.surface,
+		borderRadius: radius.md,
+		borderWidth: 1,
+		borderColor: palette.line,
+		padding: space.sm,
+		gap: space.sm,
+		boxShadow: shadow.grid
+	},
 	pendingPhoto: {
 		position: 'absolute',
 		top: '5%',
@@ -276,41 +301,39 @@ const styles = StyleSheet.create({
 		right: '7%',
 		height: '34%',
 		borderRadius: radius.sm,
-		backgroundColor: 'rgba(247,240,228,0.08)',
+		backgroundColor: 'rgba(255,255,255,0.06)',
 		borderWidth: StyleSheet.hairlineWidth,
-		borderColor: 'rgba(247,240,228,0.18)'
+		borderColor: 'rgba(255,255,255,0.14)'
 	},
 	pendingBadge: {
 		position: 'absolute',
-		top: space.xs,
-		left: space.xs,
+		top: space.md,
+		left: space.md,
 		paddingVertical: 3,
 		paddingHorizontal: space.xs,
 		borderRadius: radius.pill,
-		backgroundColor: 'rgba(18,7,32,0.85)',
+		backgroundColor: 'rgba(14,13,18,0.85)',
 		borderWidth: StyleSheet.hairlineWidth,
 		borderColor: palette.teal
 	},
 	pendingBadgeText: { ...type.meta, color: palette.teal, fontSize: 8 },
-	cardName: { ...type.small, color: palette.cream, marginTop: space.xs },
-	tierRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-	tier: { ...type.meta, color: palette.butter, fontSize: 8 },
-	meetings: { ...type.small, color: palette.creamFaint },
+	cellFooter: { gap: 2 },
+	cardName: { fontFamily: 'Outfit-SemiBold', fontSize: 13, color: palette.textPrimary },
+	tier: { fontFamily: 'Outfit-Regular', fontSize: 11, color: palette.textFaint },
 	empty: {
 		alignItems: 'center',
 		gap: space.sm,
 		padding: space.xxl,
-		borderRadius: radius.xl,
+		borderRadius: radius.lg,
 		borderWidth: 1,
 		borderStyle: 'dashed',
-		borderColor: palette.lineStrong
+		borderColor: palette.mutedUi
 	},
-	emptyGlyph: { fontSize: 42, color: palette.teal },
-	emptyTitle: { ...type.title, color: palette.cream },
-	body: { ...type.small, color: palette.creamMute, textAlign: 'center' },
+	emptyTitle: { ...type.title, color: palette.textPrimary },
+	body: { ...type.small, color: palette.textDim, textAlign: 'center' },
 	modalScrim: {
 		flex: 1,
-		backgroundColor: 'rgba(18,7,32,0.88)',
+		backgroundColor: 'rgba(10,9,14,0.9)',
 		alignItems: 'center',
 		justifyContent: 'center',
 		padding: space.xl
@@ -321,10 +344,10 @@ const styles = StyleSheet.create({
 		alignItems: 'center',
 		gap: space.lg,
 		padding: space.lg,
-		borderRadius: radius.xl,
-		backgroundColor: palette.raised,
+		borderRadius: radius.lg,
+		backgroundColor: palette.surface,
 		borderWidth: 1,
-		borderColor: palette.lineStrong,
+		borderColor: palette.line,
 		overflow: 'hidden'
 	},
 	detailCardStage: {
@@ -340,27 +363,27 @@ const styles = StyleSheet.create({
 		justifyContent: 'space-between',
 		alignItems: 'center'
 	},
-	detailTitle: { ...type.title, color: palette.cream },
+	detailTitle: { ...type.title, color: palette.textPrimary },
 	close: {
-		width: 38,
-		height: 38,
-		borderRadius: 19,
+		width: 36,
+		height: 36,
+		borderRadius: 18,
 		alignItems: 'center',
 		justifyContent: 'center',
-		backgroundColor: palette.raisedHigh
+		backgroundColor: palette.raised
 	},
-	closeText: { fontSize: 26, color: palette.cream },
+	closeText: { fontSize: 24, color: palette.textPrimary },
 	progress: { width: '100%', gap: space.sm },
-	tiltHint: { ...type.meta, color: palette.teal, fontSize: 9 },
+	tiltHint: { ...type.meta, color: palette.textFaint, fontSize: 9 },
 	progressHead: { flexDirection: 'row', justifyContent: 'space-between' },
-	progressTier: { ...type.bodyStrong, color: palette.butter },
-	progressCount: { ...type.small, color: palette.creamMute },
+	progressTier: { ...type.bodyStrong, color: palette.holo },
+	progressCount: { ...type.small, color: palette.textDim },
 	progressTrack: {
 		height: 7,
 		borderRadius: 4,
 		overflow: 'hidden',
-		backgroundColor: palette.raisedHigh
+		backgroundColor: palette.raised
 	},
-	progressFill: { height: '100%', backgroundColor: palette.rose },
-	progressHint: { ...type.small, color: palette.creamFaint }
+	progressFill: { height: '100%', backgroundColor: palette.holo },
+	progressHint: { ...type.small, color: palette.textFaint }
 });

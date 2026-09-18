@@ -1,60 +1,108 @@
 /**
- * Arcade dusk (design bible §12).
+ * Dark velvet display case (Concard style guide).
  *
- * One dark room with cards as glowing marquees. The bible fixes the *roles* and
- * leaves hex values to the first design pass — these are that pass. Anything
- * that needs a colour should name a role here rather than inlining a hex, so a
- * later retune is one file.
+ * The app chrome is intentionally neutral and dark — the cards are the hero.
+ * Backgrounds recede (ground → surface → raised), surfaces are barely
+ * distinguishable from the ground, and the only colour that "pops" is the holo
+ * gradient, reserved for primary actions, the Scan control, and card frames.
  *
- * The ramp deliberately keeps three steps below the card's own ink (#17161b,
- * see card-style.ts): a flipped card back is drawn in that ink and still has to
- * lift off the page rather than merge into it.
+ * Every value here is taken from the approved mockups. Anything that needs a
+ * colour should name a role rather than inlining a hex, so a later retune is one
+ * file. New code should use the guide roles (`ground`, `surface`, `holo`, …);
+ * the block of legacy aliases at the bottom keeps the old "arcade dusk" role
+ * names (`void`, `rose`, `cream`, …) compiling while callers migrate, each
+ * pointing at its nearest guide value.
  */
 
 export const palette = {
-	/** Deepest ground: behind sheets and modals. */
-	void: '#120720',
-	/** Base background — the dark room itself. */
-	base: '#1A0B2E',
-	/** Raised surface: panels, tab bar, list rows. */
-	raised: '#241340',
-	/** Raised one more step: pressed states, inset wells. */
-	raisedHigh: '#2E1A50',
-	/** Hairlines and dividers. */
-	line: 'rgba(247, 240, 228, 0.12)',
-	lineStrong: 'rgba(247, 240, 228, 0.22)',
+	/* Background layers (darkest → lightest). */
+	/** App background, screen fill. */
+	ground: '#121116',
+	/** Nav bar, cards, sheet/panel backgrounds. */
+	surface: '#1c1b22',
+	/** Input fields, photo placeholders, link pills, inset wells. */
+	raised: '#26242e',
 
-	/** Hero accent — neon rose, magenta-leaning. Primary actions, the wordmark. */
-	rose: '#FF4D97',
-	roseDim: '#C93878',
-	roseGlow: 'rgba(255, 77, 151, 0.45)',
+	/* Borders & dividers. */
+	/** Borders, nav top divider, inactive chip borders. */
+	line: '#34323d',
+	/** Inactive icon fills, dashed borders. */
+	mutedUi: '#3d3a47',
 
-	/** Secondary — ice teal. Selection, links, the scan reticle. */
-	teal: '#45E5D5',
-	tealDim: '#2FAEA2',
-	tealGlow: 'rgba(69, 229, 213, 0.40)',
+	/* Text. */
+	/** Names, headings, active labels. */
+	textPrimary: '#efedf2',
+	/** Usernames, secondary info, bio text. */
+	textDim: '#a9a4b8',
+	/** Nav labels (inactive), hints, tertiary. */
+	textFaint: '#8a8898',
+	/** Placeholder labels inside raised areas. */
+	textGhost: '#3d3a47',
 
-	/** Warm accent, used sparingly — butter. Tier badges, celebration. */
-	butter: '#FFD98A',
+	/* Accent. One primary accent per screen — holo. */
+	/** Primary accent — active nav, active chips, primary buttons. */
+	holo: '#b9c9ff',
+	/** Lighter holo tint when needed. */
+	holoSoft: '#dbe3ff',
+	/** "New" badges, scan-line end. */
+	teal: '#9ff0dc',
+	/** Holo gradient start/end. */
+	pink: '#ffb3e0',
+	/** Holo gradient warm stop. */
+	warm: '#ffe7a8',
 
-	/** Text and lighter UI. */
-	cream: '#F7F0E4',
-	creamMute: 'rgba(247, 240, 228, 0.66)',
-	creamFaint: 'rgba(247, 240, 228, 0.38)',
+	/** Scan screen only — slightly darker ground. */
+	scanBg: '#0e0d12',
 
-	/** Semantic. */
-	danger: '#FF5C5C',
-	success: '#6BE39A'
+	/* Glows (guide "Shadows & Glows"). */
+	/** Soft holo glow around the Scan control and holo CTAs. */
+	holoGlow: 'rgba(185,201,255,0.3)',
+	/** Teal glow, used sparingly. */
+	tealGlow: 'rgba(159,240,220,0.35)',
+
+	/* Semantic status. */
+	danger: '#ff5c5c',
+	success: '#9ff0dc',
+
+	// ---------------------------------------------------------------------------
+	// Legacy "arcade dusk" aliases — deprecated. Prefer the guide roles above.
+	// Kept so files not yet migrated keep compiling; each maps to its nearest
+	// guide value, so an un-migrated screen still renders on-palette.
+	// ---------------------------------------------------------------------------
+	/** @deprecated → ground */
+	void: '#121116',
+	/** @deprecated → ground */
+	base: '#121116',
+	/** @deprecated → raised */
+	raisedHigh: '#26242e',
+	/** @deprecated → mutedUi */
+	lineStrong: '#3d3a47',
+	/** @deprecated → holo */
+	rose: '#b9c9ff',
+	/** @deprecated → line */
+	roseDim: '#34323d',
+	/** @deprecated → holoGlow */
+	roseGlow: 'rgba(185,201,255,0.3)',
+	/** @deprecated → line */
+	tealDim: '#34323d',
+	/** @deprecated → warm */
+	butter: '#ffe7a8',
+	/** @deprecated → textPrimary */
+	cream: '#efedf2',
+	/** @deprecated → textDim */
+	creamMute: '#a9a4b8',
+	/** @deprecated → textFaint */
+	creamFaint: '#8a8898'
 } as const;
 
 /**
- * The holo gradient: rose → violet → teal → mint. Reserved for tier reveals,
- * top foils and celebration — never as a background for ordinary chrome, or it
- * stops reading as special.
+ * The holo gradient: pink → holo → teal → warm → pink at ≈118°. Reserved for
+ * card frames and primary CTAs (and the Scan control) — never as a background
+ * for ordinary chrome, or it stops reading as special.
  */
-export const HOLO_STOPS = ['#FF7EC7', '#A97BFF', '#45E5D5', '#9FFFD2'] as const;
+export const HOLO_STOPS = ['#ffb3e0', '#b9c9ff', '#9ff0dc', '#ffe7a8', '#ffb3e0'] as const;
 
 /** The same gradient as a CSS string for `experimental_backgroundImage`. */
-export const HOLO_GRADIENT = `linear-gradient(110deg, ${HOLO_STOPS.join(', ')})`;
+export const HOLO_GRADIENT = `linear-gradient(118deg, ${HOLO_STOPS.join(', ')})`;
 
 export type PaletteKey = keyof typeof palette;

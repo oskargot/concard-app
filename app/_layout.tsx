@@ -19,6 +19,11 @@ export default function RootLayout() {
 	// Self-hosted rather than fetched: a con hall is exactly where a request to a
 	// third-party font CDN fails, and the web app made the same call.
 	const [fontsLoaded, fontError] = useFonts({
+		// App chrome — Outfit (the mockups' face).
+		[font.ui]: require('../assets/fonts/Outfit-Regular.ttf'),
+		[font.uiSemi]: require('../assets/fonts/Outfit-SemiBold.ttf'),
+		[font.uiBold]: require('../assets/fonts/Outfit-Bold.ttf'),
+		// Card face — kept in sync with the web card.
 		[font.display]: require('../assets/fonts/Fredoka-Bold.ttf'),
 		[font.displaySemi]: require('../assets/fonts/Fredoka-SemiBold.ttf'),
 		[font.body]: require('../assets/fonts/SpaceGrotesk-Regular.ttf'),
@@ -35,7 +40,7 @@ export default function RootLayout() {
 	if (!fontsLoaded && !fontError) return null;
 
 	return (
-		<GestureHandlerRootView style={{ flex: 1, backgroundColor: palette.base }}>
+		<GestureHandlerRootView style={{ flex: 1, backgroundColor: palette.ground }}>
 			<SafeAreaProvider>
 				<StatusBar style="light" />
 				<AuthProvider>
@@ -43,10 +48,10 @@ export default function RootLayout() {
 					<AuthGate>
 						<Stack
 							screenOptions={{
-								headerStyle: { backgroundColor: palette.base },
-								headerTintColor: palette.cream,
-								headerTitleStyle: { fontFamily: font.display },
-								contentStyle: { backgroundColor: palette.base }
+								headerStyle: { backgroundColor: palette.ground },
+								headerTintColor: palette.textPrimary,
+								headerTitleStyle: { fontFamily: font.uiBold },
+								contentStyle: { backgroundColor: palette.ground }
 							}}
 						>
 							<Stack.Screen name="(tabs)" options={{ headerShown: false }} />
@@ -115,7 +120,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 	if (loading) {
 		return (
 			<View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-				<ActivityIndicator color={palette.rose} />
+				<ActivityIndicator color={palette.holo} />
 			</View>
 		);
 	}

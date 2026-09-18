@@ -135,11 +135,17 @@ by the `concard` web repo.
 
 ### Theme (`src/theme/`) and shared chrome (`src/ui/`)
 
-`palette.ts` / `tokens.ts` hold the "arcade dusk" palette and non-color tokens (design bible §12):
-medium rounded corners, subtle glow on interactive elements, Fredoka for display type and Space
-Grotesk for body. `src/ui/index.tsx` holds deliberately quiet chrome (`Button`, `Field`, `Panel`, …) —
-flat raised surfaces with a real hairline, no gradients — because cards are meant to be the loudest
-thing on screen.
+`palette.ts` / `tokens.ts` hold the palette and non-color tokens for the "dark velvet display case"
+chrome (Concard style guide): a neutral dark ground → surface → raised ramp, one holo accent
+(`#b9c9ff`) per screen, and **Outfit** for all app-chrome type. The card face keeps its own fonts
+(`font.display` = Fredoka, `font.body*` = Space Grotesk) so a rendered card stays pixel-identical to
+the web card and to a frozen collection snapshot — chrome must never borrow them, and the card face
+must never borrow Outfit. `src/ui/index.tsx` holds the chrome kit (`Button`, `HoloButton`, `Chip`,
+`IconCircle`, `CountBadge`, `ScreenHeader`, `QrGlyph`, `AmbientGlow`, `Field`, `Panel`, …): quiet flat
+surfaces with a real hairline, with the holo gradient reserved for primary CTAs and the Scan control
+so cards stay the loudest thing on screen. `palette.ts` also keeps the old "arcade dusk" role names
+(`void`, `rose`, `cream`, …) as deprecated aliases mapped to their nearest guide value, so any
+not-yet-migrated screen still compiles and renders on-palette; new code should use the guide roles.
 
 Fonts ship as self-hosted TTFs in `assets/fonts/` rather than via `@expo-google-fonts`, on the same
 reasoning as the web app: a convention hall is exactly where a third-party font request fails.
