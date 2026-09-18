@@ -41,12 +41,17 @@ import type { FoilKind } from '../tiers';
 import { CoverFoilTexture, TiledFoilTexture } from './FoilTexture';
 import { HOLO_SPECTRUM, holoWash, nebula, nebulaSecondary, repeatingLinear } from './gradients';
 import { FoilV2 } from './FoilV2';
+import { FoilPokemon } from './FoilPokemon';
 import type { FoilRecipeId } from './recipes';
 import { facetField, glitterField, hashSeed, starField } from './speckle';
 import { SamplerFoil, type SamplerFoilPreset } from './FoilSwatch';
 
-/** Which foil engine to draw. `v2` is the shine+glare experiment in foil-lab. */
-export type FoilEngine = 'legacy' | 'v2';
+/** Which foil engine to draw.
+ *  - `legacy` — production layer stack.
+ *  - `v2` — shine+glare recipes tuned per-recipe (foil-lab experiment).
+ *  - `pokemon` — a structural port of simeydotme/pokemon-cards-css: exactly
+ *    one color-dodge shine + one pointer-tracking overlay glare per card. */
+export type FoilEngine = 'legacy' | 'v2' | 'pokemon';
 
 /** Every layer the stack can draw, in stacking order. */
 export const FOIL_LAYERS = [
@@ -200,6 +205,21 @@ export function Foil({
 				radius={radius}
 				intensity={intensity}
 				recipe={recipeId}
+			/>
+		);
+	}
+
+	if (engine === 'pokemon') {
+		return (
+			<FoilPokemon
+				kind={kind}
+				width={width}
+				height={height}
+				rx={rx}
+				ry={ry}
+				seed={seed}
+				radius={radius}
+				intensity={intensity}
 			/>
 		);
 	}
