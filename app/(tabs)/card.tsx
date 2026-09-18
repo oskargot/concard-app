@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
-import { useRouter } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { SharedValue } from 'react-native-reanimated';
 
@@ -96,6 +96,15 @@ export default function CardScreen() {
 			<View style={styles.actions}>
 				<Button label="Edit Card" onPress={openEditor} />
 				<Text style={styles.hint}>Tap anything on the card to change it.</Text>
+				{/* Dev-only: there's no settings/debug screen yet (see CLAUDE.md's status
+				 *  list), so this is the one reachable entry point into the foil lab once
+				 *  Supabase is configured — the setup screen's link only shows up before
+				 *  that. Never ships: __DEV__ is false in a release build. */}
+				{__DEV__ ? (
+					<Link href="/dev/foil-lab" style={styles.devLink}>
+						Foil lab →
+					</Link>
+				) : null}
 			</View>
 		</ScrollView>
 	);
@@ -110,5 +119,6 @@ const styles = StyleSheet.create({
 		minHeight: 400
 	},
 	actions: { alignItems: 'center', gap: space.md, paddingBottom: space.lg },
-	hint: { ...type.small, color: palette.textFaint, textAlign: 'center' }
+	hint: { ...type.small, color: palette.textFaint, textAlign: 'center' },
+	devLink: { ...type.small, color: palette.teal, textAlign: 'center', paddingTop: space.xs }
 });
