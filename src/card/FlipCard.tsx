@@ -19,7 +19,14 @@
  *     light cue.
  */
 
-import { type ReactNode, useCallback, useEffect, useState } from 'react';
+import {
+	forwardRef,
+	type ReactNode,
+	useCallback,
+	useEffect,
+	useImperativeHandle,
+	useState
+} from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -53,13 +60,21 @@ export interface FlipCardProps {
 	onFlipChange?: (showingBack: boolean) => void;
 }
 
-export function FlipCard({
-	width,
-	renderFront,
-	renderBack,
-	flippable = true,
-	onFlipChange
-}: FlipCardProps) {
+/**
+ * Imperative flip control, so a button elsewhere (Home's "Show QR Code") can
+ * flip the card the same way a tap does — one animation path, no duplicate back.
+ */
+export interface FlipCardHandle {
+	/** Toggle between front and back. */
+	flip: () => void;
+	/** Flip to a specific face; no-op if already there or mid-flip. */
+	showFace: (back: boolean) => void;
+}
+
+export const FlipCard = forwardRef<FlipCardHandle, FlipCardProps>(function FlipCard(
+	{ width, renderFront, renderBack, flippable = true, onFlipChange },
+	ref
+) {
 	const height = width / CARD_ASPECT;
 
 	const rx = useSharedValue(0);
@@ -123,8 +138,21 @@ export function FlipCard({
 		});
 
 	const requestFlip = useCallback(() => {
+		if (flipTarget != null || !renderBack) return;
 		setFlipTarget(showingBack ? 0 : 1);
-	}, [showingBack]);
+	}, [showingBack, flipTarget, renderBack]);
+
+	useImperativeHandle(
+		ref,
+		() => ({
+			flip: () => requestFlip(),
+			showFace: (back: boolean) => {
+				if (flipTarget != null || !renderBack || showingBack === back) return;
+				setFlipTarget(back ? 1 : 0);
+			}
+		}),
+		[requestFlip, flipTarget, renderBack, showingBack]
+	);
 
 	const tap = Gesture.Tap()
 		.enabled(flippable && !!renderBack && flipTarget == null)
@@ -197,7 +225,7 @@ export function FlipCard({
 			</Animated.View>
 		</GestureDetector>
 	);
-}
+});
 
 /** A tilt-only card: no gestures, no flip. For grids and pickers. */
 export function StaticCard({

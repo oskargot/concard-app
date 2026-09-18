@@ -51,7 +51,7 @@ app/                    expo-router routes
 src/auth/               session and profile state; the route gate
 src/lib/                Supabase client, env, username rules, generated types
 src/ui/                 buttons, fields, panels — deliberately quiet chrome
-src/theme/              arcade dusk palette (§12) and non-colour tokens
+src/theme/              "dark velvet display case" palette (style guide) + tokens
 src/card/               the card renderer
   card-style.ts         style tokens, shared verbatim with the web app
   tiers.ts              the foil ladder — card tiers and sticker foils
@@ -106,7 +106,7 @@ These were resolved deliberately; each is worth revisiting.
 | **Card fields are a union**               | The bible's §6 field list drops the web app's background colour (18 tints) and fandom badge, the two loudest personalisation levers already shipping. Both are kept, and the bible's additions (pronouns, per-card label, bio alignment, link layout) are added on top.                                                                                                                   |
 | **`bio_align` / `link_layout` are style** | Bible §6 lists them as card fields. They live in the existing `style` jsonb with the other four axes rather than as their own columns, so there is one check constraint to extend instead of two columns to add.                                                                                                                                                                          |
 | **Bio cap**                               | The column stays at 200 chars so cards written by the web app remain valid; the bible's 140 is enforced in the app's editor.                                                                                                                                                                                                                                                              |
-| **Self-hosted fonts**                     | Fredoka and Space Grotesk ship as TTFs in `assets/fonts/` rather than via `@expo-google-fonts`. Same reasoning as the web app: a con hall is exactly where a third-party font request fails. (The wrapper packages also force a conflicting `react-dom`.)                                                                                                                                 |
+| **Self-hosted fonts**                     | Outfit (app chrome) and Fredoka + Space Grotesk (card face, kept pixel-synced with the web card) ship as TTFs in `assets/fonts/` rather than via `@expo-google-fonts`. Same reasoning as the web app: a con hall is exactly where a third-party font request fails. (The wrapper packages also force a conflicting `react-dom`.)                                                          |
 
 `react-dom` is pinned via `overrides` to `19.2.3`: `expo-router` pulls
 `@expo/metro-runtime`, which depends on `react-dom@19.3.0`, whose `react` peer

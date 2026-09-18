@@ -1,24 +1,41 @@
 import { useCallback, useState } from 'react';
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { CardFace } from '@/card/CardFace';
+import { CardShell } from '@/card/CardShell';
+import { StaticCard } from '@/card/FlipCard';
+import { StickerLayer } from '@/card/StickerLayer';
+import { foilForTier } from '@/card/tiers';
 import { formatRetryIn } from '@/lib/collect';
 import { ALLOWED_QR_HOSTS, SITE_ORIGIN } from '@/lib/env';
 import { profileUrl, usernameFromScan } from '@/lib/username';
 import { useConcardStore } from '@/store/useConcardStore';
 import { palette } from '@/theme/palette';
 import { radius, space, type } from '@/theme/tokens';
+import { HoloButton, IconCircle, ScreenHeader } from '@/ui';
+
+const VIEWFINDER = 320;
+const SCAN_LINE_GRADIENT =
+	'linear-gradient(90deg, transparent, #b9c9ff 30%, #9ff0dc 70%, transparent)';
 
 export default function ScanScreen() {
 	const insets = useSafeAreaInsets();
+	const { width } = useWindowDimensions();
+	const router = useRouter();
 	const [permission, requestPermission] = useCameraPermissions();
 	const enqueue = useConcardStore((state) => state.enqueueScan);
 	const pending = useConcardStore((state) => state.scan_queue.length);
 	const syncError = useConcardStore((state) => state.sync_error);
+	const recent = useConcardStore((state) => state.binder_cache).slice(0, 2);
 	const [locked, setLocked] = useState(false);
 	const [message, setMessage] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
+
+	const finder = Math.min(VIEWFINDER, width - space.xl * 2);
+	const thumbWidth = (width - space.xl * 2 - space.md) / 2;
 
 	const onScan = useCallback(
 		(result: BarcodeScanningResult) => {
@@ -48,25 +65,29 @@ export default function ScanScreen() {
 			: `@${syncError.username}: ${syncError.hint || 'Could not collect that card.'}`
 		: null;
 
+	const statusText = message ?? error ?? syncErrorText ?? null;
+	const statusTone: 'ok' | 'bad' | null = message ? 'ok' : error || syncErrorText ? 'bad' : null;
+
 	if (!permission) return <View style={styles.page} />;
 
 	if (!permission.granted) {
 		return (
 			<View style={[styles.permissionPage, { paddingTop: insets.top + space.xl }]}>
 				<View style={styles.permissionIcon}>
-					<Text style={styles.permissionGlyph}>⌁</Text>
+					<View style={styles.reticleMini}>
+						<View style={[styles.corner, styles.topLeft]} />
+						<View style={[styles.corner, styles.topRight]} />
+						<View style={[styles.corner, styles.bottomLeft]} />
+						<View style={[styles.corner, styles.bottomRight]} />
+					</View>
 				</View>
-				<Text style={styles.title}>Meet cards face to face</Text>
-				<Text style={styles.body}>
+				<Text style={styles.leadTitle}>Meet cards face to face</Text>
+				<Text style={styles.leadBody}>
 					Concard only uses the camera while this scanner is open. Nothing is recorded.
 				</Text>
-				<Pressable style={styles.permissionButton} onPress={requestPermission}>
-					<Text style={styles.permissionButtonText}>ALLOW CAMERA</Text>
-				</Pressable>
-				{message ? <Text style={styles.permissionSuccess}>{message}</Text> : null}
-				{error ? <Text style={styles.permissionError}>{error}</Text> : null}
-				{!message && !error && syncErrorText ? (
-					<Text style={styles.permissionError}>{syncErrorText}</Text>
+				<HoloButton label="Allow Camera" onPress={requestPermission} />
+				{statusText ? (
+					<Text style={statusTone === 'ok' ? styles.leadOk : styles.leadBad}>{statusText}</Text>
 				) : null}
 				<DemoScan onPress={() => onScan({ data: demoPayload } as BarcodeScanningResult)} />
 			</View>
@@ -74,62 +95,97 @@ export default function ScanScreen() {
 	}
 
 	return (
-		<View style={styles.page}>
-			<CameraView
-				style={StyleSheet.absoluteFill}
-				facing="back"
-				barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-				onBarcodeScanned={locked ? undefined : onScan}
+		<ScrollView
+			style={styles.page}
+			contentContainerStyle={[
+				styles.content,
+				{ paddingTop: insets.top, paddingBottom: insets.bottom + space.xxl }
+			]}
+		>
+			<ScreenHeader
+				title="Scan"
+				right={
+					<IconCircle label="Toggle flash">
+						<View style={styles.flashGlyph} />
+					</IconCircle>
+				}
 			/>
-			<View style={styles.scrimTop} />
-			<View style={styles.scrimBottom} />
 
-			<View style={[styles.header, { top: insets.top + space.lg }]}>
-				<Text style={styles.eyebrow}>ENCOUNTER MODE</Text>
-				<Text style={styles.title}>Find their code</Text>
-				<Text style={styles.body}>Hold steady. We’ll save it instantly—even offline.</Text>
-			</View>
-
-			<View style={styles.reticle}>
+			<View style={[styles.viewfinder, { width: finder, height: finder }]}>
+				<CameraView
+					style={StyleSheet.absoluteFill}
+					facing="back"
+					barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+					onBarcodeScanned={locked ? undefined : onScan}
+				/>
 				<View style={[styles.corner, styles.topLeft]} />
 				<View style={[styles.corner, styles.topRight]} />
 				<View style={[styles.corner, styles.bottomLeft]} />
 				<View style={[styles.corner, styles.bottomRight]} />
 				<View style={styles.scanLine} />
+				<View style={styles.scanGlow} />
 			</View>
 
-			<View style={[styles.footer, { bottom: insets.bottom + space.xl }]}>
-				{message ? (
-					<View style={styles.success}>
-						<Text style={styles.successGlyph}>✓</Text>
-						<View style={styles.successCopy}>
-							<Text style={styles.successTitle}>CARD CAPTURED</Text>
-							<Text style={styles.successBody}>{message}</Text>
-						</View>
-					</View>
-				) : error ? (
-					<View style={styles.error}>
-						<Text style={styles.errorText}>{error}</Text>
-					</View>
-				) : syncErrorText ? (
-					<View style={styles.error}>
-						<Text style={styles.errorText}>{syncErrorText}</Text>
-					</View>
-				) : (
-					<View style={styles.offlinePill}>
-						<View style={styles.statusDot} />
-						<Text style={styles.offlineText}>
-							OFFLINE READY{pending ? ` · ${pending} QUEUED` : ''}
-						</Text>
-					</View>
-				)}
-				<DemoScan onPress={() => onScan({ data: demoPayload } as BarcodeScanningResult)} />
+			{statusText ? (
+				<Text style={statusTone === 'ok' ? styles.leadOk : styles.leadBad}>{statusText}</Text>
+			) : (
+				<View style={styles.instructions}>
+					<Text style={styles.leadTitle}>Point at their code</Text>
+					<Text style={styles.leadBody}>
+						We’ll save it instantly — even offline{pending ? ` · ${pending} queued` : ''}.
+					</Text>
+				</View>
+			)}
+
+			<View style={styles.orRow}>
+				<View style={styles.orLine} />
+				<Text style={styles.orLabel}>OR</Text>
+				<View style={styles.orLine} />
 			</View>
-		</View>
+
+			<HoloButton
+				label="Show My QR Code"
+				onPress={() => router.push({ pathname: '/', params: { flip: '1' } } as never)}
+			/>
+
+			<DemoScan onPress={() => onScan({ data: demoPayload } as BarcodeScanningResult)} />
+
+			{recent.length ? (
+				<View style={styles.recent}>
+					<Text style={styles.sectionHeader}>RECENT</Text>
+					<View style={styles.recentStrip}>
+						{recent.map((card) => (
+							<View key={card.id} style={{ width: thumbWidth }}>
+								<StaticCard
+									width={thumbWidth}
+									render={(rx, ry) => (
+										<CardShell
+											style={card.view.style}
+											width={thumbWidth}
+											foil={foilForTier(card.tier)}
+											seed={card.card_id ?? card.id}
+											rx={rx}
+											ry={ry}
+											detail="thumb"
+											overlay={<StickerLayer stickers={card.view.stickers} width={thumbWidth} />}
+										>
+											<CardFace view={card.view} width={thumbWidth} />
+										</CardShell>
+									)}
+								/>
+								<Text numberOfLines={1} style={styles.recentName}>
+									@{card.view.handle}
+								</Text>
+							</View>
+						))}
+					</View>
+				</View>
+			) : null}
+		</ScrollView>
 	);
 }
 
-/** Same shape a QR on someone's My Card screen encodes — a profile URL. */
+/** Same shape a QR on My Card encodes — a profile URL, never a session token. */
 const demoPayload = profileUrl(SITE_ORIGIN, 'pixel-pal');
 
 function DemoScan({ onPress }: { onPress: () => void }) {
@@ -141,137 +197,111 @@ function DemoScan({ onPress }: { onPress: () => void }) {
 }
 
 const styles = StyleSheet.create({
-	page: { flex: 1, backgroundColor: palette.void },
+	page: { flex: 1, backgroundColor: palette.scanBg },
+	content: { paddingHorizontal: space.xl, gap: space.lg, alignItems: 'stretch' },
 	permissionPage: {
 		flex: 1,
 		alignItems: 'center',
 		justifyContent: 'center',
 		padding: space.xl,
 		gap: space.lg,
-		backgroundColor: palette.base
+		backgroundColor: palette.scanBg
 	},
 	permissionIcon: {
-		width: 88,
-		height: 88,
+		width: 96,
+		height: 96,
 		borderRadius: radius.xl,
-		backgroundColor: palette.raised,
-		borderWidth: 1,
-		borderColor: palette.teal,
+		backgroundColor: '#1a1920',
 		alignItems: 'center',
-		justifyContent: 'center',
-		boxShadow: `0 0 24px ${palette.tealGlow}`
+		justifyContent: 'center'
 	},
-	permissionGlyph: { ...type.hero, color: palette.teal, fontSize: 42 },
-	permissionButton: {
-		backgroundColor: palette.rose,
-		paddingHorizontal: space.xl,
-		paddingVertical: space.md,
-		borderRadius: radius.md
+	reticleMini: { width: 52, height: 52 },
+	leadTitle: { ...type.subtitle, fontSize: 16, color: palette.textPrimary, textAlign: 'center' },
+	leadBody: {
+		...type.small,
+		fontSize: 13,
+		color: palette.textDim,
+		textAlign: 'center',
+		maxWidth: 300
 	},
-	permissionButtonText: { ...type.meta, color: palette.void },
-	permissionSuccess: { ...type.small, color: palette.success, textAlign: 'center' },
-	permissionError: { ...type.small, color: palette.danger, textAlign: 'center' },
-	scrimTop: {
-		position: 'absolute',
-		top: 0,
-		left: 0,
-		right: 0,
-		height: '32%',
-		backgroundColor: 'rgba(18,7,32,0.72)'
+	leadOk: { ...type.small, fontSize: 13, color: palette.teal, textAlign: 'center' },
+	leadBad: { ...type.small, fontSize: 13, color: palette.danger, textAlign: 'center' },
+
+	viewfinder: {
+		alignSelf: 'center',
+		marginTop: space.md,
+		borderRadius: radius.xl,
+		backgroundColor: '#1a1920',
+		overflow: 'hidden'
 	},
-	scrimBottom: {
-		position: 'absolute',
-		bottom: 0,
-		left: 0,
-		right: 0,
-		height: '28%',
-		backgroundColor: 'rgba(18,7,32,0.78)'
+	corner: { position: 'absolute', width: 30, height: 30, borderColor: palette.holo },
+	topLeft: {
+		top: 14,
+		left: 14,
+		borderTopWidth: 2.5,
+		borderLeftWidth: 2.5,
+		borderTopLeftRadius: 6
 	},
-	header: { position: 'absolute', left: space.xl, right: space.xl, alignItems: 'center', gap: 3 },
-	eyebrow: { ...type.meta, color: palette.teal },
-	title: { ...type.hero, color: palette.cream, textAlign: 'center' },
-	body: { ...type.small, color: palette.creamMute, textAlign: 'center', maxWidth: 300 },
-	reticle: {
-		position: 'absolute',
-		width: 248,
-		height: 248,
-		top: '34%',
-		alignSelf: 'center'
+	topRight: {
+		top: 14,
+		right: 14,
+		borderTopWidth: 2.5,
+		borderRightWidth: 2.5,
+		borderTopRightRadius: 6
 	},
-	corner: { position: 'absolute', width: 50, height: 50, borderColor: palette.teal },
-	topLeft: { top: 0, left: 0, borderTopWidth: 4, borderLeftWidth: 4, borderTopLeftRadius: 18 },
-	topRight: { top: 0, right: 0, borderTopWidth: 4, borderRightWidth: 4, borderTopRightRadius: 18 },
 	bottomLeft: {
-		bottom: 0,
-		left: 0,
-		borderBottomWidth: 4,
-		borderLeftWidth: 4,
-		borderBottomLeftRadius: 18
+		bottom: 14,
+		left: 14,
+		borderBottomWidth: 2.5,
+		borderLeftWidth: 2.5,
+		borderBottomLeftRadius: 6
 	},
 	bottomRight: {
-		bottom: 0,
-		right: 0,
-		borderBottomWidth: 4,
-		borderRightWidth: 4,
-		borderBottomRightRadius: 18
+		bottom: 14,
+		right: 14,
+		borderBottomWidth: 2.5,
+		borderRightWidth: 2.5,
+		borderBottomRightRadius: 6
 	},
 	scanLine: {
 		position: 'absolute',
 		top: '50%',
-		left: 22,
-		right: 22,
-		height: 2,
-		backgroundColor: palette.rose,
-		boxShadow: `0 0 13px ${palette.roseGlow}`
+		left: 24,
+		right: 24,
+		height: 1.5,
+		opacity: 0.7,
+		...({ experimental_backgroundImage: SCAN_LINE_GRADIENT } as object)
 	},
-	footer: {
+	scanGlow: {
 		position: 'absolute',
-		left: space.xl,
-		right: space.xl,
-		alignItems: 'center',
-		gap: space.md
+		top: '50%',
+		left: 24,
+		right: 24,
+		height: 10,
+		...({
+			experimental_backgroundImage:
+				'linear-gradient(180deg, transparent, rgba(185,201,255,0.06), transparent)'
+		} as object)
 	},
-	offlinePill: {
-		flexDirection: 'row',
-		alignItems: 'center',
-		gap: space.sm,
-		paddingVertical: space.sm,
-		paddingHorizontal: space.md,
-		borderRadius: radius.pill,
-		backgroundColor: 'rgba(36,19,64,0.9)'
+	flashGlyph: {
+		width: 12,
+		height: 16,
+		borderRadius: 2,
+		borderWidth: 1.5,
+		borderColor: palette.textFaint
 	},
-	statusDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: palette.success },
-	offlineText: { ...type.meta, color: palette.creamMute },
-	success: {
-		width: '100%',
-		flexDirection: 'row',
-		alignItems: 'center',
-		gap: space.md,
-		padding: space.md,
-		borderRadius: radius.lg,
-		backgroundColor: palette.raised,
-		borderWidth: 1,
-		borderColor: palette.success
-	},
-	successGlyph: {
-		width: 38,
-		height: 38,
-		borderRadius: 19,
-		backgroundColor: palette.success,
-		color: palette.void,
-		fontSize: 24,
-		textAlign: 'center',
-		lineHeight: 38
-	},
-	successCopy: { flex: 1 },
-	successTitle: { ...type.meta, color: palette.success },
-	successBody: { ...type.small, color: palette.cream },
-	error: {
-		padding: space.md,
-		backgroundColor: 'rgba(255,92,92,0.18)',
-		borderRadius: radius.md
-	},
-	errorText: { ...type.small, color: palette.cream, textAlign: 'center' },
-	demoButton: { paddingVertical: space.sm, paddingHorizontal: space.md },
-	demoText: { ...type.small, color: palette.teal, textDecorationLine: 'underline' }
+
+	instructions: { alignItems: 'center', gap: 4 },
+
+	orRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+	orLine: { flex: 1, height: 1, backgroundColor: palette.line },
+	orLabel: { ...type.meta, color: palette.mutedUi },
+
+	demoButton: { alignSelf: 'center', paddingVertical: space.sm, paddingHorizontal: space.md },
+	demoText: { ...type.small, color: palette.textFaint, textDecorationLine: 'underline' },
+
+	recent: { gap: space.sm },
+	sectionHeader: { ...type.meta, color: palette.textFaint },
+	recentStrip: { flexDirection: 'row', gap: space.md },
+	recentName: { ...type.small, color: palette.textDim, marginTop: space.xs }
 });

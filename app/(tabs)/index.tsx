@@ -1,204 +1,152 @@
-import { useRouter } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import QRCode from 'react-native-qrcode-svg';
+import { useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import type { SharedValue } from 'react-native-reanimated';
 
+import { CardBack } from '@/card/CardBack';
+import { CardFace } from '@/card/CardFace';
+import { CardShell, shellMetrics } from '@/card/CardShell';
+import { FlipCard, type FlipCardHandle } from '@/card/FlipCard';
+import { StickerLayer } from '@/card/StickerLayer';
+import { foilForTier } from '@/card/tiers';
+import { SITE_ORIGIN } from '@/lib/env';
+import { profileUrl } from '@/lib/username';
 import { useConcardStore } from '@/store/useConcardStore';
 import { palette } from '@/theme/palette';
-import { radius, space, type } from '@/theme/tokens';
+import { space, type } from '@/theme/tokens';
+import { AmbientGlow, HoloButton, IconCircle } from '@/ui';
 
+/**
+ * Home: the card is what you share. The hero card is visible on load; "Show QR
+ * Code" flips it to its QR back — there is no separate share screen (the QR back
+ * encodes the same profile URL the web scanner reads).
+ */
 export default function HomeScreen() {
 	const insets = useSafeAreaInsets();
-	const router = useRouter();
-	const binder = useConcardStore((state) => state.binder_cache);
-	const pending = useConcardStore((state) => state.scan_queue.length);
-	const activeCard = useConcardStore((state) => state.active_card);
-	const lastSync = useConcardStore((state) => state.last_sync_at);
-	const uniquePeople = new Set(binder.map((card) => card.view.handle)).size;
+	const { width } = useWindowDimensions();
+	const card = useConcardStore((state) => state.active_card);
+	const flipRef = useRef<FlipCardHandle>(null);
+	const [showingQr, setShowingQr] = useState(false);
+	// Scan's "Show My QR Code" deep-links here with ?flip=1 rather than inventing
+	// a second share surface — Home owns flip-to-QR.
+	const { flip } = useLocalSearchParams<{ flip?: string }>();
+
+	useEffect(() => {
+		if (flip === '1') flipRef.current?.showFace(true);
+	}, [flip]);
+
+	const cardWidth = Math.min(width - space.xl * 2, 266);
+
+	// The stable profile URL — never a session token — so the app QR and the web
+	// scanner agree on one contract (`usernameFromScan` on the web).
+	const qrUrl = useMemo(() => profileUrl(SITE_ORIGIN, card.handle), [card.handle]);
+	const readableUrl = qrUrl.replace(/^https?:\/\//, '');
+	const qrBoxSize = useMemo(() => {
+		const m = shellMetrics(cardWidth, card.style.shape);
+		return m.u(60) - 2 * m.u(3.33);
+	}, [cardWidth, card.style.shape]);
+
+	const renderFront = (rx: SharedValue<number>, ry: SharedValue<number>) => (
+		<CardShell
+			style={card.style}
+			width={cardWidth}
+			foil={foilForTier(0)}
+			seed={card.id}
+			rx={rx}
+			ry={ry}
+			overlay={<StickerLayer stickers={card.stickers} width={cardWidth} />}
+		>
+			<CardFace view={card} width={cardWidth} />
+		</CardShell>
+	);
+
+	const renderBack = (rx: SharedValue<number>, ry: SharedValue<number>) => (
+		<CardBack
+			style={card.style}
+			width={cardWidth}
+			variant="qr"
+			url={readableUrl}
+			qr={<QRCode value={qrUrl} size={qrBoxSize} backgroundColor="#fbf9f3" color="#17161b" />}
+			rx={rx}
+			ry={ry}
+		/>
+	);
 
 	return (
 		<ScrollView
 			contentContainerStyle={[
 				styles.page,
-				{ paddingTop: insets.top + space.xl, paddingBottom: insets.bottom + space.xxl }
+				{ paddingTop: insets.top, paddingBottom: insets.bottom + space.xxl }
 			]}
 		>
 			<View style={styles.header}>
-				<View>
-					<Text style={styles.eyebrow}>CONCARD / EVENT MODE</Text>
-					<Text style={styles.title}>Ready, {activeCard.title.split(' ')[0]}?</Text>
-				</View>
-				<View style={styles.liveDot} />
+				<Text style={styles.wordmark}>CONCARD</Text>
+				<IconCircle label="Notifications">
+					<View style={styles.bell} />
+				</IconCircle>
 			</View>
 
-			<Pressable style={styles.hero} onPress={() => router.push('/scan' as never)}>
-				<View style={styles.heroGlow} />
-				<Text style={styles.heroKicker}>QUICK ENCOUNTER</Text>
-				<Text style={styles.heroTitle}>Scan a new card</Text>
-				<Text style={styles.heroBody}>
-					Works offline. We’ll keep it safe until the convention Wi-Fi catches up.
-				</Text>
-				<View style={styles.scanPill}>
-					<Text style={styles.scanPillText}>OPEN SCANNER →</Text>
-				</View>
-			</Pressable>
-
-			<View style={styles.statRow}>
-				<Stat value={String(uniquePeople)} label="People met" />
-				<Stat value={String(binder.length)} label="Cards held" />
-				<Stat value={String(pending)} label="To sync" accent={pending > 0} />
+			<View style={styles.stage}>
+				<AmbientGlow style={styles.glow} />
+				<FlipCard
+					ref={flipRef}
+					width={cardWidth}
+					renderFront={renderFront}
+					renderBack={renderBack}
+					onFlipChange={setShowingQr}
+				/>
 			</View>
 
-			<Text style={styles.sectionLabel}>YOUR NEXT MOVE</Text>
 			<View style={styles.actions}>
-				<Action
-					glyph="▯"
-					title="Tune your card"
-					body={`${activeCard.stickers.length} sticker${activeCard.stickers.length === 1 ? '' : 's'} equipped`}
-					onPress={() => router.push('/card' as never)}
+				<HoloButton
+					label={showingQr ? 'Show Card' : 'Show QR Code'}
+					onPress={() => flipRef.current?.flip()}
 				/>
-				<Action
-					glyph="✦"
-					title="Browse stickers"
-					body="5 unlocked · 3 still hidden"
-					onPress={() => router.push('/stickers' as never)}
-				/>
-				<Action
-					glyph="▦"
-					title="Open binder"
-					body="Your encounters, saved locally"
-					onPress={() => router.push('/binder' as never)}
-				/>
+				<Text style={styles.hint}>
+					{showingQr
+						? '✦ Point this at a friend’s camera to be collected'
+						: '✦ Flip to your code and let people collect you'}
+				</Text>
 			</View>
-
-			<Text style={styles.sync}>
-				{pending
-					? `${pending} scan${pending === 1 ? '' : 's'} waiting safely on this device`
-					: lastSync
-						? `All caught up · synced ${new Date(lastSync).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-						: 'Offline-ready · your binder lives on this device'}
-			</Text>
 		</ScrollView>
 	);
 }
 
-function Stat({ value, label, accent }: { value: string; label: string; accent?: boolean }) {
-	return (
-		<View style={styles.stat}>
-			<Text style={[styles.statValue, accent && styles.statAccent]}>{value}</Text>
-			<Text style={styles.statLabel}>{label}</Text>
-		</View>
-	);
-}
-
-function Action({
-	glyph,
-	title,
-	body,
-	onPress
-}: {
-	glyph: string;
-	title: string;
-	body: string;
-	onPress: () => void;
-}) {
-	return (
-		<Pressable
-			style={({ pressed }) => [styles.action, pressed && styles.pressed]}
-			onPress={onPress}
-		>
-			<View style={styles.actionGlyph}>
-				<Text style={styles.actionGlyphText}>{glyph}</Text>
-			</View>
-			<View style={styles.actionCopy}>
-				<Text style={styles.actionTitle}>{title}</Text>
-				<Text style={styles.actionBody}>{body}</Text>
-			</View>
-			<Text style={styles.chevron}>›</Text>
-		</Pressable>
-	);
-}
-
 const styles = StyleSheet.create({
-	page: { paddingHorizontal: space.xl, gap: space.lg },
-	header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-	eyebrow: { ...type.meta, color: palette.teal },
-	title: { ...type.hero, color: palette.cream, marginTop: 2 },
-	liveDot: {
-		width: 11,
-		height: 11,
-		borderRadius: 6,
-		backgroundColor: palette.success,
-		boxShadow: `0 0 13px ${palette.success}`
+	page: {
+		flexGrow: 1,
+		paddingHorizontal: space.xl,
+		gap: space.lg
 	},
-	hero: {
-		overflow: 'hidden',
-		backgroundColor: palette.raised,
-		borderRadius: radius.xl,
-		borderWidth: 1,
-		borderColor: palette.roseDim,
-		padding: space.xl,
-		gap: space.sm,
-		minHeight: 205
-	},
-	heroGlow: {
-		position: 'absolute',
-		width: 180,
-		height: 180,
-		borderRadius: 90,
-		backgroundColor: 'rgba(255,77,151,0.16)',
-		right: -50,
-		top: -55,
-		boxShadow: `0 0 45px ${palette.roseGlow}`
-	},
-	heroKicker: { ...type.meta, color: palette.rose },
-	heroTitle: { ...type.hero, color: palette.cream, maxWidth: 240 },
-	heroBody: { ...type.small, color: palette.creamMute, maxWidth: 270 },
-	scanPill: {
-		alignSelf: 'flex-start',
-		marginTop: space.xs,
-		backgroundColor: palette.rose,
-		paddingVertical: space.sm,
-		paddingHorizontal: space.md,
-		borderRadius: radius.pill
-	},
-	scanPillText: { ...type.meta, color: palette.void },
-	statRow: { flexDirection: 'row', gap: space.sm },
-	stat: {
-		flex: 1,
-		backgroundColor: palette.raised,
-		borderRadius: radius.md,
-		padding: space.md,
-		borderWidth: StyleSheet.hairlineWidth,
-		borderColor: palette.line
-	},
-	statValue: { ...type.title, color: palette.cream },
-	statAccent: { color: palette.butter },
-	statLabel: { ...type.small, color: palette.creamFaint },
-	sectionLabel: { ...type.meta, color: palette.creamFaint, marginTop: space.xs },
-	actions: { gap: space.sm },
-	action: {
+	header: {
+		height: 60,
 		flexDirection: 'row',
 		alignItems: 'center',
-		gap: space.md,
-		padding: space.md,
-		backgroundColor: palette.raised,
-		borderRadius: radius.lg,
-		borderWidth: StyleSheet.hairlineWidth,
-		borderColor: palette.line
+		justifyContent: 'space-between'
 	},
-	actionGlyph: {
-		width: 43,
-		height: 43,
-		borderRadius: radius.md,
-		backgroundColor: palette.raisedHigh,
+	wordmark: {
+		fontFamily: 'Outfit-Bold',
+		fontSize: 16,
+		letterSpacing: 3,
+		color: palette.textPrimary
+	},
+	bell: {
+		width: 14,
+		height: 14,
+		borderRadius: 5,
+		borderWidth: 1.5,
+		borderColor: palette.textFaint
+	},
+	stage: {
+		flexGrow: 1,
 		alignItems: 'center',
-		justifyContent: 'center'
+		justifyContent: 'center',
+		gap: space.lg,
+		minHeight: 400
 	},
-	actionGlyphText: { ...type.title, color: palette.teal },
-	actionCopy: { flex: 1 },
-	actionTitle: { ...type.bodyStrong, color: palette.cream },
-	actionBody: { ...type.small, color: palette.creamFaint },
-	chevron: { fontSize: 28, color: palette.creamFaint },
-	pressed: { opacity: 0.76 },
-	sync: { ...type.small, color: palette.creamFaint, textAlign: 'center' }
+	glow: { top: '50%', marginTop: -190 },
+	actions: { alignItems: 'center', gap: space.md, paddingBottom: space.lg },
+	hint: { ...type.small, fontSize: 13, color: palette.textFaint, textAlign: 'center' }
 });

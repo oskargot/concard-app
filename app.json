@@ -7,7 +7,7 @@
 		"orientation": "portrait",
 		"icon": "./assets/icon.png",
 		"userInterfaceStyle": "dark",
-		"backgroundColor": "#1A0B2E",
+		"backgroundColor": "#121116",
 		"ios": {
 			"supportsTablet": true,
 			"bundleIdentifier": "me.concard.app",
@@ -16,7 +16,7 @@
 		"android": {
 			"package": "me.concard.app",
 			"adaptiveIcon": {
-				"backgroundColor": "#1A0B2E",
+				"backgroundColor": "#121116",
 				"foregroundImage": "./assets/android-icon-foreground.png",
 				"monochromeImage": "./assets/android-icon-monochrome.png"
 			},
@@ -42,6 +42,9 @@
 				"expo-font",
 				{
 					"fonts": [
+						"./assets/fonts/Outfit-Regular.ttf",
+						"./assets/fonts/Outfit-SemiBold.ttf",
+						"./assets/fonts/Outfit-Bold.ttf",
 						"./assets/fonts/Fredoka-Bold.ttf",
 						"./assets/fonts/Fredoka-SemiBold.ttf",
 						"./assets/fonts/SpaceGrotesk-Regular.ttf",
