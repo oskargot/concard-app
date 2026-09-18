@@ -99,7 +99,9 @@ const DEFAULTS: Record<FoilLayerName, { blend: ViewStyle['mixBlendMode']; opacit
 	facets: { blend: 'color-dodge', opacity: 0.5 },
 	glitter: { blend: 'color-dodge', opacity: 0.55 },
 	stars: { blend: 'plus-lighter', opacity: 0.9 },
-	spec: { blend: 'screen', opacity: 0.42 },
+	// The circular specular shine. Brighter than the first pass — at 0.42 it was
+	// there in code but too faint to read on device as a light on the card.
+	spec: { blend: 'screen', opacity: 0.55 },
 	edge: { blend: 'normal', opacity: 1 }
 };
 
@@ -443,7 +445,7 @@ const FACET_ANGLES = [0, 45, 90, 135, 180, 225, 270, 315] as const;
 // what the transform-based approach exists to avoid.
 const WASH = holoWash('118deg', 1);
 const BARS = repeatingLinear('102deg', HOLO_SPECTRUM, 4.5, 100);
-const SPEC = radialGlare(50, 38, { core: 0.3, mid: 0.08 });
+const SPEC = radialGlare(50, 38, { core: 0.62, mid: 0.22 });
 const NEBULA_A = nebula();
 const NEBULA_B = nebulaSecondary();
 

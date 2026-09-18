@@ -83,6 +83,10 @@ export const FlipCard = forwardRef<FlipCardHandle, FlipCardProps>(function FlipC
 	const flip = useSharedValue(0);
 	/** 1 while dragging or the settle spring is running. */
 	const live = useSharedValue(0);
+	/** 1 only while a flip is animating. Gates the faces' 3D perspective so the
+	 *  card stays flat — and its text/gradients crisp — at rest, even though both
+	 *  faces now stay mounted the whole time. */
+	const flipInMotion = useSharedValue(0);
 
 	const [showingBack, setShowingBack] = useState(false);
 	/** Non-null while a flip is staged/running: the face we're animating toward. */
@@ -112,10 +116,12 @@ export const FlipCard = forwardRef<FlipCardHandle, FlipCardProps>(function FlipC
 		if (flipTarget == null) return;
 		const from: 0 | 1 = flipTarget === 1 ? 0 : 1;
 		flip.value = from;
+		flipInMotion.value = 1;
 		flip.value = withTiming(flipTarget, { duration: 520 }, (finished) => {
+			flipInMotion.value = 0;
 			if (finished) runOnJS(finishFlip)(flipTarget === 1);
 		});
-	}, [flipTarget, finishFlip, flip]);
+	}, [flipTarget, finishFlip, flip, flipInMotion]);
 
 	const pan = Gesture.Pan()
 		.onBegin(() => {
@@ -178,37 +184,58 @@ export const FlipCard = forwardRef<FlipCardHandle, FlipCardProps>(function FlipC
 		};
 	});
 
-	const frontStyle = useAnimatedStyle(() => ({
-		transform: [
-			{ perspective: 1400 },
-			{ rotateY: `${interpolate(flip.value, [0, 1], [0, 180])}deg` }
-		],
-		backfaceVisibility: 'hidden' as const
-	}));
+	// Both faces stay mounted so the photo and foil never reload mid-flip — that
+	// remount was the flicker. At rest we simply show the current face and hide
+	// the other with opacity: no perspective, so the resting card stays flat and
+	// crisp. Only while a flip is actually running do the faces take the 3D
+	// perspective + backface that make the flip read as a turn.
+	const frontStyle = useAnimatedStyle(() => {
+		if (flipInMotion.value === 0) {
+			return { opacity: flip.value < 0.5 ? 1 : 0 };
+		}
+		return {
+			opacity: 1,
+			transform: [
+				{ perspective: 1400 },
+				{ rotateY: `${interpolate(flip.value, [0, 1], [0, 180])}deg` }
+			],
+			backfaceVisibility: 'hidden' as const
+		};
+	});
 
-	const backStyle = useAnimatedStyle(() => ({
-		transform: [
-			{ perspective: 1400 },
-			{ rotateY: `${interpolate(flip.value, [0, 1], [180, 360])}deg` }
-		],
-		backfaceVisibility: 'hidden' as const
-	}));
+	const backStyle = useAnimatedStyle(() => {
+		if (flipInMotion.value === 0) {
+			return { opacity: flip.value < 0.5 ? 0 : 1 };
+		}
+		return {
+			opacity: 1,
+			transform: [
+				{ perspective: 1400 },
+				{ rotateY: `${interpolate(flip.value, [0, 1], [180, 360])}deg` }
+			],
+			backfaceVisibility: 'hidden' as const
+		};
+	});
 
 	const flipping = flipTarget != null && !!renderBack;
 
-	const face = flipping ? (
+	// Keep both faces mounted whenever there is a back (front first, so the back
+	// stacks over it). Showing one or the other is now an opacity/transform change
+	// on stable views — never an unmount — which is what stops a flip from
+	// reloading the photo. With no back, the single front face is enough.
+	const face = renderBack ? (
 		<>
 			<Animated.View style={[StyleSheet.absoluteFill, frontStyle]} collapsable={false}>
 				{renderFront(rx, ry)}
 			</Animated.View>
 			<Animated.View style={[StyleSheet.absoluteFill, backStyle]} collapsable={false}>
-				{renderBack!(rx, ry)}
+				{renderBack(rx, ry)}
 			</Animated.View>
 		</>
 	) : (
-		<View style={StyleSheet.absoluteFill} collapsable={false}>
-			{showingBack && renderBack ? renderBack(rx, ry) : renderFront(rx, ry)}
-		</View>
+		<Animated.View style={StyleSheet.absoluteFill} collapsable={false}>
+			{renderFront(rx, ry)}
+		</Animated.View>
 	);
 
 	return (
