@@ -16,7 +16,7 @@ import { profileUrl } from '@/lib/username';
 import { useConcardStore } from '@/store/useConcardStore';
 import { palette } from '@/theme/palette';
 import { space, type } from '@/theme/tokens';
-import { AmbientGlow, HoloButton, IconCircle } from '@/ui';
+import { HoloButton, IconCircle } from '@/ui';
 
 /**
  * Home: the card is what you share. The hero card is visible on load; "Show QR
@@ -56,6 +56,7 @@ export default function HomeScreen() {
 			seed={card.id}
 			rx={rx}
 			ry={ry}
+			light
 			overlay={<StickerLayer stickers={card.stickers} width={cardWidth} />}
 		>
 			<CardFace view={card} width={cardWidth} />
@@ -89,7 +90,6 @@ export default function HomeScreen() {
 			</View>
 
 			<View style={styles.stage}>
-				<AmbientGlow style={styles.glow} />
 				<FlipCard
 					ref={flipRef}
 					width={cardWidth}
@@ -145,15 +145,9 @@ const styles = StyleSheet.create({
 		justifyContent: 'center',
 		gap: space.lg,
 		minHeight: 400,
-		// Bias the centred card upward so it sits higher on screen, clear of the
-		// ambient glow behind it.
+		// Bias the centred card upward so it sits higher on screen.
 		paddingBottom: 96
 	},
-	// Centred on the (lifted) card so the glow reads as a symmetric backlight
-	// behind it. The old offset pushed the glow up ~30px, so its soft gradient
-	// edge cut across the lower face as a stray diagonal seam; centring removes
-	// it. -208 = the glow's own half-height (160) plus the 48px the card is lifted.
-	glow: { top: '50%', marginTop: -208 },
 	actions: { alignItems: 'center', gap: space.md, paddingBottom: space.lg },
 	hint: { ...type.small, fontSize: 13, color: palette.textFaint, textAlign: 'center' }
 });

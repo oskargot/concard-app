@@ -12,10 +12,11 @@
 import type { ReactNode } from 'react';
 import { StyleSheet, View, type ViewStyle } from 'react-native';
 import MaskedView from '@react-native-masked-view/masked-view';
-import type { SharedValue } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, type SharedValue } from 'react-native-reanimated';
 import Svg, { Polygon } from 'react-native-svg';
 
 import { BGS, FRAMES, type CardStyle } from './card-style';
+import { TILT_RANGE } from './FlipCard';
 import { CARD_ASPECT } from '../theme/tokens';
 import { Foil } from './foil/Foil';
 import type { FoilEngine, FoilLayerName, FoilOverride, SamplerFoilOptions } from './foil/Foil';
@@ -42,6 +43,12 @@ export interface CardShellProps {
 	foilEngine?: FoilEngine;
 	/** Foil-lab: force a specific v2 recipe regardless of `foil` kind. */
 	foilRecipe?: FoilRecipeId;
+	/**
+	 * Draw a soft circular light over the face — bright at the centre, faint at
+	 * its edges. Opt-in so a collected card's frozen snapshot stays pixel-identical
+	 * to the web card; used on the home hero card, which is app chrome, not data.
+	 */
+	light?: boolean;
 	children?: ReactNode;
 	/** Drawn outside the face clip, so stickers can hang over the card edge. */
 	overlay?: ReactNode;
@@ -67,6 +74,17 @@ export function shellMetrics(width: number, shape: CardStyle['shape']): ShellMet
 	return { width, height, band, outerRadius, faceRadius: outerRadius - band, u };
 }
 
+/**
+ * A soft round light on the face: brightest at the centre, fading to nothing by
+ * ~52% out. `circle` (not `ellipse`) keeps it round on the 5:7 face instead of
+ * stretching to the box, so the edges stay faint and even all the way around.
+ * Biased up to 30% so its core sits over the photo (which lives in the upper
+ * third of the face) rather than over the bio below it; it slides off this rest
+ * position as the card tilts (see `lightShift`).
+ */
+const FACE_LIGHT =
+	'radial-gradient(circle at 50% 30%, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0.2) 26%, transparent 52%)';
+
 export function CardShell({
 	style,
 	width,
@@ -81,12 +99,27 @@ export function CardShell({
 	detail = 'full',
 	foilEngine,
 	foilRecipe,
+	light,
 	children,
 	overlay
 }: CardShellProps) {
 	const m = shellMetrics(width, style.shape);
 	const shaved = style.shape === 'shaved';
 	const foilKind = style.frame === 'holo' && foil === 'none' ? 'holo' : foil;
+
+	// The light glides opposite the drag, like a fixed source reflecting off a
+	// card you tilt: drag right and it slides left, drag down and it slides up.
+	// This deliberately departs from the foil's frozen-parallax rule (see
+	// FlipCard) — here the moving light *is* the point, so the travel is generous
+	// enough to read. As the face-sized layer slides, the edge it leaves bare is
+	// already in the gradient's transparent tail, so no seam shows.
+	const lightTravel = m.u(20);
+	const lightShift = useAnimatedStyle(() => ({
+		transform: [
+			{ translateX: -(ry.value / TILT_RANGE) * lightTravel },
+			{ translateY: (rx.value / TILT_RANGE) * lightTravel }
+		]
+	}));
 
 	const band = (
 		<View
@@ -119,6 +152,23 @@ export function CardShell({
 			>
 				{/* content sits under the light, so the foil plays over the face */}
 				<View style={StyleSheet.absoluteFill}>{children}</View>
+				{light ? (
+					<Animated.View
+						pointerEvents="none"
+						style={[
+							StyleSheet.absoluteFill,
+							{
+								// The photo lifts itself onto its own layer for flip stability
+								// (zIndex/elevation in CardFace); the light has to sit above it
+								// or it paints under the picture on Android.
+								zIndex: 4,
+								elevation: 4,
+								experimental_backgroundImage: FACE_LIGHT
+							} as ViewStyle,
+							lightShift
+						]}
+					/>
+				) : null}
 				{foilKind ? (
 					<Foil
 						kind={foilKind}

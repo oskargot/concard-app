@@ -42,7 +42,7 @@ import Animated, {
 import { CARD_ASPECT } from '../theme/tokens';
 
 /** Maximum tilt in degrees. Matches the range Foil maps its parallax across. */
-const TILT_RANGE = 10;
+export const TILT_RANGE = 10;
 
 /** How much of the card you have to drag across to reach full tilt. */
 const DRAG_TO_FULL = 0.55;
