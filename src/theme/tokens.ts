@@ -1,17 +1,34 @@
 /**
- * Non-colour design tokens (design bible §12 "UI treatment"):
- * medium rounded corners, subtle glow on interactive elements, and a type
- * system where Fredoka carries display and Space Grotesk carries body.
+ * Non-colour design tokens (Concard style guide).
+ *
+ * Two type families live here, on purpose:
+ *
+ *  - `font.ui*` is **Outfit**, the app-chrome face the mockups are drawn in. The
+ *    chrome type scale (`type.*`) is built on it.
+ *  - `font.display` / `font.body*` stay **Fredoka / Space Grotesk**: these are
+ *    the *card-face* fonts, ported to match the web card pixel-for-pixel
+ *    (`CardFace`, `CardBack`, stickers). Chrome must not borrow them, and the
+ *    card face must not borrow Outfit — that is what keeps a collected snapshot
+ *    identical to how it looked the day it was collected.
  */
 
 import { palette } from './palette';
 
-/** Medium rounded — "not baby-round, not sharp". */
+/** Border-radius scale (guide "Border Radius Scale"). */
 export const radius = {
+	/** Card link pills. */
+	xs: 5,
+	/** Photo/image areas inside a card. */
 	sm: 8,
-	md: 14,
-	lg: 20,
-	xl: 28,
+	/** Sticker/Binder grid tiles, mini-card images. */
+	md: 12,
+	/** Card outer wrapper, sheets. */
+	lg: 16,
+	/** Scan viewfinder, large action buttons. */
+	xl: 20,
+	/** Secondary action buttons (Share, Edit Card). */
+	xxl: 24,
+	/** Icon circle buttons, avatars, chips. */
 	pill: 999
 } as const;
 
@@ -20,48 +37,71 @@ export const space = {
 	sm: 8,
 	md: 12,
 	lg: 16,
+	/** Screen horizontal padding — 24px on every screen. */
 	xl: 24,
 	xxl: 32
 } as const;
 
 export const font = {
+	/* Card-face fonts — pixel-synced with the web card. Do not use in chrome. */
 	display: 'Fredoka-Bold',
 	displaySemi: 'Fredoka-SemiBold',
 	body: 'SpaceGrotesk-Regular',
 	bodyMedium: 'SpaceGrotesk-Medium',
-	bodyBold: 'SpaceGrotesk-Bold'
+	bodyBold: 'SpaceGrotesk-Bold',
+
+	/* App-chrome font — Outfit 400 / 600 / 700. */
+	ui: 'Outfit-Regular',
+	uiSemi: 'Outfit-SemiBold',
+	uiBold: 'Outfit-Bold'
 } as const;
 
 /**
- * Type scale. `meta` is the small-caps label style Space Grotesk handles well;
- * it always ships with letterSpacing, which is what keeps it from reading as
+ * Chrome type scale, in Outfit, sized to the guide. Uppercase roles always ship
+ * with letterSpacing — that is what keeps a small label from reading as
  * shrunken body text.
  */
 export const type = {
-	hero: { fontFamily: font.display, fontSize: 32, lineHeight: 38 },
-	title: { fontFamily: font.display, fontSize: 22, lineHeight: 27 },
-	subtitle: { fontFamily: font.displaySemi, fontSize: 17, lineHeight: 22 },
-	body: { fontFamily: font.body, fontSize: 15, lineHeight: 21 },
-	bodyStrong: { fontFamily: font.bodyMedium, fontSize: 15, lineHeight: 21 },
-	small: { fontFamily: font.body, fontSize: 13, lineHeight: 18 },
+	/** Home hero card name / big page titles. */
+	hero: { fontFamily: font.uiBold, fontSize: 28, lineHeight: 34 },
+	/** Screen titles (Home, Card, Scan…). */
+	title: { fontFamily: font.uiBold, fontSize: 17, lineHeight: 22 },
+	/** Sub-headers, instruction lead. */
+	subtitle: { fontFamily: font.uiSemi, fontSize: 15, lineHeight: 20 },
+	/** Body text, bio, instructions. */
+	body: { fontFamily: font.ui, fontSize: 13, lineHeight: 19 },
+	/** Emphasised body / secondary button label. */
+	bodyStrong: { fontFamily: font.uiSemi, fontSize: 13, lineHeight: 18, letterSpacing: 0.2 },
+	/** Hints, tertiary, count badges. */
+	small: { fontFamily: font.ui, fontSize: 12, lineHeight: 17 },
+	/** Primary CTA label. */
+	cta: { fontFamily: font.uiBold, fontSize: 14, letterSpacing: 0.4 },
+	/** Section headers (RECENT), tags, nav — small caps. */
 	meta: {
-		fontFamily: font.bodyMedium,
+		fontFamily: font.uiSemi,
 		fontSize: 11,
 		lineHeight: 14,
-		letterSpacing: 1.1,
+		letterSpacing: 0.7,
 		textTransform: 'uppercase' as const
 	}
 } as const;
 
 /**
- * Subtle glow states on interactive elements — "not flat, not skeuomorphic".
- * `boxShadow` landed in React Native core, so this is a real outer glow rather
- * than the stacked-translucent-border trick.
+ * Shadows & glows (guide "Shadows & Glows"). `boxShadow` is real in React Native
+ * core now, so these are true outer shadows rather than the translucent-border
+ * trick.
  */
-export const glow = {
-	rose: { boxShadow: `0 0 18px ${palette.roseGlow}` },
-	teal: { boxShadow: `0 0 18px ${palette.tealGlow}` },
-	none: { boxShadow: undefined }
+export const shadow = {
+	/** Hero card: a deep drop plus a faint holo bloom. */
+	hero: `0 20px 44px rgba(23,22,27,0.75), 0 0 32px rgba(185,201,255,0.12)`,
+	/** Binder / grid card. */
+	grid: `0 8px 20px rgba(23,22,27,0.5)`,
+	/** Scan control at rest. */
+	scan: `0 4px 18px ${palette.holoGlow}`,
+	/** Scan control while the Scan screen is active. */
+	scanActive: `0 4px 20px rgba(185,201,255,0.4)`,
+	/** Holo gradient CTA button. */
+	cta: `0 4px 24px rgba(185,201,255,0.25)`
 } as const;
 
 /** Cards are 5:7, the same ratio the web card uses, so snapshots stay portable. */

@@ -51,7 +51,7 @@ app/                    expo-router routes
 src/auth/               session and profile state; the route gate
 src/lib/                Supabase client, env, username rules, generated types
 src/ui/                 buttons, fields, panels — deliberately quiet chrome
-src/theme/              arcade dusk palette (§12) and non-colour tokens
+src/theme/              "dark velvet display case" palette (style guide) + tokens
 src/card/               the card renderer
   card-style.ts         style tokens, shared verbatim with the web app
   tiers.ts              the foil ladder — card tiers and sticker foils
@@ -106,7 +106,7 @@ These were resolved deliberately; each is worth revisiting.
 | **Card fields are a union**               | The bible's §6 field list drops the web app's background colour (18 tints) and fandom badge, the two loudest personalisation levers already shipping. Both are kept, and the bible's additions (pronouns, per-card label, bio alignment, link layout) are added on top.                                                                                                                   |
 | **`bio_align` / `link_layout` are style** | Bible §6 lists them as card fields. They live in the existing `style` jsonb with the other four axes rather than as their own columns, so there is one check constraint to extend instead of two columns to add.                                                                                                                                                                          |
 | **Bio cap**                               | The column stays at 200 chars so cards written by the web app remain valid; the bible's 140 is enforced in the app's editor.                                                                                                                                                                                                                                                              |
-| **Self-hosted fonts**                     | Fredoka and Space Grotesk ship as TTFs in `assets/fonts/` rather than via `@expo-google-fonts`. Same reasoning as the web app: a con hall is exactly where a third-party font request fails. (The wrapper packages also force a conflicting `react-dom`.)                                                                                                                                 |
+| **Self-hosted fonts**                     | Outfit (app chrome) and Fredoka + Space Grotesk (card face, kept pixel-synced with the web card) ship as TTFs in `assets/fonts/` rather than via `@expo-google-fonts`. Same reasoning as the web app: a con hall is exactly where a third-party font request fails. (The wrapper packages also force a conflicting `react-dom`.)                                                          |
 
 `react-dom` is pinned via `overrides` to `19.2.3`: `expo-router` pulls
 `@expo/metro-runtime`, which depends on `react-dom@19.3.0`, whose `react` peer
@@ -116,13 +116,28 @@ resolvable.
 
 ## Status
 
-Phase 2 of 7 done.
+Phase 2 of 7, plus the card editor and the meet loop.
 
 - **In:** the card renderer and foil lab; email/password auth, the username claim
-  and the forced first card.
-- **Not in:** the QR back, the card switcher and editor, photo upload, stickers,
-  the scanner with its offline queue, the binder, settings. The Scan and Binder
-  tabs are placeholders.
+  and the forced first card; the card editor (text in place, style, per-card
+  links, affiliation, photo upload); the meet loop end to end — My Card flips to
+  a real QR (`EXPO_PUBLIC_SITE_URL || 'https://concard.me'` + username, the same
+  contract the web scanner reads), the scanner parses that same URL (or a bare
+  username) via `src/lib/username.ts`'s `usernameFromScan`, scans queue offline
+  in `useConcardStore` and drain through `collect_card` in `src/store/sync.ts`,
+  and the binder replaces its starter demo cards with a live `collections` read
+  the first time a signed-in user is seen.
+- **Not in:** the QR back on other card looks under `/dev/cards`, the card
+  switcher, stickers inventory/combine/placement UI, photo pan/zoom, events,
+  friends, DMs, purchases, settings.
+- **Known gaps in the meet loop:** `tier`/`meeting_count` are computed
+  client-side from `collections` rows (the schema has no running total, so this
+  is a count query per owner, not a server-authoritative field); a collected
+  card's fandom badge is dropped rather than rendered, since the snapshot's
+  affiliation shape doesn't carry the app's `style_category` and drawing it
+  needs a fandoms-table lookup this drain doesn't do; the events feature isn't
+  wired, so a binder card's back shows "in person" rather than a venue.
 
-Nothing has been run against a live Supabase project yet — that needs a real
-`.env` and a device.
+Nothing has been run against a live Supabase project on a device yet — that
+needs a real `.env` and two accounts to test the scan → collect → binder loop
+end to end (see the handoff's manual test script).

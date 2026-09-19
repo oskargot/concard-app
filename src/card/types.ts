@@ -105,4 +105,11 @@ export interface CollectedCard {
 	last_scanned_at: string;
 	/** Null once the owner deletes the card; the snapshot survives (§7). */
 	card_id: string | null;
+	/** The person's profile id — how repeat meetings of the same person are
+	 *  merged, since `card_id` changes if they switch their active card. Null
+	 *  for an offline placeholder that hasn't synced yet. */
+	owner_id: string | null;
+	/** True for an optimistic entry queued offline that hasn't reached
+	 *  Supabase yet — the binder shows it but flags it as unconfirmed. */
+	pending?: boolean;
 }
