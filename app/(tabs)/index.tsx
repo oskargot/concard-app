@@ -1,7 +1,9 @@
+import { useState } from 'react';
 import { useRouter } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useAuth } from '@/auth/AuthProvider';
 import { useConcardStore } from '@/store/useConcardStore';
 import { palette } from '@/theme/palette';
 import { radius, space, type } from '@/theme/tokens';
@@ -9,11 +11,27 @@ import { radius, space, type } from '@/theme/tokens';
 export default function HomeScreen() {
 	const insets = useSafeAreaInsets();
 	const router = useRouter();
+	const { signOut } = useAuth();
+	const [signingOut, setSigningOut] = useState(false);
 	const binder = useConcardStore((state) => state.binder_cache);
 	const pending = useConcardStore((state) => state.scan_queue.length);
 	const activeCard = useConcardStore((state) => state.active_card);
 	const lastSync = useConcardStore((state) => state.last_sync_at);
 	const uniquePeople = new Set(binder.map((card) => card.view.handle)).size;
+
+	async function handleSignOut() {
+		if (signingOut) return;
+		setSigningOut(true);
+		try {
+			await signOut();
+		} catch (error) {
+			Alert.alert(
+				'Could not sign out',
+				error instanceof Error ? error.message : 'Please try again.'
+			);
+			setSigningOut(false);
+		}
+	}
 
 	return (
 		<ScrollView
@@ -77,6 +95,15 @@ export default function HomeScreen() {
 						? `All caught up · synced ${new Date(lastSync).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
 						: 'Offline-ready · your binder lives on this device'}
 			</Text>
+
+			<Pressable
+				onPress={handleSignOut}
+				disabled={signingOut}
+				accessibilityRole="button"
+				style={({ pressed }) => [styles.signOut, pressed && styles.pressed]}
+			>
+				<Text style={styles.signOutText}>{signingOut ? 'SIGNING OUT…' : 'SIGN OUT'}</Text>
+			</Pressable>
 		</ScrollView>
 	);
 }
@@ -200,5 +227,7 @@ const styles = StyleSheet.create({
 	actionBody: { ...type.small, color: palette.creamFaint },
 	chevron: { fontSize: 28, color: palette.creamFaint },
 	pressed: { opacity: 0.76 },
-	sync: { ...type.small, color: palette.creamFaint, textAlign: 'center' }
+	sync: { ...type.small, color: palette.creamFaint, textAlign: 'center' },
+	signOut: { alignItems: 'center', paddingVertical: space.sm },
+	signOutText: { ...type.meta, color: palette.creamFaint }
 });

@@ -47,32 +47,37 @@ export interface AuthState {
 
 const AuthContext = createContext<AuthState | null>(null);
 
+async function fetchProfile(userId: string | null): Promise<Profile | null> {
+	if (!supabase || !userId) return null;
+	const { data, error } = await supabase
+		.from('profiles')
+		.select('*')
+		.eq('id', userId)
+		.maybeSingle();
+	// A profile that does not exist yet is the expected "needs-username" case,
+	// not a failure worth surfacing.
+	if (error) console.warn('concard: could not load profile', error.message);
+	return data ?? null;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
 	// With no client there is nothing to load, so this starts settled rather than
 	// having an effect immediately switch it off.
 	const [loading, setLoading] = useState(() => !!supabase);
 	const [session, setSession] = useState<Session | null>(null);
 	const [profile, setProfile] = useState<Profile | null>(null);
-	// Guards against a late response from a previous user overwriting the current
-	// one — sign out and straight back in as someone else would otherwise race.
-	const loadedFor = useRef<string | null>(null);
+	// Identifies the user whose profile request has settled. This keeps the gate
+	// on its loading screen between receiving a session and loading that user's
+	// profile, without making a Supabase call inside onAuthStateChange.
+	const [profileFor, setProfileFor] = useState<string | null>(null);
+	const profileRequest = useRef(0);
 
 	const loadProfile = useCallback(async (userId: string | null) => {
-		if (!supabase || !userId) {
-			setProfile(null);
-			loadedFor.current = null;
-			return;
-		}
-		loadedFor.current = userId;
-		const { data, error } = await supabase
-			.from('profiles')
-			.select('*')
-			.eq('id', userId)
-			.maybeSingle();
-		// a profile that does not exist yet is the expected "needs-username" case,
-		// not a failure worth surfacing
-		if (error) console.warn('concard: could not load profile', error.message);
-		if (loadedFor.current === userId) setProfile(data ?? null);
+		const request = ++profileRequest.current;
+		const nextProfile = await fetchProfile(userId);
+		if (request !== profileRequest.current) return;
+		setProfileFor(userId);
+		setProfile(nextProfile);
 	}, []);
 
 	useEffect(() => {
@@ -80,16 +85,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 		bindAutoRefresh();
 
 		let active = true;
-		supabase.auth.getSession().then(async ({ data }) => {
+		supabase.auth.getSession().then(({ data, error }) => {
 			if (!active) return;
+			if (error) console.warn('concard: could not restore session', error.message);
 			setSession(data.session);
-			await loadProfile(data.session?.user.id ?? null);
-			if (active) setLoading(false);
+			setLoading(false);
 		});
 
-		const { data: sub } = supabase.auth.onAuthStateChange(async (_event, next) => {
+		const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => {
+			if (!active) return;
+			// Supabase warns that awaiting another client call in this callback can
+			// deadlock. Profile loading happens in the effect below instead.
 			setSession(next);
-			await loadProfile(next?.user.id ?? null);
 			setLoading(false);
 		});
 
@@ -97,7 +104,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 			active = false;
 			sub.subscription.unsubscribe();
 		};
-	}, [loadProfile]);
+	}, []);
+
+	useEffect(() => {
+		const userId = session?.user.id ?? null;
+		const request = ++profileRequest.current;
+		void fetchProfile(userId).then((nextProfile) => {
+			if (request !== profileRequest.current) return;
+			setProfileFor(userId);
+			setProfile(nextProfile);
+		});
+	}, [session?.user.id]);
 
 	const refresh = useCallback(() => loadProfile(session?.user.id ?? null), [loadProfile, session]);
 
@@ -123,22 +140,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 	const signOut = useCallback(async () => {
 		if (!supabase) return;
-		await supabase.auth.signOut();
+		const { error } = await supabase.auth.signOut();
+		if (error) throw error;
 	}, []);
 
 	const status: AuthStatus = useMemo(() => {
-		// The prototype is deliberately explorable without credentials. Screens
-		// use persisted fixture data and swap to this same API when configured.
-		if (!supabase) return 'ready';
+		if (!supabase) return 'unconfigured';
 		if (!session) return 'signed-out';
 		if (!profile) return 'needs-username';
 		if (!profile.active_card_id) return 'needs-card';
 		return 'ready';
 	}, [session, profile]);
 
+	const isLoading = loading || (!!session && profileFor !== session.user.id);
+
 	const value = useMemo<AuthState>(
-		() => ({ loading, status, session, profile, signIn, signUp, signOut, refresh }),
-		[loading, status, session, profile, signIn, signUp, signOut, refresh]
+		() => ({ loading: isLoading, status, session, profile, signIn, signUp, signOut, refresh }),
+		[isLoading, status, session, profile, signIn, signUp, signOut, refresh]
 	);
 
 	return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
