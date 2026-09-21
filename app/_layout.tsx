@@ -91,6 +91,9 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 	const router = useRouter();
 
 	useEffect(() => {
+		// Let development builds open the main app without completing signup,
+		// username claim, or the first-card flow.
+		if (__DEV__) return;
 		if (loading) return;
 
 		// useSegments() is typed as a tuple of the routes it knows about, so it is
@@ -117,7 +120,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 		if (!onCorrectStep) router.replace(target as never);
 	}, [loading, status, segments, router]);
 
-	if (loading) {
+	if (loading && !__DEV__) {
 		return (
 			<View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
 				<ActivityIndicator color={palette.holo} />
