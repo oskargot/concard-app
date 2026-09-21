@@ -1,31 +1,352 @@
 /**
- * Stage C0 smoke: proof that a Skia canvas draws on a card-sized surface and
- * that its light answers the same `rx`/`ry` tilt every other engine in this
- * folder reads. It is deliberately *not* a foil — no per-tier recipe, no pinned
- * textures — just one holo radial and a specular core that slide opposite the
- * tilt, so a glance tells you Skia is linked and reanimated is driving it on the
- * UI thread. The real Skia foil is Stage C1.
+ * Stage C1: the holo finish, as one SkSL runtime shader.
  *
- * This module imports `@shopify/react-native-skia`, which only resolves in a
- * development build. Nothing here is imported at app start — the `/dev/skia-smoke`
- * route requires it lazily and shows a fallback in Expo Go (see that route).
+ * This is an *additive light overlay*. It draws no card — it emits only the
+ * light a holographic laminate would throw back at you, and the caller screen-
+ * blends it over the real card face (`mixBlendMode: 'screen'`, the same
+ * mechanism every other engine in this folder uses). The shader therefore
+ * cannot see what is underneath it, which is why there is no base colour and no
+ * luma protection here: it adds light, it never darkens.
+ *
+ * ── TUNING ───────────────────────────────────────────────────────────────────
+ * Everything that controls how this *looks* is a named constant in the block
+ * below. Change a number, save, and Fast Refresh re-runs this module, rebuilds
+ * the shader source and recompiles it — the change is on the phone immediately.
+ * Nothing in the shader body needs reading to tune it.
+ *
+ * The rule that keeps it that way: **uniforms are only for what the shader
+ * cannot know at compile time** — the canvas size, the clock, and the finger.
+ * Every look value is baked into the source as a `const`, so a knob lives in
+ * exactly one place and a typo is a compile error with a line number rather
+ * than a crash on the render thread.
+ *
+ * If a compile does fail, the canvas is replaced by a red panel quoting the
+ * error and the offending source line. It is never a silent white rectangle.
+ *
+ * ── COST ─────────────────────────────────────────────────────────────────────
+ * `u_time` is a uniform, so this canvas redraws at 60fps for as long as it is
+ * mounted, even untouched. That is right for a hero card and wrong for a binder
+ * grid of thirty. The fix there is to stop the frame callback when off-screen,
+ * not to turn DRIFT_SPEED down — a frozen shader still redraws.
  */
 
-import {
-	Canvas,
-	Group,
-	RadialGradient,
-	RoundedRect,
-	rect,
-	rrect,
-	vec
-} from '@shopify/react-native-skia';
+import { Canvas, Fill, Shader, Skia, useClock } from '@shopify/react-native-skia';
+import type { SkRuntimeEffect } from '@shopify/react-native-skia';
+import { ScrollView, StyleSheet, Text } from 'react-native';
 import { useDerivedValue, type SharedValue } from 'react-native-reanimated';
 
+import { palette, HOLO_STOPS } from '../../theme/palette';
+import { space, type } from '../../theme/tokens';
 import { TILT_RANGE } from '../FlipCard';
+import { HOLO_SPECTRUM } from './gradients';
 
-/** Hex mirror of `gradients.ts`' HOLO_SPECTRUM — Skia parses hex most reliably. */
-const HOLO = ['#FF7773', '#FFED5F', '#A8FF5F', '#83FFF7', '#7894FF', '#D875FF'];
+/* ══════════════════════════════════════════════════════════════════════════
+   INSTRUMENT PANEL — every value that controls the look lives here.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Colour ──────────────────────────────────────────────────────────────── */
+
+/** Which ramp the shine cycles through. Swap and save to compare the two. */
+const RAMP: 'brand' | 'foil' = 'brand';
+
+/** Style-guide ramp: pink -> holo -> teal -> warm. Pastel, on-brand, quieter.
+ *  (HOLO_STOPS repeats its first colour at the end; the ramp already wraps.) */
+const RAMP_BRAND = HOLO_STOPS.slice(0, 4);
+
+/** The saturated trading-card rainbow the blend-mode foil uses. Louder. */
+const RAMP_FOIL = HOLO_SPECTRUM;
+
+/** Colour purity. 0 = silver/grey sheen, 1 = ramp as authored, 2 = candy. */
+const SATURATION = 1.0;
+
+/* ── Band pattern ────────────────────────────────────────────────────────── */
+
+/** How many rainbow bands cross the card. The loudest knob here. 0.6 - 6. */
+const BAND_FREQUENCY = 1.4;
+
+/** Band edge definition. 0.5 = one broad wash, 1.5 = tight stripes. 0.5 - 1.5. */
+const BAND_SHARPNESS = 1.1;
+
+/** How much of the colour wheel one band crosses. 0.4 - 2.5. */
+const HUE_SPREAD = 1.0;
+
+/** Direction the bands run across the card, in degrees. 0 - 180. */
+const SWEEP_ANGLE_DEG = 45;
+
+/** Shifts which colour lands where. Purely cosmetic reroll. 0 - 1. */
+const PATTERN_PHASE = 0.0;
+
+/* ── Tilt response ───────────────────────────────────────────────────────── */
+
+/** How far the bands slide for a full-range drag. 0.4 - 4. */
+const TILT_SENSITIVITY = 1.2;
+
+/** Horizontal vs vertical drag weighting, [x, y]. Each 0 - 1.5. */
+const TILT_AXIS_WEIGHT: [number, number] = [0.9, 0.6];
+
+/* ── Highlight (the specular bloom) ──────────────────────────────────────── */
+
+/** Size of the bright spot, in card heights. 0.2 - 1.2. */
+const HIGHLIGHT_RADIUS = 0.55;
+
+/** Edge of the spot. 0 = hard disc, 1 = pure falloff. 0 - 1. */
+const HIGHLIGHT_SOFTNESS = 0.85;
+
+/** How bright the spot gets. 0 - 1.5. */
+const HIGHLIGHT_STRENGTH = 0.75;
+
+/** How far it slides at full tilt. It moves *opposite* your finger, like a real
+ *  reflection does. 0 - 0.8. */
+const HIGHLIGHT_TRAVEL = 0.35;
+
+/* ── Idle drift ──────────────────────────────────────────────────────────── */
+
+/** Speed of the slow wander when nobody is touching the card, in rad/sec.
+ *  0 stops the motion (but not the redraw — see COST above). 0 - 1.5. */
+const DRIFT_SPEED = 0.35;
+
+/** How much virtual tilt the wander fakes, in the same units as a real drag.
+ *  0 freezes the resting card completely. 0 - 0.5. */
+const DRIFT_AMOUNT = 0.18;
+
+/** How readily the drift yields to a real finger, as a fraction of full tilt.
+ *  Lower yields sooner. At 0.25 it is gone within 2.5 degrees. 0.05 - 1. */
+const DRIFT_FADE = 0.25;
+
+/* ── Global / shape ──────────────────────────────────────────────────────── */
+
+/**
+ * Master loudness of the whole finish: subtle sheen vs. full rainbow.
+ * This is the dial to reach for first. 0 - 2.
+ */
+const FOIL_INTENSITY = 0.75;
+
+/** Thickness of the lit lip around the card edge, in card heights. 0 - 0.05. */
+const RIM_WIDTH = 0.012;
+
+/** Brightness of that lip. 0 turns it off. 0 - 1. */
+const RIM_STRENGTH = 0.35;
+
+/** Anti-alias width at the card outline, in dp. 0.5 - 3. */
+const EDGE_FEATHER_DP = 1.5;
+
+/* ══════════════════════════════════════════════════════════════════════════
+   END OF PANEL — below here is machinery.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * SkSL has no implicit int->float conversion: `const float X = 2;` will not
+ * compile. Every number reaching the source goes through here so it always
+ * carries a decimal point.
+ */
+function f(n: number): string {
+	return n.toFixed(6);
+}
+
+/** Parse `#rgb`, `#rrggbb` or `rgb(r,g,b)` into 0..1 components. */
+function parseColor(c: string): [number, number, number] {
+	const rgb = c.match(/rgba?\(([^)]+)\)/);
+	if (rgb) {
+		const parts = rgb[1].split(',').map((p) => Number(p.trim()));
+		return [parts[0] / 255, parts[1] / 255, parts[2] / 255];
+	}
+	let hex = c.replace('#', '');
+	if (hex.length === 3) {
+		hex = hex
+			.split('')
+			.map((ch) => ch + ch)
+			.join('');
+	}
+	const n = parseInt(hex, 16);
+	return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+}
+
+/** A colour as an SkSL `float3` literal. */
+function f3(c: string): string {
+	const [r, g, b] = parseColor(c);
+	return `float3(${f(r)}, ${f(g)}, ${f(b)})`;
+}
+
+/**
+ * Build the ramp lookup from a list of stops of *any* length, as an unrolled
+ * if-chain over constants. Generating it is what lets the two ramps have
+ * different stop counts (brand has four, the foil spectrum has six) without the
+ * shader body knowing or caring. No array uniforms, no dynamic indexing.
+ */
+function rampFunction(stops: readonly string[]): string {
+	const n = stops.length;
+	const consts = stops.map((c, i) => `const float3 STOP_${i} = ${f3(c)};`).join('\n');
+	// Each stop blends into the next; the last wraps back to the first, so the
+	// ramp is cyclic and a band can sweep forever without a seam.
+	const branches = stops
+		.map((_, i) => {
+			const next = (i + 1) % n;
+			const test = i === n - 1 ? 'else' : `${i === 0 ? 'if' : 'else if'} (i < ${f(i + 0.5)})`;
+			return `    ${test} { a = STOP_${i}; b = STOP_${next}; }`;
+		})
+		.join('\n');
+
+	return `${consts}
+
+float3 rampAt(float t) {
+    t = fract(t) * ${f(n)};
+    float i = floor(t);
+    float k = smoothstep(0.0, 1.0, t - i);
+    float3 a = STOP_0;
+    float3 b = STOP_1;
+${branches}
+    float3 c = mix(a, b, k);
+    // Pull toward luma for a silver sheen, or past the stops for candy.
+    float grey = dot(c, float3(0.299, 0.587, 0.114));
+    return clamp(mix(float3(grey), c, ${f(SATURATION)}), 0.0, 1.0);
+}`;
+}
+
+const SWEEP_RAD = (SWEEP_ANGLE_DEG * Math.PI) / 180;
+
+/**
+ * The shader.
+ *
+ * Every declaration is `float`, never `half`. SkSL treats `half` as mediump and
+ * will happily infer it, which is how coordinate maths quietly starts banding.
+ * `half` appears only in `main`'s mandated signature and the final conversion.
+ * For the same reason the `float2`/`float3` spellings are used throughout
+ * rather than the `vec2`/`vec3` aliases — mixing the two is the usual way a
+ * `half` sneaks into a chain.
+ *
+ * Note there is no preprocessor in SkSL: no #define, no #ifdef, no #include.
+ * Keep the source ASCII-only, comments included -- a stray em-dash or smart
+ * quote is a lexer error a long way from where it reads like one.
+ */
+const SOURCE = `
+uniform float2 u_resolution;  // canvas size in dp
+uniform float  u_radius;      // corner radius in dp
+uniform float  u_time;        // seconds since mount
+uniform float2 u_tilt;        // (ry, rx) / TILT_RANGE, -1..1, y up-positive
+
+const float TAU = 6.2831853;
+
+const float2 SWEEP_AXIS       = float2(${f(Math.cos(SWEEP_RAD))}, ${f(Math.sin(SWEEP_RAD))});
+const float  BAND_FREQUENCY   = ${f(BAND_FREQUENCY)};
+const float  BAND_SHARPNESS   = ${f(BAND_SHARPNESS)};
+const float  HUE_SPREAD       = ${f(HUE_SPREAD)};
+const float  PATTERN_PHASE    = ${f(PATTERN_PHASE)};
+const float  TILT_SENSITIVITY = ${f(TILT_SENSITIVITY)};
+const float2 TILT_AXIS_WEIGHT = float2(${f(TILT_AXIS_WEIGHT[0])}, ${f(TILT_AXIS_WEIGHT[1])});
+const float  HIGHLIGHT_RADIUS = ${f(HIGHLIGHT_RADIUS)};
+const float  HIGHLIGHT_SOFT   = ${f(HIGHLIGHT_SOFTNESS)};
+const float  HIGHLIGHT_STR    = ${f(HIGHLIGHT_STRENGTH)};
+const float  HIGHLIGHT_TRAVEL = ${f(HIGHLIGHT_TRAVEL)};
+const float  DRIFT_SPEED      = ${f(DRIFT_SPEED)};
+const float  DRIFT_AMOUNT     = ${f(DRIFT_AMOUNT)};
+const float  DRIFT_FADE       = ${f(DRIFT_FADE)};
+const float  FOIL_INTENSITY   = ${f(FOIL_INTENSITY)};
+const float  RIM_WIDTH        = ${f(RIM_WIDTH)};
+const float  RIM_STRENGTH     = ${f(RIM_STRENGTH)};
+const float  EDGE_FEATHER_DP  = ${f(EDGE_FEATHER_DP)};
+
+${rampFunction(RAMP === 'brand' ? RAMP_BRAND : RAMP_FOIL)}
+
+/**
+ * Live tilt, plus a slow idle wander.
+ *
+ * The real tilt enters at coefficient 1 and is never filtered, smoothed or
+ * delayed -- that is the whole reason this cannot feel laggy. The drift is an
+ * additive perturbation whose gain is a pure function of the *current* tilt, so
+ * there is no timer or easing to wait out: move your finger and it is already
+ * gone. It fades back in for free as FlipCard's release spring settles rx/ry
+ * toward zero.
+ */
+float2 tiltNow() {
+    float2 t = u_tilt;
+    float2 drift = float2(sin(u_time * DRIFT_SPEED),
+                          sin(u_time * DRIFT_SPEED * 1.5 + 1.2)) * DRIFT_AMOUNT;
+    return t + drift * (1.0 - smoothstep(0.0, DRIFT_FADE, length(t)));
+}
+
+/** Rounded-rect SDF, in card-centred units. Negative inside. */
+float sdRoundRect(float2 p, float2 b, float r) {
+    float2 q = abs(p) - b + r;
+    return min(max(q.x, q.y), 0.0) + length(max(q, float2(0.0))) - r;
+}
+
+half4 main(float2 fragCoord) {
+    // main() receives PIXELS (dp on this canvas), not uv, origin top-left with
+    // y running down. Skia's y matches FlipCard's up-positive rx convention, so
+    // no flip is needed here.
+    float2 uv = fragCoord / u_resolution;
+    float aspect = u_resolution.x / u_resolution.y;
+
+    // Card-centred, aspect-corrected: y spans -0.5..0.5, x spans +/-0.5*aspect.
+    float2 p = uv - 0.5;
+    p.x *= aspect;
+
+    float sd = sdRoundRect(p, float2(0.5 * aspect, 0.5), u_radius / u_resolution.y);
+    float mask = 1.0 - smoothstep(0.0, EDGE_FEATHER_DP / u_resolution.y, sd);
+    if (mask <= 0.0) { return half4(0.0); }
+
+    float2 t = tiltNow();
+
+    // One phase drives both the hue and the band envelope, which is what makes
+    // the colour and the bright stripe move together like a real laminate.
+    float phase = dot(p, SWEEP_AXIS) * BAND_FREQUENCY
+                + dot(t, TILT_AXIS_WEIGHT) * TILT_SENSITIVITY;
+
+    float3 colour = rampAt(phase * HUE_SPREAD + PATTERN_PHASE);
+
+    // clamp() before pow() so an edit to the phase above can never produce
+    // pow(negative, e).
+    float band = clamp(0.5 + 0.5 * cos(phase * TAU), 0.0, 1.0);
+    float envelope = pow(band, mix(1.0, 4.0, clamp(BAND_SHARPNESS - 0.5, 0.0, 1.0)));
+    envelope = envelope * 0.9 + 0.1;
+
+    // The bloom slides opposite the tilt, the way a reflection does.
+    float2 lightCentre = float2(0.5) - t * HIGHLIGHT_TRAVEL;
+    float2 d = uv - lightCentre;
+    d.x *= aspect;
+    float inner = HIGHLIGHT_RADIUS * (1.0 - HIGHLIGHT_SOFT);
+    float bloom = (1.0 - smoothstep(inner, HIGHLIGHT_RADIUS, length(d))) * HIGHLIGHT_STR;
+
+    float rim = (1.0 - smoothstep(RIM_WIDTH * 0.5, RIM_WIDTH, -sd)) * RIM_STRENGTH;
+
+    float3 light = colour * (envelope * FOIL_INTENSITY)
+                 + colour * bloom
+                 + float3(rim);
+    light = clamp(light, 0.0, 1.0);
+
+    // Runtime effects return PREMULTIPLIED alpha. Returning straight alpha here
+    // fringes the anti-aliased corners.
+    return half4(half3(light * mask), half(mask));
+}
+`;
+
+let cachedEffect: SkRuntimeEffect | null | undefined;
+let compileError: string | null = null;
+
+/**
+ * Compiled once per module instance. Fast Refresh re-runs this file on save,
+ * which resets the cache — that is what makes a knob edit take effect.
+ *
+ * This is a function rather than a module-level `const` for one load-bearing
+ * reason: `RuntimeEffect.Make` *throws* on native. At module scope that throw
+ * would escape the lazy `require('@/card/foil/SkiaSmoke')` in the dev route,
+ * which would catch it and report "Skia isn't linked in this app" — a flatly
+ * wrong diagnosis for a missing semicolon. (On web it returns null instead, so
+ * both are handled.)
+ */
+function shineEffect(): SkRuntimeEffect | null {
+	if (cachedEffect === undefined) {
+		try {
+			cachedEffect = Skia.RuntimeEffect.Make(SOURCE) ?? null;
+			if (!cachedEffect) compileError = 'RuntimeEffect.Make returned null.';
+		} catch (e) {
+			cachedEffect = null;
+			compileError = e instanceof Error ? e.message : String(e);
+		}
+		if (!cachedEffect) console.warn(`[SkiaSmoke] SkSL did not compile\n${compileError}`);
+	}
+	return cachedEffect;
+}
 
 export interface SkiaSmokeProps {
 	width: number;
@@ -33,54 +354,84 @@ export interface SkiaSmokeProps {
 	/** Card tilt, owned by FlipCard — the same signal the foil engines read. */
 	rx: SharedValue<number>;
 	ry: SharedValue<number>;
-	/** Corner radius of the surface, so the canvas reads as a card face. */
+	/** Corner radius of the face this sits over, so the shine follows its edge. */
 	radius?: number;
 }
 
 export function SkiaSmoke({ width, height, rx, ry, radius = width * 0.06 }: SkiaSmokeProps) {
-	// The light sits opposite the tilt — drag right, it slides left — matching
-	// the convention in Foil.tsx / FoilPokemon. This is the whole point of the
-	// smoke: only light moves, and it moves on the UI thread.
-	const holoCenter = useDerivedValue(() =>
-		vec(
-			width * (0.5 - (ry.value / TILT_RANGE) * 0.4),
-			height * (0.5 - (rx.value / TILT_RANGE) * 0.4)
-		)
-	);
-	const specCenter = useDerivedValue(() =>
-		vec(
-			width * (0.5 - (ry.value / TILT_RANGE) * 0.28),
-			height * (0.35 - (rx.value / TILT_RANGE) * 0.28)
-		)
-	);
+	const clock = useClock();
+	const effect = shineEffect();
 
-	const surface = rrect(rect(0, 0, width, height), radius, radius);
+	const uniforms = useDerivedValue(() => ({
+		u_resolution: [width, height],
+		u_radius: radius,
+		// useClock reports milliseconds since the first frame; the shader wants
+		// seconds. It is monotonic and never wrapped — float32 keeps sub-ms
+		// resolution for hours, and wrapping would pop the sin() phase.
+		u_time: clock.value / 1000,
+		// Degrees -> normalised -1..1. rx is already up-positive (FlipCard
+		// negates translationY), which is the convention the shader expects.
+		u_tilt: [ry.value / TILT_RANGE, rx.value / TILT_RANGE]
+	}));
+
+	if (!effect) return <ShaderError message={compileError} width={width} height={height} />;
 
 	return (
 		<Canvas style={{ width, height }}>
-			{/* Base plate so the blended light has something to sit on. */}
-			<RoundedRect rect={surface} color="#141019" />
-
-			{/* The holo sweep — the "colour moves with tilt" cue. */}
-			<Group>
-				<RoundedRect rect={surface}>
-					<RadialGradient c={holoCenter} r={width * 0.95} colors={HOLO} />
-				</RoundedRect>
-			</Group>
-
-			{/* A specular core over the top, screened so it only ever brightens. */}
-			<Group blendMode="screen">
-				<RoundedRect rect={surface}>
-					<RadialGradient
-						c={specCenter}
-						r={width * 0.6}
-						colors={['#FFFFFF', 'rgba(255,255,255,0)']}
-					/>
-				</RoundedRect>
-			</Group>
-
-			{/* A faint lit lip so the flat plate reads as a card with an edge. */}
-			<RoundedRect rect={surface} style="stroke" strokeWidth={width * 0.008} color="#FFFFFF59" />
+			<Fill>
+				<Shader source={effect} uniforms={uniforms} />
+			</Fill>
 		</Canvas>
 	);
 }
+
+/**
+ * A compile failure is otherwise a white rectangle. Skia reports
+ * `error: <line>:<col>: <text>` where the line indexes into SOURCE, so quote
+ * the surrounding lines — otherwise you are counting lines in a template
+ * literal by hand.
+ */
+function ShaderError({
+	message,
+	width,
+	height
+}: {
+	message: string | null;
+	width: number;
+	height: number;
+}) {
+	return (
+		<ScrollView style={[styles.error, { width, height }]}>
+			<Text style={styles.errorTitle}>SKSL DID NOT COMPILE</Text>
+			<Text selectable style={styles.errorBody}>
+				{message ?? 'No error text was reported.'}
+			</Text>
+			<Text style={styles.errorSource}>{quoteSource(message)}</Text>
+		</ScrollView>
+	);
+}
+
+/** The three source lines around the first line number in a Skia error. */
+function quoteSource(message: string | null): string {
+	const line = Number(message?.match(/error:\s*(\d+):/)?.[1]);
+	if (!line) return '';
+	const lines = SOURCE.split('\n');
+	const from = Math.max(0, line - 3);
+	return lines
+		.slice(from, line + 2)
+		.map((text, i) => `${from + i + 1 === line ? '>' : ' '} ${from + i + 1}  ${text}`)
+		.join('\n');
+}
+
+const styles = StyleSheet.create({
+	error: {
+		padding: space.md,
+		backgroundColor: palette.raised,
+		borderWidth: StyleSheet.hairlineWidth,
+		borderColor: palette.danger
+	},
+	errorTitle: { ...type.meta, color: palette.danger, marginBottom: space.xs },
+	errorBody: { ...type.body, color: palette.textPrimary, marginBottom: space.sm },
+	// No card-face font here: the style guide keeps Space Grotesk on the card.
+	errorSource: { ...type.small, color: palette.textDim }
+});
