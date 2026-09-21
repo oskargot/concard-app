@@ -48,52 +48,46 @@ Expo Go ships Skia on SDK 57, so `/dev/skia-smoke` and the shader foil run there
 with no development build — confirmed on a physical device. This repo said
 otherwise for a while; it was wrong.
 
-A development build is still available (`expo-dev-client` is installed) and is
-worth reaching for if you add a native module Expo Go does not carry, but
-nothing in the foil path needs one today. Keep Skia pinned to the version the
-SDK expects — `npx expo install --check` — since Expo Go's native side is built
-against exactly that.
-
-The route keeps a lazy require and an error boundary around the canvas. They no
-longer guard a missing native module; they catch a **shader** that fails to
-compile, which would otherwise be a silent white rectangle. A compile error is
-reported on the canvas with the offending source line.
-
-You build the dev client **once** (any time the native deps change), install it
-on the phone, and after that iterate on JS with a normal `expo start`.
-
-### One-time setup
+Start the dev server with **`npm start`**, not a bare `npx expo start`.
+`scripts/start.js` does two things the plain command gets wrong on this setup:
+it advertises an address the phone can actually route to (a VPN or hypervisor
+adapter otherwise wins, and the failure is quiet -- the bundle still loads
+while Fast Refresh never connects), and it asks for Expo Go explicitly. It
+prints which address it chose, and how to override it:
 
 ```sh
-npm install -g eas-cli   # or: npx eas-cli@latest
-eas login                # your Expo account
-eas init                 # links this repo to an EAS project, writes the projectId into app.json
+npm start              # Expo Go, on the best address it can find
+npm start -- -c        # same, clearing Metro's cache
+REACT_NATIVE_PACKAGER_HOSTNAME=<ip> npm start   # force an address
 ```
 
-### Build and install the dev client (iOS, from Windows)
+Keep Skia pinned to the version the SDK expects -- `npx expo install --check`
+-- since Expo Go's native side is built against exactly that.
 
-There is no Mac here, so `expo run:ios` can't build locally — the dev client is
-built in **EAS cloud**. The `development` profile in `eas.json` is a dev client
-with internal (ad-hoc) distribution.
+The `/dev/skia-smoke` route keeps an error boundary around the canvas. It no
+longer guards a missing native module; it catches a render-time throw. A
+shader that fails to *compile* reports itself on the canvas, with the offending
+source line, rather than going silently white.
+
+### There is no development build any more
+
+`expo-dev-client` used to be a dependency, from when Skia was believed to need
+a custom build. It doesn't, and its presence alone made the Expo CLI hand out
+`exp+concard://expo-development-client/?url=...` deep links that do nothing in
+Expo Go -- so it was removed.
+
+If a future native module does need one, add it back and rebuild:
 
 ```sh
-eas device:create        # register the iPhone once — follow the link/QR on the device to install the profile
-eas build --profile development --platform ios
+npx expo install expo-dev-client
+eas build --profile development --platform ios   # the profile is still in eas.json
+npm start -- --dev-client
 ```
 
-When the build finishes, EAS shows a QR / install link; open it on the registered
-iPhone to install the app. (Android, if wanted later:
-`eas build --profile development --platform android`, then install the `.apk`.)
-
-### Day-to-day after it's installed
-
-```sh
-npx expo start --dev-client
-```
-
-Open the app you installed (not Expo Go) and it connects to this dev server;
-Fast Refresh works exactly as in Expo Go. You only rebuild when a native
-dependency changes — editing JS/TS never needs a new build.
+There is no Mac here, so `expo run:ios` can't build locally; the `development`
+profile in `eas.json` is a dev client with internal (ad-hoc) distribution, and
+`eas device:create` registers the iPhone. The checked-in `android/` directory
+is from that era too.
 
 ## Layout
 

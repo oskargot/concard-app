@@ -90,17 +90,18 @@ if (env.REACT_NATIVE_PACKAGER_HOSTNAME) {
 
 // Default to Expo Go.
 //
-// `expo-dev-client` is a dependency, and its presence alone makes the Expo CLI
-// assume you want the custom native app: it then prints an
-// `exp+concard://expo-development-client/?url=...` deep link, which does
-// nothing unless that build is installed on the phone. Everything in this repo
-// runs in Expo Go now, including the Skia shader foil, so ask for Expo Go
-// unless the caller explicitly wants the dev client.
+// `expo-dev-client` was a dependency until the Skia foil was proven to run in
+// Expo Go, and its presence alone was enough to make the Expo CLI assume the
+// custom native app was the target: it printed
+// `exp+concard://expo-development-client/?url=...` deep links, which do
+// nothing unless that build is installed on the phone. The package is gone, so
+// this flag is belt-and-braces -- but it keeps that failure from coming back
+// silently if anything ever pulls the package in again.
 const args = process.argv.slice(2);
 const picksTarget = args.some((a) => ['--go', '-g', '--dev-client', '-d'].includes(a));
 if (!picksTarget) {
 	args.push('--go');
-	console.log('Target: Expo Go. For the development build: npm start -- --dev-client');
+	console.log('Target: Expo Go.');
 }
 
 const result = spawnSync('expo', ['start', ...args], {
