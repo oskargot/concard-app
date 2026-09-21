@@ -162,14 +162,14 @@ const HIGHLIGHT_TRAVEL = 0.35;
    the wide bloom above which reads as light coming through it. */
 
 /**
- * How far the light reaches from its centre, per axis [x, y], in card heights.
+ * How far the light reaches from its centre, in card heights.
  *
- * Separate axes so the light can be a broad pool across the card rather than
- * only a bigger circle. Widening x costs nothing in brightness -- the centre
- * always peaks at GLARE_STRENGTH whatever the radius -- it only spreads the
- * falloff. Each 0.1 - 1.2.
+ * Aspect-corrected, so this is a true circle on screen rather than one
+ * stretched by the card's 5:7 shape. Widening costs nothing in brightness --
+ * the centre always peaks at GLARE_STRENGTH whatever the radius -- it only
+ * spreads the falloff out further. 0.1 - 1.2.
  */
-const GLARE_RADIUS: [number, number] = [0.75, 0.42];
+const GLARE_RADIUS = 0.42;
 
 /** How quickly it fades. 1 = straight linear ramp to the rim, higher = a
  *  tighter hot centre with a longer faint tail. 0.5 - 5. */
@@ -343,7 +343,7 @@ const float  HIGHLIGHT_SOFT   = ${f(HIGHLIGHT_SOFTNESS)};
 const float  HIGHLIGHT_STR    = ${f(HIGHLIGHT_STRENGTH)};
 const float  HIGHLIGHT_TRAVEL = ${f(HIGHLIGHT_TRAVEL)};
 const float2 LIGHT_DIRECTION  = float2(${f(LIGHT_DIRECTION[0])}, ${f(LIGHT_DIRECTION[1])});
-const float2 GLARE_RADIUS     = float2(${f(GLARE_RADIUS[0])}, ${f(GLARE_RADIUS[1])});
+const float  GLARE_RADIUS     = ${f(GLARE_RADIUS)};
 const float  GLARE_FALLOFF    = ${f(GLARE_FALLOFF)};
 const float  GLARE_STRENGTH   = ${f(GLARE_STRENGTH)};
 const float2 GLARE_REST       = float2(${f(GLARE_REST[0])}, ${f(GLARE_REST[1])});
@@ -440,18 +440,16 @@ half4 main(float2 fragCoord) {
     float inner = HIGHLIGHT_RADIUS * (1.0 - HIGHLIGHT_SOFT);
     float bloom = (1.0 - softStep(inner, HIGHLIGHT_RADIUS, length(d))) * HIGHLIGHT_STR;
 
-    // The glare: one light source fading out into an ellipse. It rests where
-    // GLARE_REST puts it rather than at the card's centre, so it can pool
-    // across the top and leave the bio below it legible.
+    // The glare: one light source fading out into a circle. It rests where
+    // GLARE_REST puts it rather than at the card's centre, so it can sit high
+    // and leave the bio below it legible.
     float2 glareCentre = GLARE_REST + t * LIGHT_DIRECTION * GLARE_TRAVEL;
     float2 gd = uv - glareCentre;
     gd.x *= aspect;
-    // 1 at the centre, 0 at the rim. Dividing per axis before taking the
-    // length is what makes the pool elliptical rather than round; the peak
-    // stays at GLARE_STRENGTH however wide it gets. Clamped, so pow() never
-    // sees a negative.
-    float2 n = gd / max(GLARE_RADIUS, float2(0.0001));
-    float reach = 1.0 - clamp(length(n), 0.0, 1.0);
+    // 1 at the centre, 0 at the rim. gd.x is aspect-corrected above, so one
+    // radius gives a true circle; the peak stays at GLARE_STRENGTH however
+    // wide it gets. Clamped, so pow() never sees a negative.
+    float reach = 1.0 - clamp(length(gd) / max(GLARE_RADIUS, 0.0001), 0.0, 1.0);
     float glare = pow(reach, GLARE_FALLOFF) * GLARE_STRENGTH;
     float3 glareColour = mix(float3(1.0), colour, GLARE_TINT);
 
