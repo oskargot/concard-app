@@ -81,23 +81,62 @@ const PATTERN_PHASE = 0.0;
 /** How far the bands slide for a full-range drag. 0.4 - 4. */
 const TILT_SENSITIVITY = 1.2;
 
-/** Horizontal vs vertical drag weighting, [x, y]. Each 0 - 1.5. */
+/** Horizontal vs vertical drag weighting, [x, y]. A negative value reverses
+ *  that axis' band sweep. Each -1.5 - 1.5. */
 const TILT_AXIS_WEIGHT: [number, number] = [0.9, 0.6];
+
+/**
+ * Which way the light slides against your finger, per axis [x, y].
+ * -1 = opposite, the way a real reflection moves. +1 = follows your finger.
+ *
+ * If a highlight ever tracks the wrong way, this is the knob -- not a sign
+ * buried in the shader. Both the bloom and the glare read it.
+ */
+const LIGHT_DIRECTION: [number, number] = [-1, -1];
 
 /* ── Highlight (the specular bloom) ──────────────────────────────────────── */
 
 /** Size of the bright spot, in card heights. 0.2 - 1.2. */
-const HIGHLIGHT_RADIUS = 0.55;
+const HIGHLIGHT_RADIUS = 0.25;
 
 /** Edge of the spot. 0 = hard disc, 1 = pure falloff. 0 - 1. */
 const HIGHLIGHT_SOFTNESS = 0.85;
 
 /** How bright the spot gets. 0 - 1.5. */
-const HIGHLIGHT_STRENGTH = 0.75;
+const HIGHLIGHT_STRENGTH = 0.45;
 
-/** How far it slides at full tilt. It moves *opposite* your finger, like a real
- *  reflection does. 0 - 0.8. */
+/** How far it slides at full tilt. Direction is LIGHT_DIRECTION. 0 - 0.8. */
 const HIGHLIGHT_TRAVEL = 0.35;
+
+/* ── Circular glare (the hard-edged hotspot) ─────────────────────── */
+
+/* This is the lens-like circle that reads as a *reflection sitting on* the
+   laminate, as opposed to the wide bloom above which reads as light coming
+   through it. Same staging as the blend-mode engine's `radialGlare`: a hot
+   core, then a softer halo out to the rim. */
+
+/** Overall size of the circle, in card heights. 0.1 - 0.9. */
+const GLARE_RADIUS = 0.42;
+
+/** Fraction of that radius which is the hot core. This is what makes it read
+ *  as a circle rather than a blob. 0.05 - 0.9. */
+const GLARE_CORE = 0.35;
+
+/** Hardness of the core's edge. 0 = razor disc, 1 = fully soft. 0 - 1. */
+const GLARE_EDGE = 0.6;
+
+/** Brightness of the halo between core and rim, relative to the core. 0 - 1. */
+const GLARE_HALO = 0.45;
+
+/** How bright the glare gets overall. 0 turns it off. 0 - 1.5. */
+const GLARE_STRENGTH = 0.55;
+
+/** How far the circle slides at full tilt. Direction is LIGHT_DIRECTION.
+ *  Keep it under HIGHLIGHT_TRAVEL and the two separate as you drag. 0 - 0.8. */
+const GLARE_TRAVEL = 0.3;
+
+/** 0 = white glare, 1 = fully tinted by the holo band under it. 0 - 1. */
+const GLARE_TINT = 0.25;
 
 /* ── Idle drift ──────────────────────────────────────────────────────────── */
 
@@ -222,7 +261,7 @@ const SOURCE = `
 uniform float2 u_resolution;  // canvas size in dp
 uniform float  u_radius;      // corner radius in dp
 uniform float  u_time;        // seconds since mount
-uniform float2 u_tilt;        // (ry, rx) / TILT_RANGE, -1..1, y up-positive
+uniform float2 u_tilt;        // tilt in SCREEN space, -1..1, y down-positive
 
 const float TAU = 6.2831853;
 
@@ -237,6 +276,14 @@ const float  HIGHLIGHT_RADIUS = ${f(HIGHLIGHT_RADIUS)};
 const float  HIGHLIGHT_SOFT   = ${f(HIGHLIGHT_SOFTNESS)};
 const float  HIGHLIGHT_STR    = ${f(HIGHLIGHT_STRENGTH)};
 const float  HIGHLIGHT_TRAVEL = ${f(HIGHLIGHT_TRAVEL)};
+const float2 LIGHT_DIRECTION  = float2(${f(LIGHT_DIRECTION[0])}, ${f(LIGHT_DIRECTION[1])});
+const float  GLARE_RADIUS     = ${f(GLARE_RADIUS)};
+const float  GLARE_CORE       = ${f(GLARE_CORE)};
+const float  GLARE_EDGE       = ${f(GLARE_EDGE)};
+const float  GLARE_HALO       = ${f(GLARE_HALO)};
+const float  GLARE_STRENGTH   = ${f(GLARE_STRENGTH)};
+const float  GLARE_TRAVEL     = ${f(GLARE_TRAVEL)};
+const float  GLARE_TINT       = ${f(GLARE_TINT)};
 const float  DRIFT_SPEED      = ${f(DRIFT_SPEED)};
 const float  DRIFT_AMOUNT     = ${f(DRIFT_AMOUNT)};
 const float  DRIFT_FADE       = ${f(DRIFT_FADE)};
@@ -264,6 +311,18 @@ float2 tiltNow() {
     return t + drift * (1.0 - smoothstep(0.0, DRIFT_FADE, length(t)));
 }
 
+/**
+ * smoothstep with a guaranteed non-zero width.
+ *
+ * Several knobs are allowed to collapse the two edges onto each other -- a
+ * hard-edged disc is GLARE_EDGE 0, HIGHLIGHT_SOFTNESS 0, RIM_WIDTH 0 -- and
+ * smoothstep(e, e, x) is undefined. This keeps the intended look (an edge as
+ * hard as one pixel allows) instead of a driver-dependent artefact.
+ */
+float softStep(float e0, float e1, float x) {
+    return smoothstep(e0, max(e1, e0 + 0.0005), x);
+}
+
 /** Rounded-rect SDF, in card-centred units. Negative inside. */
 float sdRoundRect(float2 p, float2 b, float r) {
     float2 q = abs(p) - b + r;
@@ -272,8 +331,8 @@ float sdRoundRect(float2 p, float2 b, float r) {
 
 half4 main(float2 fragCoord) {
     // main() receives PIXELS (dp on this canvas), not uv, origin top-left with
-    // y running down. Skia's y matches FlipCard's up-positive rx convention, so
-    // no flip is needed here.
+    // y running down. u_tilt is already converted to that same screen space on
+    // the JS side, so every axis below can be treated identically.
     float2 uv = fragCoord / u_resolution;
     float aspect = u_resolution.x / u_resolution.y;
 
@@ -282,7 +341,7 @@ half4 main(float2 fragCoord) {
     p.x *= aspect;
 
     float sd = sdRoundRect(p, float2(0.5 * aspect, 0.5), u_radius / u_resolution.y);
-    float mask = 1.0 - smoothstep(0.0, EDGE_FEATHER_DP / u_resolution.y, sd);
+    float mask = 1.0 - softStep(0.0, EDGE_FEATHER_DP / u_resolution.y, sd);
     if (mask <= 0.0) { return half4(0.0); }
 
     float2 t = tiltNow();
@@ -300,17 +359,30 @@ half4 main(float2 fragCoord) {
     float envelope = pow(band, mix(1.0, 4.0, clamp(BAND_SHARPNESS - 0.5, 0.0, 1.0)));
     envelope = envelope * 0.9 + 0.1;
 
-    // The bloom slides opposite the tilt, the way a reflection does.
-    float2 lightCentre = float2(0.5) - t * HIGHLIGHT_TRAVEL;
+    // The wide bloom: light coming *through* the laminate.
+    float2 lightCentre = float2(0.5) + t * LIGHT_DIRECTION * HIGHLIGHT_TRAVEL;
     float2 d = uv - lightCentre;
     d.x *= aspect;
     float inner = HIGHLIGHT_RADIUS * (1.0 - HIGHLIGHT_SOFT);
-    float bloom = (1.0 - smoothstep(inner, HIGHLIGHT_RADIUS, length(d))) * HIGHLIGHT_STR;
+    float bloom = (1.0 - softStep(inner, HIGHLIGHT_RADIUS, length(d))) * HIGHLIGHT_STR;
 
-    float rim = (1.0 - smoothstep(RIM_WIDTH * 0.5, RIM_WIDTH, -sd)) * RIM_STRENGTH;
+    // The circular glare: a reflection sitting *on* the laminate. Distance is
+    // normalised against the radius so the core and halo stay in proportion at
+    // any size, which is what keeps it reading as a circle rather than a blob.
+    float2 glareCentre = float2(0.5) + t * LIGHT_DIRECTION * GLARE_TRAVEL;
+    float2 gd = uv - glareCentre;
+    gd.x *= aspect;
+    float gr = length(gd) / max(GLARE_RADIUS, 0.0001);
+    float core = 1.0 - softStep(GLARE_CORE * (1.0 - GLARE_EDGE), GLARE_CORE, gr);
+    float halo = 1.0 - softStep(GLARE_CORE, 1.0, gr);
+    float glare = clamp(core + halo * GLARE_HALO, 0.0, 1.0) * GLARE_STRENGTH;
+    float3 glareColour = mix(float3(1.0), colour, GLARE_TINT);
+
+    float rim = (1.0 - softStep(RIM_WIDTH * 0.5, RIM_WIDTH, -sd)) * RIM_STRENGTH;
 
     float3 light = colour * (envelope * FOIL_INTENSITY)
                  + colour * bloom
+                 + glareColour * glare
                  + float3(rim);
     light = clamp(light, 0.0, 1.0);
 
@@ -369,9 +441,12 @@ export function SkiaSmoke({ width, height, rx, ry, radius = width * 0.06 }: Skia
 		// seconds. It is monotonic and never wrapped — float32 keeps sub-ms
 		// resolution for hours, and wrapping would pop the sin() phase.
 		u_time: clock.value / 1000,
-		// Degrees -> normalised -1..1. rx is already up-positive (FlipCard
-		// negates translationY), which is the convention the shader expects.
-		u_tilt: [ry.value / TILT_RANGE, rx.value / TILT_RANGE]
+		// Degrees -> normalised -1..1, converted to SCREEN space here so the
+		// shader never has to think about it. rx is up-positive (FlipCard
+		// negates translationY) while the canvas' y runs down, so y is negated:
+		// without it `0.5 - tilt` reverses horizontally but not vertically, and
+		// the highlight tracks your finger on one axis only.
+		u_tilt: [ry.value / TILT_RANGE, -rx.value / TILT_RANGE]
 	}));
 
 	if (!effect) return <ShaderError message={compileError} width={width} height={height} />;
