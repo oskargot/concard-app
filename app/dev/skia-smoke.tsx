@@ -6,41 +6,29 @@
  * you are judging is the finish against actual photo, name and frame rather
  * than against a convenient dark plate.
  *
- * Skia ships in Expo Go on SDK 57, so this route is no longer dev-client-only.
- * The lazy require and error boundary below stay anyway: they now earn their
- * keep catching a *shader* miss rather than a missing native module, and a dead
- * canvas is otherwise a silent white rectangle.
+ * Skia ships in Expo Go on SDK 57, so this route is no longer dev-client-only
+ * and the canvas is imported normally. It used to be a lazy `require` inside a
+ * try/catch, guarding a native module Expo Go did not carry -- but that put
+ * SkiaSmoke outside the static dependency graph and pinned this module to the
+ * component instance it first resolved, so edits to the shader did not reach
+ * the phone until Metro was restarted. Tuning the shader by hot-reloading is
+ * the point of that file, so the static import matters.
+ *
+ * The error boundary stays: it catches a render-time throw from the canvas.
+ * A shader that fails to *compile* reports itself on the canvas instead.
  */
 
 import { Component, type ReactNode } from 'react';
 import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { type SharedValue } from 'react-native-reanimated';
 
 import { Card } from '@/card/Card';
 import { shellMetrics } from '@/card/CardShell';
 import { DEMO_CARD } from '@/card/demo-card';
 import { FlipCard } from '@/card/FlipCard';
+import { SkiaSmoke } from '@/card/foil/SkiaSmoke';
 import { palette } from '@/theme/palette';
 import { radius, space, type } from '@/theme/tokens';
-
-// Lazy require: a static import would pull Skia in at app start, so any miss
-// would redbox the whole app rather than this one route.
-type SkiaSmokeComponent = (props: {
-	width: number;
-	height: number;
-	rx: SharedValue<number>;
-	ry: SharedValue<number>;
-	radius: number;
-}) => ReactNode;
-
-let SkiaSmoke: SkiaSmokeComponent | null = null;
-try {
-	// eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy on purpose: a static import would pull Skia's native module in at app start and redbox before this route is ever opened.
-	SkiaSmoke = require('@/card/foil/SkiaSmoke').SkiaSmoke as SkiaSmokeComponent;
-} catch {
-	SkiaSmoke = null;
-}
 
 export default function SkiaSmokeScreen() {
 	const { width } = useWindowDimensions();
@@ -76,44 +64,40 @@ export default function SkiaSmokeScreen() {
 
 			<View style={styles.stage}>
 				<SkiaBoundary>
-					{SkiaSmoke ? (
-						<FlipCard
-							width={cardWidth}
-							flippable={false}
-							renderFront={(rx, ry) => (
-								// `isolation: isolate` scopes the screen blend to the card, so the
-								// foil brightens the card and not the page behind it.
-								<View style={styles.cardStack}>
-									{/* No `foil` prop: CardShell only mounts the blend-mode stack when
-									    one is named, and the two engines should not fight. */}
-									<Card view={DEMO_CARD} width={cardWidth} seed="skia-smoke" rx={rx} ry={ry} />
-									<View
-										pointerEvents="none"
-										style={[
-											styles.foil,
-											{
-												left: m.band,
-												top: m.band,
-												width: faceWidth,
-												height: faceHeight,
-												borderRadius: faceRadius
-											}
-										]}
-									>
-										<SkiaSmoke
-											width={faceWidth}
-											height={faceHeight}
-											radius={faceRadius}
-											rx={rx}
-											ry={ry}
-										/>
-									</View>
+					<FlipCard
+						width={cardWidth}
+						flippable={false}
+						renderFront={(rx, ry) => (
+							// `isolation: isolate` scopes the screen blend to the card, so the
+							// foil brightens the card and not the page behind it.
+							<View style={styles.cardStack}>
+								{/* No `foil` prop: CardShell only mounts the blend-mode stack
+								    when one is named, and the two engines should not fight. */}
+								<Card view={DEMO_CARD} width={cardWidth} seed="skia-smoke" rx={rx} ry={ry} />
+								<View
+									pointerEvents="none"
+									style={[
+										styles.foil,
+										{
+											left: m.band,
+											top: m.band,
+											width: faceWidth,
+											height: faceHeight,
+											borderRadius: faceRadius
+										}
+									]}
+								>
+									<SkiaSmoke
+										width={faceWidth}
+										height={faceHeight}
+										radius={faceRadius}
+										rx={rx}
+										ry={ry}
+									/>
 								</View>
-							)}
-						/>
-					) : (
-						<Fallback />
-					)}
+							</View>
+						)}
+					/>
 				</SkiaBoundary>
 			</View>
 			<Text style={styles.hint}>DRAG TO MOVE THE LIGHT</Text>
@@ -121,22 +105,22 @@ export default function SkiaSmokeScreen() {
 	);
 }
 
-/** Shown when Skia itself cannot be reached at all. */
+/** Shown when the canvas throws while rendering. */
 function Fallback() {
 	return (
 		<View style={styles.fallback}>
-			<Text style={styles.fallbackTitle}>Skia isn&apos;t linked in this app</Text>
+			<Text style={styles.fallbackTitle}>The Skia canvas threw</Text>
 			<Text style={styles.fallbackBody}>
 				Expo Go ships Skia on SDK 57, so this should not happen — check that{' '}
 				<Text style={styles.mono}>@shopify/react-native-skia</Text> matches the SDK with{' '}
-				<Text style={styles.mono}>npx expo install --check</Text>. A shader that fails to compile
-				reports itself separately, on the canvas.
+				<Text style={styles.mono}>npx expo install --check</Text>, and read the Metro log. A shader
+				that fails to compile reports itself separately, on the canvas.
 			</Text>
 		</View>
 	);
 }
 
-/** Catches a render-time miss and swaps in the same panel. */
+/** Swaps in the panel above rather than redboxing the app. */
 class SkiaBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
 	state = { failed: false };
 

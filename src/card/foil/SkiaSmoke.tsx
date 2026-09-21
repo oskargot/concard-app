@@ -470,6 +470,7 @@ half4 main(float2 fragCoord) {
 `;
 
 let cachedEffect: SkRuntimeEffect | null | undefined;
+let cachedSource: string | null = null;
 let compileError: string | null = null;
 
 /**
@@ -484,7 +485,13 @@ let compileError: string | null = null;
  * both are handled.)
  */
 function shineEffect(): SkRuntimeEffect | null {
-	if (cachedEffect === undefined) {
+	// Keyed on the source, not just "have we compiled once". Re-running this
+	// module resets the cache on its own, but this also catches the case where
+	// the module object survives a hot update and only SOURCE changed -- which
+	// is the difference between a knob edit appearing on the phone and not.
+	if (cachedEffect === undefined || cachedSource !== SOURCE) {
+		cachedSource = SOURCE;
+		compileError = null;
 		try {
 			cachedEffect = Skia.RuntimeEffect.Make(SOURCE) ?? null;
 			if (!cachedEffect) compileError = 'RuntimeEffect.Make returned null.';
