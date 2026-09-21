@@ -11,14 +11,13 @@ Supabase schema and migrations live — both surfaces share one project.
 
 ## Stack
 
-- **Expo SDK 57** / React Native 0.86 / React 19.2 — the blend-mode foils and
-  the whole app run in Expo Go, but the Skia foil path needs a development build
-  (see "Skia and the development build" below)
+- **Expo SDK 57** / React Native 0.86 / React 19.2 — the whole app runs in
+  Expo Go, Skia foil path included (see "Skia" below)
 - **expo-router** for file-based navigation
 - **react-native-reanimated** 4 + **gesture-handler** for tilt, flip and drag
 - **react-native-svg** for the foils' dot and facet fields
-- **@shopify/react-native-skia** for the shader-based foil (Stage C, dev client
-  only — pinned to the Expo SDK 57 version, `2.6.2`)
+- **@shopify/react-native-skia** for the shader-based foil (Stage C — bundled
+  into Expo Go, pinned to the Expo SDK 57 version, `2.6.2`)
 - **Supabase** for Postgres, Auth and Storage — shared with the web app
 
 ## Getting started
@@ -43,50 +42,50 @@ Scan the QR with Expo Go. Then open **My Card → the foil lab**.
 | `npm run lint`      | ESLint + Prettier check |
 | `npm run format`    | Prettier write          |
 
-## Skia and the development build
+## Skia
 
-Expo Go is enough for everything **except** the Skia foil path (Stage C). Skia is
-a native module that Expo Go does not ship, so anything under `/dev/skia-smoke`
-(and, later, the `skia` foil engine) needs a **development build** — a custom
-build of this app with the native module linked, that then loads JS over the
-network the same way Expo Go does. Opening `/dev/skia-smoke` in Expo Go shows a
-"Skia isn't linked" panel, not a crash.
+Expo bundles `@shopify/react-native-skia` into Expo Go — the SDK 57 docs list it
+as **"Included in Expo Go"** — so the Skia foil path needs no development build
+and no special client. It installs like any other Expo dependency:
 
-You build the dev client **once** (any time the native deps change), install it
-on the phone, and after that iterate on JS with a normal `expo start`.
+```sh
+npx expo install @shopify/react-native-skia
+```
 
-### One-time setup
+`/dev/skia-smoke` and, later, the `skia` foil engine run under a plain
+`npx expo start` alongside everything else. Keep the package pinned to the
+version Expo ships for this SDK (`2.6.2`); a mismatched version is the one way
+to break it in Expo Go.
+
+### Development builds (optional)
+
+Nothing in this repo needs a dev client, so `expo-dev-client` isn't installed
+and `eas.json` has no `development` profile — only `preview` and `production`,
+which are for real distribution builds and don't need one.
+
+If you ever add a native module Expo Go does *not* bundle, restore the dev-build
+path first:
+
+```sh
+npx expo install expo-dev-client
+```
+
+then add a `development` profile back to `eas.json`:
+
+```json
+"development": { "developmentClient": true, "distribution": "internal", "ios": { "simulator": false } }
+```
+
+There is no Mac here, so `expo run:ios` can't build locally — a dev client would
+have to be built in **EAS cloud**:
 
 ```sh
 npm install -g eas-cli   # or: npx eas-cli@latest
 eas login                # your Expo account
-eas init                 # links this repo to an EAS project, writes the projectId into app.json
-```
-
-### Build and install the dev client (iOS, from Windows)
-
-There is no Mac here, so `expo run:ios` can't build locally — the dev client is
-built in **EAS cloud**. The `development` profile in `eas.json` is a dev client
-with internal (ad-hoc) distribution.
-
-```sh
-eas device:create        # register the iPhone once — follow the link/QR on the device to install the profile
+eas device:create        # register the iPhone once — follow the link/QR on the device
 eas build --profile development --platform ios
-```
-
-When the build finishes, EAS shows a QR / install link; open it on the registered
-iPhone to install the app. (Android, if wanted later:
-`eas build --profile development --platform android`, then install the `.apk`.)
-
-### Day-to-day after it's installed
-
-```sh
 npx expo start --dev-client
 ```
-
-Open the app you installed (not Expo Go) and it connects to this dev server;
-Fast Refresh works exactly as in Expo Go. You only rebuild when a native
-dependency changes — editing JS/TS never needs a new build.
 
 ## Layout
 
@@ -95,7 +94,7 @@ app/                    expo-router routes
   (auth)/               sign in · claim a username · first card (§10)
   (tabs)/               My Card · Scan · Binder (design bible §11)
   dev/foil-lab          every foil layer, individually switchable
-  dev/skia-smoke        Skia canvas proof (dev client only, Stage C0)
+  dev/skia-smoke        Skia canvas proof (Stage C0)
   dev/cards             every card look on fixture data
 src/auth/               session and profile state; the route gate
 src/lib/                Supabase client, env, username rules, generated types
@@ -132,14 +131,13 @@ Two deliberate departures from the CSS original:
 
 ### Skia (Stage C)
 
-The blend-mode route above was built to avoid a native module, so the whole card
-renderer runs in Expo Go. It got the foils close but not to "physical holo", so
-Stage C tries **Skia** for real shader control — accepting the cost of a
-development build (see "Skia and the development build" above). This is a
-deliberate, staged bet, not a rewrite:
+The blend-mode route above got the foils close but not to "physical holo", so
+Stage C moves to **Skia** for real shader control. Because Expo Go bundles Skia
+(see "Skia" above), this costs nothing in distribution — the whole card renderer
+still runs in Expo Go. This is a deliberate, staged bet, not a rewrite:
 
-- **C0 (this stage):** the dev client and Skia are wired up, with a smoke canvas
-  at `/dev/skia-smoke` proving Skia draws on a card-sized surface and answers the
+- **C0 (this stage):** Skia is wired up, with a smoke canvas at
+  `/dev/skia-smoke` proving Skia draws on a card-sized surface and answers the
   same `rx`/`ry` tilt the foils read. Production foil is untouched.
 - **C1:** a Skia foil engine (pinned textures, moving light, per-tier recipes),
   selectable in the foil lab and compared A/B against the blend-mode engines

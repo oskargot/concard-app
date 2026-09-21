@@ -59,7 +59,7 @@ export default function SetupScreen() {
 					Open the fandom sticker lab →
 				</Link>
 				<Link href="/dev/skia-smoke" style={styles.link}>
-					Open the Skia smoke (dev client only) →
+					Open the Skia smoke →
 				</Link>
 			</Panel>
 		</ScrollView>

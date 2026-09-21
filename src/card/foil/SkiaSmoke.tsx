@@ -44,13 +44,13 @@ export function SkiaSmoke({ width, height, rx, ry, radius = width * 0.06 }: Skia
 	const holoCenter = useDerivedValue(() =>
 		vec(
 			width * (0.5 - (ry.value / TILT_RANGE) * 0.4),
-			height * (0.5 - (rx.value / TILT_RANGE) * 0.4)
+			height * (0.5 + (rx.value / TILT_RANGE) * 0.4)
 		)
 	);
 	const specCenter = useDerivedValue(() =>
 		vec(
 			width * (0.5 - (ry.value / TILT_RANGE) * 0.28),
-			height * (0.35 - (rx.value / TILT_RANGE) * 0.28)
+			height * (0.35 + (rx.value / TILT_RANGE) * 0.28)
 		)
 	);
 

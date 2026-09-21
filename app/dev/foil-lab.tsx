@@ -138,7 +138,7 @@ export default function FoilLabScreen() {
 					Open blank-card sampler →
 				</Link>
 				<Link href="/dev/skia-smoke" style={styles.link}>
-					Open Skia smoke (dev client only) →
+					Open Skia smoke →
 				</Link>
 			</Section>
 

@@ -92,10 +92,13 @@ deterministic glitter/star/facet fields from a seed (pass the card id) so a card
 stable across renders. `FoilV2.tsx` / `recipes.tsx` are an experimental shine+glare engine, toggled via
 `engine="v2"`; production code leaves `engine` unset (legacy).
 
-**Why no Skia**: `@shopify/react-native-skia` isn't available in Expo Go, and shader-based foils would
-force a development build. The blend-mode approach above needs nothing beyond what Expo Go ships, so
-the whole renderer runs there. `/dev/foil-lab` exists specifically to check every layer (toggle,
-blend-mode cycle, opacity) against real hardware on both platforms.
+**Why Skia**: `@shopify/react-native-skia` is bundled into Expo Go (Expo lists it as "Included in
+Expo Go"), so shader-based foils cost nothing in distribution — `npx expo install` and the whole
+renderer still runs in Expo Go. The blend-mode stack above got the foils close but not to "physical
+holo", so Stage C moves to Skia for real shader control; see "Skia (Stage C)" in the README for how
+that lands. The blend-mode engines stay until Skia clearly wins in the lab. `/dev/foil-lab` exists
+specifically to check every layer (toggle, blend-mode cycle, opacity) against real hardware on both
+platforms.
 
 ### The card editor (`app/card/edit.tsx`, `src/card/editor/`, `src/card/use-card-editor.ts`)
 

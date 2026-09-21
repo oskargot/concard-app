@@ -1,12 +1,11 @@
 /**
- * Stage C0 smoke route: proves the Skia canvas draws on a card-sized surface in
- * a development build, driven by FlipCard's tilt.
+ * Stage C0 smoke route: proves the Skia canvas draws on a card-sized surface,
+ * driven by FlipCard's tilt.
  *
- * Skia is a native module that only exists in the dev client, never in Expo Go.
- * So the Skia component is required lazily and the whole surface sits behind an
- * error boundary: in the dev client you get the canvas, in Expo Go you get a
- * panel telling you to install the dev build instead of a redbox. This is the
- * one route in the app that is *meant* to be Expo Go-unsafe — see the README.
+ * Expo Go bundles Skia, so this route runs anywhere the rest of the app does —
+ * no dev client needed. The error boundary below is kept as a plain guard: a
+ * Skia version that doesn't match the one Expo ships for this SDK is the
+ * realistic way the canvas fails, and a panel reads better than a redbox.
  */
 
 import { Component, type ReactNode } from 'react';
@@ -18,9 +17,9 @@ import { FlipCard } from '@/card/FlipCard';
 import { palette } from '@/theme/palette';
 import { CARD_ASPECT, radius, space, type } from '@/theme/tokens';
 
-// Lazy require: importing Skia at app start would try to touch a native module
-// Expo Go doesn't ship. Requiring it here keeps the failure contained to this
-// route, and the error boundary below catches a render-time miss too.
+// Required rather than statically imported so a broken/mismatched Skia install
+// fails on this dev route only, instead of at app start. The error boundary
+// below catches a render-time miss too.
 type SkiaSmokeComponent = (props: {
 	width: number;
 	height: number;
@@ -30,7 +29,7 @@ type SkiaSmokeComponent = (props: {
 
 let SkiaSmoke: SkiaSmokeComponent | null = null;
 try {
-	// eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy on purpose: a static import would pull Skia's native module in at app start and redbox Expo Go before this route is ever opened.
+	// eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy on purpose: keeps a bad Skia install contained to this route instead of redboxing the app at start.
 	SkiaSmoke = require('@/card/foil/SkiaSmoke').SkiaSmoke as SkiaSmokeComponent;
 } catch {
 	SkiaSmoke = null;
@@ -50,12 +49,12 @@ export default function SkiaSmokeScreen() {
 			]}
 		>
 			<View style={styles.intro}>
-				<Text style={styles.eyebrow}>DEV CLIENT · SKIA</Text>
+				<Text style={styles.eyebrow}>SKIA</Text>
 				<Text style={styles.title}>Skia smoke</Text>
 				<Text style={styles.body}>
 					A Skia canvas on a card-sized surface. Drag to tilt — the holo and its specular core slide
-					opposite the tilt, driven by the same rx/ry as the foil engines. Proof that Skia is linked
-					and reanimated drives it. Not a foil (that&apos;s C1).
+					opposite the tilt, driven by the same rx/ry as the foil engines. Proof that Skia draws and
+					reanimated drives it. Not a foil (that&apos;s C1).
 				</Text>
 			</View>
 
@@ -79,22 +78,23 @@ export default function SkiaSmokeScreen() {
 	);
 }
 
-/** Shown in Expo Go (or any build without Skia linked). */
+/** Shown when the Skia canvas can't load — in practice, a version mismatch. */
 function Fallback() {
 	return (
 		<View style={styles.fallback}>
-			<Text style={styles.fallbackTitle}>Skia isn&apos;t linked in this app</Text>
+			<Text style={styles.fallbackTitle}>Skia didn&apos;t load</Text>
 			<Text style={styles.fallbackBody}>
-				This route needs the development build, not Expo Go. Install the dev client and run{' '}
-				<Text style={styles.mono}>npx expo start --dev-client</Text>. See the README (&ldquo;Skia
-				and the development build&rdquo;) for the exact steps.
+				Expo Go bundles Skia, so this is almost always a version mismatch. Reinstall the version
+				Expo ships for this SDK with{' '}
+				<Text style={styles.mono}>npx expo install @shopify/react-native-skia</Text>. See the README
+				(&ldquo;Skia&rdquo;) for details.
 			</Text>
 		</View>
 	);
 }
 
-/** Catches a render-time Skia miss (Expo Go throws when the canvas mounts, not
- *  always at require) and swaps in the same fallback panel. */
+/** Catches a render-time Skia miss (the canvas can throw on mount rather than
+ *  at require) and swaps in the same fallback panel. */
 class SkiaBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
 	state = { failed: false };
 
