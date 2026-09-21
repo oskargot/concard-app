@@ -108,8 +108,25 @@ const PATTERN_PHASE = 0.0;
 
 /* ── Tilt response ───────────────────────────────────────────────────────── */
 
-/** How far the bands slide for a full-range drag. 0.4 - 4. */
-const TILT_SENSITIVITY = 1.2;
+/**
+ * How far the bands *slide* for a full-range drag, in band widths.
+ *
+ * This is the "pattern moves across the card" half of the response. On its own
+ * it can read as a printed pattern being dragged around, because a full-range
+ * drag needs 55% of the card's width and a short one barely shifts anything.
+ * 0.4 - 6.
+ */
+const TILT_SENSITIVITY = 2.2;
+
+/**
+ * How far the *colour* shifts for a full-range drag, in ramp cycles, without
+ * moving the bands.
+ *
+ * This is the half that reads as light rather than paint: a fixed point on the
+ * card recolours as you tilt, instead of a pattern sliding past it. If the foil
+ * looks painted on, raise this before TILT_SENSITIVITY. 0 - 4.
+ */
+const TILT_HUE_SHIFT = 1.6;
 
 /** Horizontal vs vertical drag weighting, [x, y]. A negative value reverses
  *  that axis' band sweep. Each -1.5 - 1.5. */
@@ -144,8 +161,15 @@ const HIGHLIGHT_TRAVEL = 0.35;
    GLARE_RADIUS. It reads as a reflection sitting *on* the laminate, against
    the wide bloom above which reads as light coming through it. */
 
-/** How far the light reaches from its centre, in card heights. 0.1 - 0.9. */
-const GLARE_RADIUS = 0.34;
+/**
+ * How far the light reaches from its centre, per axis [x, y], in card heights.
+ *
+ * Separate axes so the light can be a broad pool across the card rather than
+ * only a bigger circle. Widening x costs nothing in brightness -- the centre
+ * always peaks at GLARE_STRENGTH whatever the radius -- it only spreads the
+ * falloff. Each 0.1 - 1.2.
+ */
+const GLARE_RADIUS: [number, number] = [0.75, 0.42];
 
 /** How quickly it fades. 1 = straight linear ramp to the rim, higher = a
  *  tighter hot centre with a longer faint tail. 0.5 - 5. */
@@ -158,20 +182,20 @@ const GLARE_STRENGTH = 0.45;
  * Where the light rests with the card held flat, in face coordinates: [0, 0]
  * is the face's top-left corner, [1, 1] its bottom-right.
  *
- * The default sits it over the photo. On the card face the name lands around
- * y 0.08, the photo spans roughly 0.14 - 0.42, the bio centres near 0.60 and
- * the links near 0.88 -- so staying around 0.3 is what keeps the light off the
- * text. Raise y toward the name, lower it toward the bio.
+ * The default sits it high, over the top of the photo. On the card face the
+ * name lands around y 0.08, the photo spans roughly 0.14 - 0.42, the bio
+ * centres near 0.60 and the links near 0.88. Below about 0.1 the light starts
+ * washing the name; below about 0.35 it starts reaching the bio.
  */
-const GLARE_REST: [number, number] = [0.5, 0.3];
+const GLARE_REST: [number, number] = [0.5, 0.16];
 
 /**
  * How far it slides at full tilt, per axis [x, y]. Direction is
  * LIGHT_DIRECTION.
  *
  * Vertical is damped on purpose: at these values the centre stays inside
- * 0.18 - 0.42, which is the photo band, so a hard drag cannot swing the light
- * down onto the bio. Raise y only as far as the text can take it. Each 0 - 0.8.
+ * 0.04 - 0.28, so a hard drag cannot swing the light down onto the bio. Raise
+ * y only as far as the text can take it. Each 0 - 0.8.
  */
 const GLARE_TRAVEL: [number, number] = [0.3, 0.12];
 
@@ -312,13 +336,14 @@ const float  BAND_FLOOR       = ${f(BAND_FLOOR)};
 const float  HUE_SPREAD       = ${f(HUE_SPREAD)};
 const float  PATTERN_PHASE    = ${f(PATTERN_PHASE)};
 const float  TILT_SENSITIVITY = ${f(TILT_SENSITIVITY)};
+const float  TILT_HUE_SHIFT   = ${f(TILT_HUE_SHIFT)};
 const float2 TILT_AXIS_WEIGHT = float2(${f(TILT_AXIS_WEIGHT[0])}, ${f(TILT_AXIS_WEIGHT[1])});
 const float  HIGHLIGHT_RADIUS = ${f(HIGHLIGHT_RADIUS)};
 const float  HIGHLIGHT_SOFT   = ${f(HIGHLIGHT_SOFTNESS)};
 const float  HIGHLIGHT_STR    = ${f(HIGHLIGHT_STRENGTH)};
 const float  HIGHLIGHT_TRAVEL = ${f(HIGHLIGHT_TRAVEL)};
 const float2 LIGHT_DIRECTION  = float2(${f(LIGHT_DIRECTION[0])}, ${f(LIGHT_DIRECTION[1])});
-const float  GLARE_RADIUS     = ${f(GLARE_RADIUS)};
+const float2 GLARE_RADIUS     = float2(${f(GLARE_RADIUS[0])}, ${f(GLARE_RADIUS[1])});
 const float  GLARE_FALLOFF    = ${f(GLARE_FALLOFF)};
 const float  GLARE_STRENGTH   = ${f(GLARE_STRENGTH)};
 const float2 GLARE_REST       = float2(${f(GLARE_REST[0])}, ${f(GLARE_REST[1])});
@@ -386,14 +411,21 @@ half4 main(float2 fragCoord) {
 
     float2 t = tiltNow();
 
-    // One phase drives both the hue and the band envelope, so the colour and
-    // the bright stripe move together like a real laminate. HUE_SPREAD is what
-    // stops them locking: at exactly 1 every band peaks on the same ramp
-    // position and the card reads as a single colour.
-    float phase = dot(p, SWEEP_AXIS) * BAND_FREQUENCY
-                + dot(t, TILT_AXIS_WEIGHT) * TILT_SENSITIVITY;
+    // Tilt enters twice, and the two halves look completely different.
+    float lean = dot(t, TILT_AXIS_WEIGHT);
 
-    float3 colour = rampAt(phase * HUE_SPREAD + PATTERN_PHASE);
+    // Once to slide the pattern across the card. One phase drives both the hue
+    // and the band envelope, so colour and bright stripe travel together like
+    // a real laminate. HUE_SPREAD is what stops them locking: at exactly 1
+    // every band peaks on the same ramp position and the card reads as one
+    // colour.
+    float phase = dot(p, SWEEP_AXIS) * BAND_FREQUENCY + lean * TILT_SENSITIVITY;
+
+    // Once more into the hue alone, which recolours a fixed point *in place*
+    // rather than moving anything past it. Without this the foil reads as a
+    // pattern printed on the card and dragged around with it, because the card
+    // is physically rotating under your eye at the same time.
+    float3 colour = rampAt(phase * HUE_SPREAD + PATTERN_PHASE + lean * TILT_HUE_SHIFT);
 
     // clamp() before pow() so an edit to the phase above can never produce
     // pow(negative, e).
@@ -408,14 +440,18 @@ half4 main(float2 fragCoord) {
     float inner = HIGHLIGHT_RADIUS * (1.0 - HIGHLIGHT_SOFT);
     float bloom = (1.0 - softStep(inner, HIGHLIGHT_RADIUS, length(d))) * HIGHLIGHT_STR;
 
-    // The circular glare: one light source fading out into a circle. It rests
-    // where GLARE_REST puts it rather than at the card's centre, so it can sit
-    // over the photo and leave the name above and the bio below legible.
+    // The glare: one light source fading out into an ellipse. It rests where
+    // GLARE_REST puts it rather than at the card's centre, so it can pool
+    // across the top and leave the bio below it legible.
     float2 glareCentre = GLARE_REST + t * LIGHT_DIRECTION * GLARE_TRAVEL;
     float2 gd = uv - glareCentre;
     gd.x *= aspect;
-    // 1 at the centre, 0 at the rim. Clamped, so pow() never sees a negative.
-    float reach = 1.0 - clamp(length(gd) / max(GLARE_RADIUS, 0.0001), 0.0, 1.0);
+    // 1 at the centre, 0 at the rim. Dividing per axis before taking the
+    // length is what makes the pool elliptical rather than round; the peak
+    // stays at GLARE_STRENGTH however wide it gets. Clamped, so pow() never
+    // sees a negative.
+    float2 n = gd / max(GLARE_RADIUS, float2(0.0001));
+    float reach = 1.0 - clamp(length(n), 0.0, 1.0);
     float glare = pow(reach, GLARE_FALLOFF) * GLARE_STRENGTH;
     float3 glareColour = mix(float3(1.0), colour, GLARE_TINT);
 
