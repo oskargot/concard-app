@@ -56,24 +56,54 @@ const RAMP_BRAND = HOLO_STOPS.slice(0, 4);
 /** The saturated trading-card rainbow the blend-mode foil uses. Louder. */
 const RAMP_FOIL = HOLO_SPECTRUM;
 
-/** Colour purity. 0 = silver/grey sheen, 1 = ramp as authored, 2 = candy. */
-const SATURATION = 1.0;
+/**
+ * Colour purity. 0 = silver/grey sheen, 1 = ramp as authored, 2 = candy.
+ *
+ * Above 1 is worth reaching for with the brand ramp: those four stops are
+ * pale, and a screen blend pushes pale colours toward white, so at 1.0 they
+ * can all read as the same wash. RAMP 'foil' is the bigger lever if you want
+ * obvious rainbow. 0 - 2.
+ */
+const SATURATION = 1.25;
 
 /* ── Band pattern ────────────────────────────────────────────────────────── */
 
-/** How many rainbow bands cross the card. The loudest knob here. 0.6 - 6. */
-const BAND_FREQUENCY = 1.4;
+/**
+ * How many rainbow bands cross the card. The loudest knob here.
+ *
+ * Below about 2 the card holds less than one full band, so there is a single
+ * bright spot at its centre and the rest of the ramp only appears in the dim
+ * surround. Raise this to put several peaks on the card at once. 0.6 - 6.
+ */
+const BAND_FREQUENCY = 2.6;
 
 /** Band edge definition. 0.5 = one broad wash, 1.5 = tight stripes. 0.5 - 1.5. */
 const BAND_SHARPNESS = 1.1;
 
-/** How much of the colour wheel one band crosses. 0.4 - 2.5. */
-const HUE_SPREAD = 1.0;
+/**
+ * How lit the card stays between the bright bands, as a fraction of a peak.
+ *
+ * This is what decides how much of the ramp you actually see: at 0 only the
+ * bands themselves are coloured and everything between them goes dark, so the
+ * card reads as one hue. Raising it trades band contrast for rainbow. 0 - 0.8.
+ */
+const BAND_FLOOR = 0.35;
+
+/**
+ * How much of the colour wheel one brightness band crosses.
+ *
+ * Keep this off whole numbers. Hue and brightness share one phase, so at
+ * exactly 1.0 (or 2.0, or 3.0) every band peaks on the same ramp position and
+ * the card reads as one colour, with the others showing only where it is
+ * dimmest. Off-integer values walk the peak around the ramp instead. 0.4 - 2.5.
+ */
+const HUE_SPREAD = 1.65;
 
 /** Direction the bands run across the card, in degrees. 0 - 180. */
 const SWEEP_ANGLE_DEG = 45;
 
-/** Shifts which colour lands where. Purely cosmetic reroll. 0 - 1. */
+/** Which colour the bands lead with, as a position in the ramp. A cosmetic
+ *  reroll: it rotates the ramp without changing anything else. 0 - 1. */
 const PATTERN_PHASE = 0.0;
 
 /* ── Tilt response ───────────────────────────────────────────────────────── */
@@ -115,14 +145,14 @@ const HIGHLIGHT_TRAVEL = 0.35;
    the wide bloom above which reads as light coming through it. */
 
 /** How far the light reaches from its centre, in card heights. 0.1 - 0.9. */
-const GLARE_RADIUS = 0.22;
+const GLARE_RADIUS = 0.34;
 
 /** How quickly it fades. 1 = straight linear ramp to the rim, higher = a
  *  tighter hot centre with a longer faint tail. 0.5 - 5. */
-const GLARE_FALLOFF = 1.6;
+const GLARE_FALLOFF = 2.2;
 
 /** How bright the centre gets. 0 turns the glare off. 0 - 1.5. */
-const GLARE_STRENGTH = 0.55;
+const GLARE_STRENGTH = 0.45;
 
 /**
  * Where the light rests with the card held flat, in face coordinates: [0, 0]
@@ -168,7 +198,7 @@ const DRIFT_FADE = 0.25;
  * Master loudness of the whole finish: subtle sheen vs. full rainbow.
  * This is the dial to reach for first. 0 - 2.
  */
-const FOIL_INTENSITY = 0.75;
+const FOIL_INTENSITY = 0.38;
 
 /** Thickness of the lit lip around the card edge, in card heights. 0 - 0.05. */
 const RIM_WIDTH = 0.012;
@@ -278,6 +308,7 @@ const float TAU = 6.2831853;
 const float2 SWEEP_AXIS       = float2(${f(Math.cos(SWEEP_RAD))}, ${f(Math.sin(SWEEP_RAD))});
 const float  BAND_FREQUENCY   = ${f(BAND_FREQUENCY)};
 const float  BAND_SHARPNESS   = ${f(BAND_SHARPNESS)};
+const float  BAND_FLOOR       = ${f(BAND_FLOOR)};
 const float  HUE_SPREAD       = ${f(HUE_SPREAD)};
 const float  PATTERN_PHASE    = ${f(PATTERN_PHASE)};
 const float  TILT_SENSITIVITY = ${f(TILT_SENSITIVITY)};
@@ -324,9 +355,9 @@ float2 tiltNow() {
  * smoothstep with a guaranteed non-zero width.
  *
  * Several knobs are allowed to collapse the two edges onto each other -- a
- * hard-edged disc is GLARE_EDGE 0, HIGHLIGHT_SOFTNESS 0, RIM_WIDTH 0 -- and
- * smoothstep(e, e, x) is undefined. This keeps the intended look (an edge as
- * hard as one pixel allows) instead of a driver-dependent artefact.
+ * hard-edged disc is HIGHLIGHT_SOFTNESS 0, a hairline lip is RIM_WIDTH 0 --
+ * and smoothstep(e, e, x) is undefined. This keeps the intended look (an edge
+ * as hard as one pixel allows) instead of a driver-dependent artefact.
  */
 float softStep(float e0, float e1, float x) {
     return smoothstep(e0, max(e1, e0 + 0.0005), x);
@@ -355,8 +386,10 @@ half4 main(float2 fragCoord) {
 
     float2 t = tiltNow();
 
-    // One phase drives both the hue and the band envelope, which is what makes
-    // the colour and the bright stripe move together like a real laminate.
+    // One phase drives both the hue and the band envelope, so the colour and
+    // the bright stripe move together like a real laminate. HUE_SPREAD is what
+    // stops them locking: at exactly 1 every band peaks on the same ramp
+    // position and the card reads as a single colour.
     float phase = dot(p, SWEEP_AXIS) * BAND_FREQUENCY
                 + dot(t, TILT_AXIS_WEIGHT) * TILT_SENSITIVITY;
 
@@ -366,7 +399,7 @@ half4 main(float2 fragCoord) {
     // pow(negative, e).
     float band = clamp(0.5 + 0.5 * cos(phase * TAU), 0.0, 1.0);
     float envelope = pow(band, mix(1.0, 4.0, clamp(BAND_SHARPNESS - 0.5, 0.0, 1.0)));
-    envelope = envelope * 0.9 + 0.1;
+    envelope = envelope * (1.0 - BAND_FLOOR) + BAND_FLOOR;
 
     // The wide bloom: light coming *through* the laminate.
     float2 lightCentre = float2(0.5) + t * LIGHT_DIRECTION * HIGHLIGHT_TRAVEL;
