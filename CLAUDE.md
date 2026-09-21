@@ -92,10 +92,17 @@ deterministic glitter/star/facet fields from a seed (pass the card id) so a card
 stable across renders. `FoilV2.tsx` / `recipes.tsx` are an experimental shine+glare engine, toggled via
 `engine="v2"`; production code leaves `engine` unset (legacy).
 
-**Why no Skia**: `@shopify/react-native-skia` isn't available in Expo Go, and shader-based foils would
-force a development build. The blend-mode approach above needs nothing beyond what Expo Go ships, so
-the whole renderer runs there. `/dev/foil-lab` exists specifically to check every layer (toggle,
-blend-mode cycle, opacity) against real hardware on both platforms.
+**Why blend modes, and where Skia fits**: this engine predates Skia being usable here, and the
+reasoning was that `@shopify/react-native-skia` would force a development build. That is no longer
+true — Expo Go ships Skia on SDK 57, confirmed on a physical device — so a shader foil is an option
+rather than a dev-client exile. The blend-mode stack stays as production: it is what every shipped
+card draws today, and `/dev/foil-lab` exists specifically to check every layer (toggle, blend-mode
+cycle, opacity) against real hardware on both platforms.
+
+`src/card/foil/SkiaSmoke.tsx` is the shader path (Stage C1): one SkSL runtime effect that emits
+light only and is screen-blended over the face, previewed at `/dev/skia-smoke`. It is one base holo
+finish, not a replacement for the tier ladder. Its look is tuned by editing the named constants at
+the top of that file — they are baked into the shader source, so a save recompiles it.
 
 ### The card editor (`app/card/edit.tsx`, `src/card/editor/`, `src/card/use-card-editor.ts`)
 

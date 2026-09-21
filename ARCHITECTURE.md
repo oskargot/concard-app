@@ -75,9 +75,9 @@ Technologies: Expo SDK 57, React Native 0.86, React 19.2, expo-router (file-base
 react-native-reanimated 4 + gesture-handler (tilt/flip/drag), react-native-svg (foil dot/facet
 fields), zustand (client state), TypeScript (strict).
 
-Deployment: Distributed via Expo Go during development (no custom native module requires a dev
-build yet — see "Why no Skia" in `CLAUDE.md`). No CI/CD or store deployment pipeline is configured
-in this repo at present.
+Deployment: Distributed via Expo Go during development — including the Skia shader foil, since
+Expo Go ships Skia on SDK 57 (see "Why blend modes, and where Skia fits" in `CLAUDE.md`). No CI/CD
+or store deployment pipeline is configured in this repo at present.
 
 Key subsystems (see `CLAUDE.md` for full detail on each):
 
