@@ -108,34 +108,44 @@ const HIGHLIGHT_STRENGTH = 0.45;
 /** How far it slides at full tilt. Direction is LIGHT_DIRECTION. 0 - 0.8. */
 const HIGHLIGHT_TRAVEL = 0.35;
 
-/* ── Circular glare (the hard-edged hotspot) ─────────────────────── */
+/* ── Circular glare (the light source) ─────────────────────── */
 
-/* This is the lens-like circle that reads as a *reflection sitting on* the
-   laminate, as opposed to the wide bloom above which reads as light coming
-   through it. Same staging as the blend-mode engine's `radialGlare`: a hot
-   core, then a softer halo out to the rim. */
+/* One light source fading out into a circle: brightest at its centre, gone by
+   GLARE_RADIUS. It reads as a reflection sitting *on* the laminate, against
+   the wide bloom above which reads as light coming through it. */
 
-/** Overall size of the circle, in card heights. 0.1 - 0.9. */
-const GLARE_RADIUS = 0.42;
+/** How far the light reaches from its centre, in card heights. 0.1 - 0.9. */
+const GLARE_RADIUS = 0.22;
 
-/** Fraction of that radius which is the hot core. This is what makes it read
- *  as a circle rather than a blob. 0.05 - 0.9. */
-const GLARE_CORE = 0.35;
+/** How quickly it fades. 1 = straight linear ramp to the rim, higher = a
+ *  tighter hot centre with a longer faint tail. 0.5 - 5. */
+const GLARE_FALLOFF = 1.6;
 
-/** Hardness of the core's edge. 0 = razor disc, 1 = fully soft. 0 - 1. */
-const GLARE_EDGE = 0.6;
-
-/** Brightness of the halo between core and rim, relative to the core. 0 - 1. */
-const GLARE_HALO = 0.45;
-
-/** How bright the glare gets overall. 0 turns it off. 0 - 1.5. */
+/** How bright the centre gets. 0 turns the glare off. 0 - 1.5. */
 const GLARE_STRENGTH = 0.55;
 
-/** How far the circle slides at full tilt. Direction is LIGHT_DIRECTION.
- *  Keep it under HIGHLIGHT_TRAVEL and the two separate as you drag. 0 - 0.8. */
-const GLARE_TRAVEL = 0.3;
+/**
+ * Where the light rests with the card held flat, in face coordinates: [0, 0]
+ * is the face's top-left corner, [1, 1] its bottom-right.
+ *
+ * The default sits it over the photo. On the card face the name lands around
+ * y 0.08, the photo spans roughly 0.14 - 0.42, the bio centres near 0.60 and
+ * the links near 0.88 -- so staying around 0.3 is what keeps the light off the
+ * text. Raise y toward the name, lower it toward the bio.
+ */
+const GLARE_REST: [number, number] = [0.5, 0.3];
 
-/** 0 = white glare, 1 = fully tinted by the holo band under it. 0 - 1. */
+/**
+ * How far it slides at full tilt, per axis [x, y]. Direction is
+ * LIGHT_DIRECTION.
+ *
+ * Vertical is damped on purpose: at these values the centre stays inside
+ * 0.18 - 0.42, which is the photo band, so a hard drag cannot swing the light
+ * down onto the bio. Raise y only as far as the text can take it. Each 0 - 0.8.
+ */
+const GLARE_TRAVEL: [number, number] = [0.3, 0.12];
+
+/** 0 = white light, 1 = fully tinted by the holo band under it. 0 - 1. */
 const GLARE_TINT = 0.25;
 
 /* ── Idle drift ──────────────────────────────────────────────────────────── */
@@ -278,11 +288,10 @@ const float  HIGHLIGHT_STR    = ${f(HIGHLIGHT_STRENGTH)};
 const float  HIGHLIGHT_TRAVEL = ${f(HIGHLIGHT_TRAVEL)};
 const float2 LIGHT_DIRECTION  = float2(${f(LIGHT_DIRECTION[0])}, ${f(LIGHT_DIRECTION[1])});
 const float  GLARE_RADIUS     = ${f(GLARE_RADIUS)};
-const float  GLARE_CORE       = ${f(GLARE_CORE)};
-const float  GLARE_EDGE       = ${f(GLARE_EDGE)};
-const float  GLARE_HALO       = ${f(GLARE_HALO)};
+const float  GLARE_FALLOFF    = ${f(GLARE_FALLOFF)};
 const float  GLARE_STRENGTH   = ${f(GLARE_STRENGTH)};
-const float  GLARE_TRAVEL     = ${f(GLARE_TRAVEL)};
+const float2 GLARE_REST       = float2(${f(GLARE_REST[0])}, ${f(GLARE_REST[1])});
+const float2 GLARE_TRAVEL     = float2(${f(GLARE_TRAVEL[0])}, ${f(GLARE_TRAVEL[1])});
 const float  GLARE_TINT       = ${f(GLARE_TINT)};
 const float  DRIFT_SPEED      = ${f(DRIFT_SPEED)};
 const float  DRIFT_AMOUNT     = ${f(DRIFT_AMOUNT)};
@@ -366,16 +375,15 @@ half4 main(float2 fragCoord) {
     float inner = HIGHLIGHT_RADIUS * (1.0 - HIGHLIGHT_SOFT);
     float bloom = (1.0 - softStep(inner, HIGHLIGHT_RADIUS, length(d))) * HIGHLIGHT_STR;
 
-    // The circular glare: a reflection sitting *on* the laminate. Distance is
-    // normalised against the radius so the core and halo stay in proportion at
-    // any size, which is what keeps it reading as a circle rather than a blob.
-    float2 glareCentre = float2(0.5) + t * LIGHT_DIRECTION * GLARE_TRAVEL;
+    // The circular glare: one light source fading out into a circle. It rests
+    // where GLARE_REST puts it rather than at the card's centre, so it can sit
+    // over the photo and leave the name above and the bio below legible.
+    float2 glareCentre = GLARE_REST + t * LIGHT_DIRECTION * GLARE_TRAVEL;
     float2 gd = uv - glareCentre;
     gd.x *= aspect;
-    float gr = length(gd) / max(GLARE_RADIUS, 0.0001);
-    float core = 1.0 - softStep(GLARE_CORE * (1.0 - GLARE_EDGE), GLARE_CORE, gr);
-    float halo = 1.0 - softStep(GLARE_CORE, 1.0, gr);
-    float glare = clamp(core + halo * GLARE_HALO, 0.0, 1.0) * GLARE_STRENGTH;
+    // 1 at the centre, 0 at the rim. Clamped, so pow() never sees a negative.
+    float reach = 1.0 - clamp(length(gd) / max(GLARE_RADIUS, 0.0001), 0.0, 1.0);
+    float glare = pow(reach, GLARE_FALLOFF) * GLARE_STRENGTH;
     float3 glareColour = mix(float3(1.0), colour, GLARE_TINT);
 
     float rim = (1.0 - softStep(RIM_WIDTH * 0.5, RIM_WIDTH, -sd)) * RIM_STRENGTH;
