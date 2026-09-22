@@ -23,6 +23,16 @@
  * If a compile does fail, the canvas is replaced by a red panel quoting the
  * error and the offending source line. It is never a silent white rectangle.
  *
+ * ── THE RULE THIS SHADER IS BUILT AROUND ─────────────────────────────────────
+ * A foil is light moving on a laminate that is *not* moving. The material —
+ * the grain, the flakes, the UV they are sampled in — is pinned to the card,
+ * and tilt may never touch it; tilt only changes the lighting terms (where the
+ * glare sits, how far the hue has walked, which flakes are catching light).
+ * A grain speck that crawls across the face as you tilt is the single thing
+ * that makes this read as a sticker rather than a finish, so `u_tilt` must
+ * never reach a grain coordinate. Every grain knob below is a *look* value;
+ * none of them is a motion value.
+ *
  * ── COST ─────────────────────────────────────────────────────────────────────
  * `u_time` is a uniform, so this canvas redraws at 60fps for as long as it is
  * mounted, even untouched. That is right for a hero card and wrong for a binder
@@ -73,21 +83,29 @@ const SATURATION = 1.25;
  *
  * Below about 2 the card holds less than one full band, so there is a single
  * bright spot at its centre and the rest of the ramp only appears in the dim
- * surround. Raise this to put several peaks on the card at once. 0.6 - 6.
+ * surround. Raise this to put several peaks on the card at once.
+ *
+ * Kept low on purpose: tight candy stripes are what reads as a printed
+ * pattern, and with the grain below carrying the fine detail the bands no
+ * longer have to. 0.6 - 6.
  */
-const BAND_FREQUENCY = 2.6;
+const BAND_FREQUENCY = 1.8;
 
 /** Band edge definition. 0.5 = one broad wash, 1.5 = tight stripes. 0.5 - 1.5. */
-const BAND_SHARPNESS = 1.1;
+const BAND_SHARPNESS = 0.85;
 
 /**
  * How lit the card stays between the bright bands, as a fraction of a peak.
  *
  * This is what decides how much of the ramp you actually see: at 0 only the
  * bands themselves are coloured and everything between them goes dark, so the
- * card reads as one hue. Raising it trades band contrast for rainbow. 0 - 0.8.
+ * card reads as one hue. Raising it trades band contrast for rainbow.
+ *
+ * It also decides how much of the face the grain shows on, since the grain
+ * modulates this term: where the envelope falls to nothing there is no shine
+ * left to texture. 0 - 0.8.
  */
-const BAND_FLOOR = 0.35;
+const BAND_FLOOR = 0.45;
 
 /**
  * How much of the colour wheel one brightness band crosses.
@@ -106,17 +124,97 @@ const SWEEP_ANGLE_DEG = 45;
  *  reroll: it rotates the ramp without changing anything else. 0 - 1. */
 const PATTERN_PHASE = 0.0;
 
+/* ── Microstructure (the part that does NOT move) ────────────────────────── */
+
+/* Two pinned fields, both sampled in card UV and never in tilt: a fine grain
+   that gives the shine micro-contrast, and a sparse field of flakes that catch
+   the light. Together they are what stops a smooth gradient reading as plastic.
+   Because they are sampled in *card* space rather than pixel space they scale
+   with the card, the way a printed laminate does, so a binder thumbnail gets
+   the same finish as the hero and not a finer one. */
+
+/**
+ * How fine the grain is, in cells across the card's height.
+ *
+ * Aspect-corrected, so cells are square rather than stretched by the card's
+ * 5:7 shape. Too high and it turns into even sandpaper that reads as sensor
+ * noise; too low and it looks like marbling. 20 - 220.
+ */
+const GRAIN_SCALE = 56;
+
+/**
+ * How deeply the grain cuts into the shine. 0 is the smooth C1 gradient, 1
+ * swings each speck between black and double brightness.
+ *
+ * It is centred on 1, so raising this adds texture without making the finish
+ * brighter or dimmer on average. 0 - 1.
+ */
+const GRAIN_STRENGTH = 0.36;
+
+/**
+ * How much of that grain the glare also picks up. 0 = a clean optical
+ * reflection, 1 = the glare is scattered by the same specks as the shine.
+ *
+ * Some is worth having: a glare with no structure in it is the giveaway that
+ * the light is being drawn rather than reflected. Too much and the bright spot
+ * gets dirty and the text under it stops being legible. 0 - 1.
+ */
+const GRAIN_GLARE = 0.35;
+
+/** How fine the flake field is, in cells across the card's height. Each cell
+ *  holds at most one flake, so this is also the upper bound on how many there
+ *  can be. 40 - 320. */
+const SPARKLE_SCALE = 150;
+
+/** What fraction of those cells actually hold a flake. Above about 0.3 it
+ *  stops reading as glitter and starts reading as static. 0 - 0.5. */
+const SPARKLE_DENSITY = 0.14;
+
+/** Flake size as a fraction of its cell. 1 fills the cell; lower leaves dark
+ *  laminate between them, which is what makes them read as specks. 0.1 - 1. */
+const SPARKLE_SIZE = 0.55;
+
+/**
+ * How far through its flash cycle a flake is carried by a full-range drag.
+ *
+ * This is the one place tilt touches the flake field, and it changes only
+ * *brightness*: every flake has its own fixed angle it catches the light at,
+ * and tilting sweeps that angle past them in turn. The flakes themselves do
+ * not move — if they appear to travel, this is not the knob, something has
+ * leaked tilt into a coordinate. 0 - 8.
+ */
+const SPARKLE_FLICKER = 3.0;
+
+/** How briefly each flake flashes. 1 = every flake glows softly all the time,
+ *  10 = a hard blink as the angle passes. 1 - 12. */
+const SPARKLE_SHARPNESS = 5.0;
+
+/** How bright a flake gets at its peak. 0 turns the flakes off entirely and
+ *  leaves the grain. 0 - 1. */
+const SPARKLE_STRENGTH = 0.38;
+
+/**
+ * How much a flake needs the light to be on it before it fires, as a blend
+ * between the two.
+ *
+ * At 1 flakes only exist inside the glare and bloom, which is physically right
+ * and can leave the rest of the card flat; at 0 the whole face glitters at
+ * once, which reads as an effect layer. 0 - 1.
+ */
+const SPARKLE_LIGHT_GATE = 0.8;
+
 /* ── Tilt response ───────────────────────────────────────────────────────── */
 
 /**
  * How far the bands *slide* for a full-range drag, in band widths.
  *
- * This is the "pattern moves across the card" half of the response. On its own
- * it can read as a printed pattern being dragged around, because a full-range
- * drag needs 55% of the card's width and a short one barely shifts anything.
- * 0.4 - 6.
+ * This is the "pattern moves across the card" half of the response, and it is
+ * deliberately the *quieter* half. On its own it reads as a printed pattern
+ * being dragged around: a real laminate's microstructure does not travel, only
+ * the light on it does. Above about 1.5 the bands start visibly crawling.
+ * Keep it well under TILT_HUE_SHIFT. 0.4 - 6.
  */
-const TILT_SENSITIVITY = 2.2;
+const TILT_SENSITIVITY = 0.8;
 
 /**
  * How far the *colour* shifts for a full-range drag, in ramp cycles, without
@@ -124,9 +222,10 @@ const TILT_SENSITIVITY = 2.2;
  *
  * This is the half that reads as light rather than paint: a fixed point on the
  * card recolours as you tilt, instead of a pattern sliding past it. If the foil
- * looks painted on, raise this before TILT_SENSITIVITY. 0 - 4.
+ * looks painted on, raise this before TILT_SENSITIVITY — this is the knob that
+ * carries the motion now, and it belongs well above it. 0 - 4.
  */
-const TILT_HUE_SHIFT = 1.6;
+const TILT_HUE_SHIFT = 2.2;
 
 /** Horizontal vs vertical drag weighting, [x, y]. A negative value reverses
  *  that axis' band sweep. Each -1.5 - 1.5. */
@@ -220,9 +319,15 @@ const DRIFT_FADE = 0.25;
 
 /**
  * Master loudness of the whole finish: subtle sheen vs. full rainbow.
- * This is the dial to reach for first. 0 - 2.
+ * This is the dial to reach for first.
+ *
+ * Trimmed slightly when BAND_FLOOR went up: a higher floor lights the gaps
+ * between the bands, and holding this where it was would have made the whole
+ * overlay brighter rather than just better lit. Between them the finish adds
+ * about as much light to the face as it did before the grain arrived, which is
+ * what keeps the name and bio legible under it. 0 - 2.
  */
-const FOIL_INTENSITY = 0.38;
+const FOIL_INTENSITY = 0.34;
 
 /** Thickness of the lit lip around the card edge, in card heights. 0 - 0.05. */
 const RIM_WIDTH = 0.012;
@@ -334,6 +439,16 @@ const float  BAND_FREQUENCY   = ${f(BAND_FREQUENCY)};
 const float  BAND_SHARPNESS   = ${f(BAND_SHARPNESS)};
 const float  BAND_FLOOR       = ${f(BAND_FLOOR)};
 const float  HUE_SPREAD       = ${f(HUE_SPREAD)};
+const float  GRAIN_SCALE      = ${f(GRAIN_SCALE)};
+const float  GRAIN_STRENGTH   = ${f(GRAIN_STRENGTH)};
+const float  GRAIN_GLARE      = ${f(GRAIN_GLARE)};
+const float  SPARKLE_SCALE    = ${f(SPARKLE_SCALE)};
+const float  SPARKLE_DENSITY  = ${f(SPARKLE_DENSITY)};
+const float  SPARKLE_SIZE     = ${f(SPARKLE_SIZE)};
+const float  SPARKLE_FLICKER  = ${f(SPARKLE_FLICKER)};
+const float  SPARKLE_SHARP    = ${f(SPARKLE_SHARPNESS)};
+const float  SPARKLE_STRENGTH = ${f(SPARKLE_STRENGTH)};
+const float  SPARKLE_GATE     = ${f(SPARKLE_LIGHT_GATE)};
 const float  PATTERN_PHASE    = ${f(PATTERN_PHASE)};
 const float  TILT_SENSITIVITY = ${f(TILT_SENSITIVITY)};
 const float  TILT_HUE_SHIFT   = ${f(TILT_HUE_SHIFT)};
@@ -388,6 +503,73 @@ float softStep(float e0, float e1, float x) {
     return smoothstep(e0, max(e1, e0 + 0.0005), x);
 }
 
+/**
+ * A stable hash: same input, same output, forever and on every GPU.
+ *
+ * This is the whole reason the microstructure can be pinned. There is no
+ * texture to sample and no seed to keep in sync -- a point on the card hashes
+ * to the same speck every frame because nothing time-varying or tilt-varying
+ * is ever allowed into p.
+ *
+ * Kept in float throughout: the fract() chain below is exactly the kind of
+ * maths that turns into visible banding the moment a mediump half gets into
+ * it, and a banded "grain" is just a moire pattern.
+ */
+float hash21(float2 p) {
+    p = fract(p * float2(127.1, 311.7));
+    p += dot(p, p + 34.23);
+    return fract(p.x * p.y);
+}
+
+/** Value noise: the hash above, smoothed between its lattice points. 0..1. */
+float valueNoise(float2 p) {
+    float2 i = floor(p);
+    float2 g = fract(p);
+    // Hermite, so the lattice does not show up as a visible grid.
+    float2 k = g * g * (3.0 - 2.0 * g);
+    float a = hash21(i);
+    float b = hash21(i + float2(1.0, 0.0));
+    float c = hash21(i + float2(0.0, 1.0));
+    float d = hash21(i + float2(1.0, 1.0));
+    return mix(mix(a, b, k.x), mix(c, d, k.x), k.y);
+}
+
+/**
+ * The grain. Two octaves: a coarse one that clumps, and a finer one on top so
+ * it does not read as one regular size of speck. Centred near 0.5.
+ */
+float grainAt(float2 g) {
+    return valueNoise(g) * 0.62 + valueNoise(g * 2.17 + 19.73) * 0.38;
+}
+
+/**
+ * The flake field: a sparse grid of specks, each one flashing at its own tilt
+ * angle.
+ *
+ * g is in card space and must stay that way. lean enters the *phase* of
+ * the flash and nothing else, so tilting changes which flakes are lit without
+ * moving a single one of them -- the same distinction as hue-shift versus
+ * band-slide, one level down.
+ */
+float sparkleAt(float2 g, float lean) {
+    float2 cell = floor(g);
+    // Distance from the cell's centre, so a flake is a round speck sitting in
+    // its cell rather than the whole square lighting up.
+    float2 sub = fract(g) - 0.5;
+    float speck = 1.0 - softStep(SPARKLE_SIZE * 0.25, SPARKLE_SIZE * 0.5, length(sub));
+
+    // Which cells hold a flake at all. Fixed per cell, so the pattern of
+    // sparkle positions is a property of the card, not of the frame.
+    float flake = step(1.0 - SPARKLE_DENSITY, hash21(cell + 3.71));
+
+    // Each flake sits at its own angle in the laminate, so they do not all
+    // catch the light at once. Tilt sweeps the viewing angle past them.
+    float phase = hash21(cell + 11.37);
+    float facing = 0.5 + 0.5 * cos((phase + lean * SPARKLE_FLICKER) * TAU);
+
+    return flake * speck * pow(facing, SPARKLE_SHARP);
+}
+
 /** Rounded-rect SDF, in card-centred units. Negative inside. */
 float sdRoundRect(float2 p, float2 b, float r) {
     float2 q = abs(p) - b + r;
@@ -433,6 +615,18 @@ half4 main(float2 fragCoord) {
     float envelope = pow(band, mix(1.0, 4.0, clamp(BAND_SHARPNESS - 0.5, 0.0, 1.0)));
     envelope = envelope * (1.0 - BAND_FLOOR) + BAND_FLOOR;
 
+    // The microstructure. gp is built from uv alone -- no t, no u_time --
+    // which is what pins it: a speck sits over the same pixel of the photo at
+    // every tilt, and only the light crossing it changes. Aspect-corrected so
+    // the cells are square, and scaled by the card rather than by the screen,
+    // so the finish is the same one at any card size.
+    float2 gp = float2(uv.x * aspect, uv.y);
+
+    // Centred on 1: grain adds micro-contrast to the shine without changing
+    // how bright the finish is on average. max() rather than clamp() because
+    // the top end is a highlight on a speck and is allowed past 1.
+    float micro = max(0.0, 1.0 + (grainAt(gp * GRAIN_SCALE) - 0.5) * 2.0 * GRAIN_STRENGTH);
+
     // The wide bloom: light coming *through* the laminate.
     float2 lightCentre = float2(0.5) + t * LIGHT_DIRECTION * HIGHLIGHT_TRAVEL;
     float2 d = uv - lightCentre;
@@ -453,11 +647,23 @@ half4 main(float2 fragCoord) {
     float glare = pow(reach, GLARE_FALLOFF) * GLARE_STRENGTH;
     float3 glareColour = mix(float3(1.0), colour, GLARE_TINT);
 
+    // Flakes fire where there is light to catch. SPARKLE_GATE is how strictly:
+    // at 1 they live entirely inside the glare and bloom, at 0 the whole face
+    // glitters at once.
+    float lit = clamp(glare + bloom, 0.0, 1.0);
+    float sparkle = sparkleAt(gp * SPARKLE_SCALE, lean)
+                  * mix(1.0, lit, SPARKLE_GATE) * SPARKLE_STRENGTH;
+
     float rim = (1.0 - softStep(RIM_WIDTH * 0.5, RIM_WIDTH, -sd)) * RIM_STRENGTH;
 
-    float3 light = colour * (envelope * FOIL_INTENSITY)
+    // The grain multiplies the shine outright and the glare only as far as
+    // GRAIN_GLARE asks, so the reflection keeps some structure without the
+    // bright spot going dirty. The bloom is left smooth: it is light coming
+    // through the laminate rather than off it, so it has no specks in it.
+    float3 light = colour * (envelope * micro * FOIL_INTENSITY)
                  + colour * bloom
-                 + glareColour * glare
+                 + glareColour * (glare * mix(1.0, micro, GRAIN_GLARE))
+                 + glareColour * sparkle
                  + float3(rim);
     light = clamp(light, 0.0, 1.0);
 

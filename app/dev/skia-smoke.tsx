@@ -55,9 +55,10 @@ export default function SkiaSmokeScreen() {
 				<Text style={styles.eyebrow}>SKIA · SKSL</Text>
 				<Text style={styles.title}>Holo finish</Text>
 				<Text style={styles.body}>
-					One runtime shader, screen-blended over a real card. Drag to tilt — the bands sweep and
-					the bloom slides opposite your finger. Left alone it drifts slowly on its own. Every knob
-					that controls the look sits at the top of{' '}
+					One runtime shader, screen-blended over a real card. Drag to tilt — the light moves and
+					the grain does not. Hold a finger on one speck and tilt: it should stay under your finger
+					and change colour rather than crawl. Left alone the card drifts slowly on its own. Every
+					knob that controls the look sits at the top of{' '}
 					<Text style={styles.mono}>src/card/foil/SkiaSmoke.tsx</Text>.
 				</Text>
 			</View>
@@ -100,7 +101,7 @@ export default function SkiaSmokeScreen() {
 					/>
 				</SkiaBoundary>
 			</View>
-			<Text style={styles.hint}>DRAG TO MOVE THE LIGHT</Text>
+			<Text style={styles.hint}>DRAG TO MOVE THE LIGHT, NOT THE GRAIN</Text>
 		</ScrollView>
 	);
 }
