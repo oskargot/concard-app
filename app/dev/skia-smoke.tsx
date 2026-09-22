@@ -18,8 +18,8 @@
  * A shader that fails to *compile* reports itself on the canvas instead.
  */
 
-import { Component, type ReactNode } from 'react';
-import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Component, useState, type ReactNode } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Card } from '@/card/Card';
@@ -27,10 +27,23 @@ import { shellMetrics } from '@/card/CardShell';
 import { DEMO_CARD } from '@/card/demo-card';
 import { FlipCard } from '@/card/FlipCard';
 import { SkiaSmoke } from '@/card/foil/SkiaSmoke';
+import { SkiaTextured } from '@/card/foil/SkiaTextured';
 import { palette } from '@/theme/palette';
 import { radius, space, type } from '@/theme/tokens';
 
+/**
+ * The two engines draw the same five terms; they differ only in where the two
+ * pinned fields come from. `procedural` computes them (a cosine for the bands,
+ * hashes for the grain and flakes); `textured` samples them from illusion.png
+ * and glitter.png. Everything else -- ramp, tilt response, glare, rim -- is
+ * deliberately identical, so flipping between them compares the pattern source
+ * and nothing else.
+ */
+const ENGINES = ['procedural', 'textured'] as const;
+type Engine = (typeof ENGINES)[number];
+
 export default function SkiaSmokeScreen() {
+	const [engine, setEngine] = useState<Engine>('procedural');
 	const { width } = useWindowDimensions();
 	const insets = useSafeAreaInsets();
 	const cardWidth = Math.min(width - space.xl * 2, 320);
@@ -57,9 +70,14 @@ export default function SkiaSmokeScreen() {
 				<Text style={styles.body}>
 					One runtime shader, screen-blended over a real card. Drag to tilt — the light moves and
 					the grain does not. Hold a finger on one speck and tilt: it should stay under your finger
-					and change colour rather than crawl. Left alone the card drifts slowly on its own. Every
-					knob that controls the look sits at the top of{' '}
-					<Text style={styles.mono}>src/card/foil/SkiaSmoke.tsx</Text>.
+					and change colour rather than crawl. Left alone the card drifts slowly on its own.
+				</Text>
+				<Text style={styles.body}>
+					Two engines draw that same finish. <Text style={styles.mono}>procedural</Text> computes
+					the pattern in <Text style={styles.mono}>src/card/foil/SkiaSmoke.tsx</Text>;{' '}
+					<Text style={styles.mono}>textured</Text> samples it from two PNGs in{' '}
+					<Text style={styles.mono}>src/card/foil/SkiaTextured.tsx</Text>. Both files keep every
+					look value in a panel at the top.
 				</Text>
 			</View>
 
@@ -88,21 +106,66 @@ export default function SkiaSmokeScreen() {
 										}
 									]}
 								>
-									<SkiaSmoke
-										width={faceWidth}
-										height={faceHeight}
-										radius={faceRadius}
-										rx={rx}
-										ry={ry}
-									/>
+									{engine === 'procedural' ? (
+										<SkiaSmoke
+											width={faceWidth}
+											height={faceHeight}
+											radius={faceRadius}
+											rx={rx}
+											ry={ry}
+										/>
+									) : (
+										<SkiaTextured
+											width={faceWidth}
+											height={faceHeight}
+											radius={faceRadius}
+											rx={rx}
+											ry={ry}
+										/>
+									)}
 								</View>
 							</View>
 						)}
 					/>
 				</SkiaBoundary>
 			</View>
+			<Chips options={ENGINES} value={engine} onChange={setEngine} />
+			<Text style={styles.hint}>
+				{engine === 'procedural'
+					? 'PATTERN COMPUTED — COSINE BANDS, HASH GRAIN, HASH FLAKES'
+					: 'PATTERN SAMPLED — ILLUSION.PNG CONTOURS, GLITTER.PNG FLAKES'}
+			</Text>
 			<Text style={styles.hint}>DRAG TO MOVE THE LIGHT, NOT THE GRAIN</Text>
 		</ScrollView>
+	);
+}
+
+/** Engine picker. Same shape as foil-lab's, kept local so the routes stay
+ *  independent of each other. */
+function Chips<T extends string>({
+	options,
+	value,
+	onChange
+}: {
+	options: readonly T[];
+	value: T;
+	onChange: (next: T) => void;
+}) {
+	return (
+		<View style={styles.chipWrap}>
+			{options.map((opt) => {
+				const on = opt === value;
+				return (
+					<Pressable
+						key={opt}
+						onPress={() => onChange(opt)}
+						style={[styles.chip, on && styles.chipOn]}
+					>
+						<Text style={[styles.chipText, on && styles.chipTextOn]}>{opt}</Text>
+					</Pressable>
+				);
+			})}
+		</View>
 	);
 }
 
@@ -153,6 +216,18 @@ const styles = StyleSheet.create({
 		elevation: 5
 	},
 	hint: { ...type.meta, color: palette.teal, textAlign: 'center', fontSize: 9 },
+	chipWrap: { flexDirection: 'row', justifyContent: 'center', gap: space.xs },
+	chip: {
+		paddingVertical: space.xs + 2,
+		paddingHorizontal: space.md,
+		borderRadius: radius.pill,
+		backgroundColor: palette.raisedHigh,
+		borderWidth: StyleSheet.hairlineWidth,
+		borderColor: palette.line
+	},
+	chipOn: { backgroundColor: palette.rose, borderColor: palette.rose },
+	chipText: { ...type.small, color: palette.creamMute },
+	chipTextOn: { color: palette.void, fontFamily: 'SpaceGrotesk-Bold' },
 	fallback: {
 		gap: space.sm,
 		padding: space.lg,
