@@ -11,14 +11,13 @@ Supabase schema and migrations live — both surfaces share one project.
 
 ## Stack
 
-- **Expo SDK 57** / React Native 0.86 / React 19.2 — the blend-mode foils and
-  the whole app run in Expo Go, but the Skia foil path needs a development build
-  (see "Skia and the development build" below)
+- **Expo SDK 57** / React Native 0.86 / React 19.2 — the whole app runs in Expo
+  Go, Skia shader foil included
 - **expo-router** for file-based navigation
 - **react-native-reanimated** 4 + **gesture-handler** for tilt, flip and drag
 - **react-native-svg** for the foils' dot and facet fields
-- **@shopify/react-native-skia** for the shader-based foil (Stage C, dev client
-  only — pinned to the Expo SDK 57 version, `2.6.2`)
+- **@shopify/react-native-skia** for the shader-based foil (Stage C — pinned to
+  the Expo SDK 57 version, `2.6.2`)
 - **Supabase** for Postgres, Auth and Storage — shared with the web app
 
 ## Getting started
@@ -43,50 +42,52 @@ Scan the QR with Expo Go. Then open **My Card → the foil lab**.
 | `npm run lint`      | ESLint + Prettier check |
 | `npm run format`    | Prettier write          |
 
-## Skia and the development build
+## Skia and Expo Go
 
-Expo Go is enough for everything **except** the Skia foil path (Stage C). Skia is
-a native module that Expo Go does not ship, so anything under `/dev/skia-smoke`
-(and, later, the `skia` foil engine) needs a **development build** — a custom
-build of this app with the native module linked, that then loads JS over the
-network the same way Expo Go does. Opening `/dev/skia-smoke` in Expo Go shows a
-"Skia isn't linked" panel, not a crash.
+Expo Go ships Skia on SDK 57, so `/dev/skia-smoke` and the shader foil run there
+with no development build — confirmed on a physical device. This repo said
+otherwise for a while; it was wrong.
 
-You build the dev client **once** (any time the native deps change), install it
-on the phone, and after that iterate on JS with a normal `expo start`.
-
-### One-time setup
-
-```sh
-npm install -g eas-cli   # or: npx eas-cli@latest
-eas login                # your Expo account
-eas init                 # links this repo to an EAS project, writes the projectId into app.json
-```
-
-### Build and install the dev client (iOS, from Windows)
-
-There is no Mac here, so `expo run:ios` can't build locally — the dev client is
-built in **EAS cloud**. The `development` profile in `eas.json` is a dev client
-with internal (ad-hoc) distribution.
+Start the dev server with **`npm start`**, not a bare `npx expo start`.
+`scripts/start.js` does two things the plain command gets wrong on this setup:
+it advertises an address the phone can actually route to (a VPN or hypervisor
+adapter otherwise wins, and the failure is quiet -- the bundle still loads
+while Fast Refresh never connects), and it asks for Expo Go explicitly. It
+prints which address it chose, and how to override it:
 
 ```sh
-eas device:create        # register the iPhone once — follow the link/QR on the device to install the profile
-eas build --profile development --platform ios
+npm start              # Expo Go, on the best address it can find
+npm start -- -c        # same, clearing Metro's cache
+REACT_NATIVE_PACKAGER_HOSTNAME=<ip> npm start   # force an address
 ```
 
-When the build finishes, EAS shows a QR / install link; open it on the registered
-iPhone to install the app. (Android, if wanted later:
-`eas build --profile development --platform android`, then install the `.apk`.)
+Keep Skia pinned to the version the SDK expects -- `npx expo install --check`
+-- since Expo Go's native side is built against exactly that.
 
-### Day-to-day after it's installed
+The `/dev/skia-smoke` route keeps an error boundary around the canvas. It no
+longer guards a missing native module; it catches a render-time throw. A
+shader that fails to *compile* reports itself on the canvas, with the offending
+source line, rather than going silently white.
+
+### There is no development build any more
+
+`expo-dev-client` used to be a dependency, from when Skia was believed to need
+a custom build. It doesn't, and its presence alone made the Expo CLI hand out
+`exp+concard://expo-development-client/?url=...` deep links that do nothing in
+Expo Go -- so it was removed.
+
+If a future native module does need one, add it back and rebuild:
 
 ```sh
-npx expo start --dev-client
+npx expo install expo-dev-client
+eas build --profile development --platform ios   # the profile is still in eas.json
+npm start -- --dev-client
 ```
 
-Open the app you installed (not Expo Go) and it connects to this dev server;
-Fast Refresh works exactly as in Expo Go. You only rebuild when a native
-dependency changes — editing JS/TS never needs a new build.
+There is no Mac here, so `expo run:ios` can't build locally; the `development`
+profile in `eas.json` is a dev client with internal (ad-hoc) distribution, and
+`eas device:create` registers the iPhone. The checked-in `android/` directory
+is from that era too.
 
 ## Layout
 
@@ -95,7 +96,7 @@ app/                    expo-router routes
   (auth)/               sign in · claim a username · first card (§10)
   (tabs)/               My Card · Scan · Binder (design bible §11)
   dev/foil-lab          every foil layer, individually switchable
-  dev/skia-smoke        Skia canvas proof (dev client only, Stage C0)
+  dev/skia-smoke        the SkSL holo finish over a real card (Stage C1)
   dev/cards             every card look on fixture data
 src/auth/               session and profile state; the route gate
 src/lib/                Supabase client, env, username rules, generated types
@@ -132,16 +133,21 @@ Two deliberate departures from the CSS original:
 
 ### Skia (Stage C)
 
-The blend-mode route above was built to avoid a native module, so the whole card
-renderer runs in Expo Go. It got the foils close but not to "physical holo", so
-Stage C tries **Skia** for real shader control — accepting the cost of a
-development build (see "Skia and the development build" above). This is a
-deliberate, staged bet, not a rewrite:
+The blend-mode route above was built to avoid a native module. It got the foils
+close but not to "physical holo", so Stage C uses **Skia** for real shader
+control — which, as it turns out, costs nothing: Expo Go ships Skia (see "Skia
+and Expo Go" above). This is a deliberate, staged bet, not a rewrite:
 
-- **C0 (this stage):** the dev client and Skia are wired up, with a smoke canvas
-  at `/dev/skia-smoke` proving Skia draws on a card-sized surface and answers the
-  same `rx`/`ry` tilt the foils read. Production foil is untouched.
-- **C1:** a Skia foil engine (pinned textures, moving light, per-tier recipes),
+- **C0 (done):** Skia wired up, with a smoke canvas at `/dev/skia-smoke` proving
+  it draws on a card-sized surface and answers the same `rx`/`ry` tilt the foils
+  read.
+- **C1 (this stage):** one real holo finish as an SkSL runtime effect
+  (`src/card/foil/SkiaSmoke.tsx`), screen-blended over a real card at
+  `/dev/skia-smoke`. It emits light only and draws no card, so it composites
+  over the existing renderer rather than replacing it. Every value that controls
+  the look is a named constant at the top of that file; edit and save to retune.
+  Production foil is untouched.
+- **C2:** the tier recipes (glitter / cosmic / mosaic) on top of that base,
   selectable in the foil lab and compared A/B against the blend-mode engines
   before anything switches.
 
