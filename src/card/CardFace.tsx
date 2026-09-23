@@ -37,6 +37,18 @@ const MICRO_BELOW = 110;
 const MAX_CHIPS = 3;
 
 /**
+ * Lifts a block onto its own layer, closer to the viewer, the same way the
+ * photo is. The name, bio and links take it too, so they sit above the foil's
+ * holo pattern and stay legible whatever the finish, while the foil's gloss
+ * (see `Foil.tsx`) still lights them from above. (`elevation` is the Android
+ * draw-order lever; `zIndex` the iOS one.) The bio and links sit on a
+ * translucent wash, which an Android elevation shadow would show through as a
+ * smudge, so the shadow is switched off. The photo keeps its own because its
+ * well is opaque.
+ */
+const LIFT = { zIndex: 1, elevation: 2, shadowColor: 'transparent' } as const;
+
+/**
  * Turns the face into the editor's canvas.
  *
  * Every field is optional on its own: a handler that isn't passed stays
@@ -101,7 +113,7 @@ export function CardFace({
 
 	return (
 		<View style={{ flex: 1, padding: m.u(4.67), gap: m.u(2.4) }}>
-			<View style={{ gap: m.u(0.55) }}>
+			<View style={{ gap: m.u(0.55), ...LIFT }}>
 				<FaceText
 					value={view.title}
 					onChangeText={edit?.onChangeTitle}
@@ -150,7 +162,8 @@ export function CardFace({
 								backgroundColor: ink.wash,
 								borderRadius: m.u(3.4),
 								paddingVertical: m.u(2.35),
-								paddingHorizontal: m.u(3)
+								paddingHorizontal: m.u(3),
+								...LIFT
 							}}
 						>
 							<FaceText
@@ -399,7 +412,8 @@ function Links({
 				backgroundColor: ink.wash,
 				paddingVertical: m.u(2.4),
 				paddingHorizontal: m.u(3),
-				justifyContent: 'space-between'
+				justifyContent: 'space-between',
+				...LIFT
 			}}
 		>
 			{Array.from({ length: MAX_CHIPS }, (_, i) => {

@@ -1,152 +1,62 @@
 /**
  * The card's light, and every foil in the app.
  *
- * One component owns all of it — card tiers and sticker foils both (see
- * `../tiers.ts`) — for the same reason the web card keeps its effect layers in
- * one shell: the light on a foil must never desync from the light on the rest of
- * the card. Everything here is driven by the card's own `rx`/`ry` tilt.
+ * One component owns all of it — card tiers and sticker foils both share the
+ * vocabulary in `../tiers.ts` — for the same reason the web card keeps its
+ * effect layers in one shell: the light on a foil must never desync from the
+ * light on the rest of the card. Everything here is driven by the card's own
+ * `rx`/`ry` tilt.
  *
- * This is the CSS trading-card foil technique ported to React Native, which
- * became possible in RN 0.86: `mixBlendMode` carries the full CSS blend set,
- * `experimental_backgroundImage` parses gradient syntax, `filter` gives
- * brightness/contrast/saturate, and `isolation` scopes the blending to the card
- * so a color-dodge layer never reaches the app background behind it.
+ * It draws two layers, on either side of the card's content, the way a
+ * printed holo card is built:
  *
- * Two deliberate departures from the CSS original:
+ *  - The *holo*, under the name, photo, bio and links. One SkSL runtime
+ *    shader (`SkiaFoil.tsx`, source in `foil-sksl.ts`) with a recipe per
+ *    kind. It emits light only and is screen-blended over the face, so it
+ *    brightens the card and never darkens it. Its alpha also tracks its
+ *    light, so its black is transparent even where a platform drops
+ *    `mixBlendMode` on the native Skia surface. Beside it sits `edge`: a lit
+ *    top lip and a shadowed bottom one, the reason a flat rectangle reads as
+ *    a card with thickness.
+ *  - The *gloss*, over everything: the glare's white wash, a plain gradient
+ *    that slides with the same numbers the shader lights its flecks with.
+ *    Every card has it, plain ones included; it replaced the static specular
+ *    shine a plain card used to borrow from the web card, so here tier 0's
+ *    light moves with the tilt where the web card's holds still.
  *
- *  - CSS `background-blend-mode` blends several backgrounds inside one element.
- *    React Native has no equivalent, so every layer is its own View with its own
- *    `mixBlendMode` and the stack does the same job.
- *  - The CSS version animates `background-position` from pointer coordinates.
- *    Here each moving layer is oversized and *translated* by Reanimated instead,
- *    because a transform is driven on the UI thread and a restyle is not. Same
- *    look, and it holds up while the card is being tilted.
+ * CardFace lifts its blocks with `zIndex: 1` / `elevation: 2`, and both
+ * platforms flatten the plain wrappers between them and this component, so
+ * those blocks end up as siblings of these two layers. The holo stack has no
+ * z at all and so stays under them; the gloss sits at 6, above them and above
+ * CardShell's face light (4).
  *
- * `wash`, `spec` and `edge` are ported from the web card's tuned values
- * (`concard/src/lib/components/CardShell.svelte`) so a card looks the same in
- * both renderers.
+ * `isolation: isolate` on the holo stack scopes the screen blend to the card,
+ * so the foil never reaches whatever is behind it.
  *
- * One intentional divergence from the web card: its base face carries a glitter
- * layer (`.glint`). Here glitter is *earned* — design bible §7 makes tier 0
- * "holo base, no extra effect" and tier 1 Glitter, so a base card that already
- * glittered would make the first upgrade invisible.
+ * One intentional divergence from the web card: its base face carries a
+ * glitter layer. Here glitter is *earned* — design bible §7 makes tier 0
+ * "holo base, no extra effect" and tier 1 Glitter, so a base card that
+ * already glittered would make the first upgrade invisible.
  */
 
-import { useMemo } from 'react';
 import { StyleSheet, View, type ViewStyle } from 'react-native';
-import Animated, { interpolate, useAnimatedStyle, type SharedValue } from 'react-native-reanimated';
-import Svg, { Defs, LinearGradient, Polygon, Stop } from 'react-native-svg';
+import Animated, { useAnimatedStyle, type SharedValue } from 'react-native-reanimated';
 
+import { TILT_RANGE } from '../FlipCard';
 import type { FoilKind } from '../tiers';
-import { CoverFoilTexture, TiledFoilTexture } from './FoilTexture';
-import { HOLO_SPECTRUM, holoWash, nebula, nebulaSecondary, repeatingLinear } from './gradients';
-import { FoilV2 } from './FoilV2';
-import { FoilPokemon } from './FoilPokemon';
-import type { FoilRecipeId } from './recipes';
-import { facetField, glitterField, hashSeed, starField } from './speckle';
-import { SamplerFoil, type SamplerFoilPreset } from './FoilSwatch';
-
-/** Which foil engine to draw.
- *  - `legacy` — production layer stack.
- *  - `v2` — shine+glare recipes tuned per-recipe (foil-lab experiment).
- *  - `pokemon` — a structural port of simeydotme/pokemon-cards-css: exactly
- *    one color-dodge shine + one pointer-tracking overlay glare per card. */
-export type FoilEngine = 'legacy' | 'v2' | 'pokemon';
-
-/** Every layer the stack can draw, in stacking order. */
-export const FOIL_LAYERS = [
-	'space',
-	'nebula',
-	'wash',
-	'bars',
-	'facets',
-	'glitter',
-	'stars',
-	'spec',
-	'edge'
-] as const;
-export type FoilLayerName = (typeof FOIL_LAYERS)[number];
+import { GLARE_REST, GLARE_TRAVEL, GLOSS_RADII, glossGradient, LIGHT_DIRECTION } from './foil-sksl';
+import { SKIA_AVAILABLE, SkiaFoil, type SkiaRecipeName } from './SkiaFoil';
 
 /**
- * Which layers each foil uses.
- *
- * `none` is tier 0: only the inner edge lip. The web card also runs a hard-light
- * holo wash + specular over every face, but those blend modes frost text on RN
- * (and can band/pixelate), so the plain card stays readable here — foil starts
- * at glitter. `holo` is the sticker ceiling rather than a card tier.
+ * Which shader recipe each foil kind draws. `holo` is the sticker ceiling
+ * rather than a card tier; a card gets it from the holo frame.
  */
-const RECIPES: Record<FoilKind, readonly FoilLayerName[]> = {
-	none: ['spec', 'edge'],
-	glitter: ['wash', 'glitter', 'spec', 'edge'],
-	holo: ['wash', 'bars', 'spec', 'edge'],
-	cosmic: ['space', 'nebula', 'stars', 'bars', 'spec', 'edge'],
-	mosaic: ['wash', 'facets', 'bars', 'spec', 'edge']
+export const RECIPE_FOR_KIND: Record<Exclude<FoilKind, 'none'>, SkiaRecipeName> = {
+	glitter: 'sprayed',
+	holo: 'linear',
+	cosmic: 'stars',
+	mosaic: 'mosaic'
 };
-
-/**
- * Default blend and opacity per layer. `wash`, `spec` and `edge` carry the web
- * card's tuned numbers; the tier layers are this pass's starting point and are
- * exactly what /dev/foil-lab exists to tune.
- */
-const DEFAULTS: Record<FoilLayerName, { blend: ViewStyle['mixBlendMode']; opacity: number }> = {
-	space: { blend: 'normal', opacity: 0.94 },
-	nebula: { blend: 'screen', opacity: 0.8 },
-	// Soft-light + lower alpha: hard-light at 0.2 washed the face into glass on device.
-	wash: { blend: 'soft-light', opacity: 0.14 },
-	bars: { blend: 'color-dodge', opacity: 0.3 },
-	facets: { blend: 'color-dodge', opacity: 0.5 },
-	glitter: { blend: 'color-dodge', opacity: 0.55 },
-	stars: { blend: 'plus-lighter', opacity: 0.9 },
-	// The circular specular shine. See SPEC below for why it fades all the way
-	// out rather than ramping down mid-face.
-	spec: { blend: 'screen', opacity: 0.5 },
-	edge: { blend: 'normal', opacity: 1 }
-};
-
-const SAMPLER_PRESET: Partial<Record<FoilKind, SamplerFoilPreset>> = {
-	glitter: 'rainbow-glitter',
-	holo: 'linear-holo',
-	cosmic: 'cosmos-speckle',
-	mosaic: 'radiant-crosshatch'
-};
-
-/** Sampler recipes are intentionally accents, not translucent curtains. */
-const SAMPLER_INTENSITY: Partial<Record<FoilKind, number>> = {
-	glitter: 0.2,
-	holo: 0.22,
-	cosmic: 0.24,
-	mosaic: 0.22
-};
-
-/** How far a layer slides per degree of tilt, as a fraction of card size.
- *  Bigger reads as deeper — right for a starfield, wrong for a card face. */
-const PARALLAX: Partial<Record<FoilLayerName, number>> = {
-	wash: 0.0022,
-	bars: 0.0016,
-	spec: 0.0024,
-	nebula: 0.0009,
-	stars: 0.0014,
-	facets: 0.0006
-};
-
-/** Oversize for translated layers, so sliding never exposes an edge. */
-const OVERSCAN = 1.4;
-
-/** Tilt range the parallax is mapped across, degrees. Matches FlipCard's clamp. */
-const TILT_RANGE = 16;
-
-export interface FoilOverride {
-	enabled?: boolean;
-	blend?: ViewStyle['mixBlendMode'];
-	opacity?: number;
-}
-
-export interface SamplerFoilOptions {
-	preset?: SamplerFoilPreset;
-	blend?: ViewStyle['mixBlendMode'];
-	/** Absolute sampler opacity, before the CardShell intensity multiplier. */
-	intensity?: number;
-}
 
 export interface FoilProps {
 	kind: FoilKind;
@@ -156,22 +66,16 @@ export interface FoilProps {
 	/** Tilt in degrees, owned by the card so foil and face share one light. */
 	rx: SharedValue<number>;
 	ry: SharedValue<number>;
-	/** Seeds the deterministic glitter/star/facet fields — pass the card id. */
-	seed: string;
 	/** Radius of the face this sits inside, so `edge` follows the card silhouette. */
 	radius?: number;
-	/** Scales every layer's opacity at once. 0 disables the foil entirely. */
+	/** Scales the foil's brightness. 0 disables the foil entirely. */
 	intensity?: number;
-	/** Per-layer overrides. Used by /dev/foil-lab; production passes nothing. */
-	overrides?: Partial<Record<FoilLayerName, FoilOverride>>;
-	/** Production sampler controls used by the on-device holo lab. */
-	samplerOptions?: SamplerFoilOptions;
-	/** Thumbnails ask for sparser dot fields. */
+	/** Thumbnails hold still instead of drifting, so a grid of them does not
+	 *  redraw every frame. */
 	detail?: 'full' | 'thumb';
-	/** `v2` swaps in the shine+glare recipes. Production leaves this unset. */
-	engine?: FoilEngine;
-	/** Foil-lab override: pick a v2 recipe regardless of `kind`. */
-	recipe?: FoilRecipeId;
+	/** Reserved. The recipes draw fixed patterns today; this is where a
+	 *  per-card facet layout will take its seed. */
+	seed?: string;
 }
 
 export function Foil({
@@ -180,195 +84,34 @@ export function Foil({
 	height,
 	rx,
 	ry,
-	seed,
 	radius = 0,
 	intensity = 1,
-	overrides,
-	samplerOptions,
-	detail = 'full',
-	engine = 'legacy',
-	recipe: recipeId
+	detail = 'full'
 }: FoilProps) {
 	if (intensity <= 0) return null;
-	const sampler = overrides ? undefined : (samplerOptions?.preset ?? SAMPLER_PRESET[kind]);
-	const layers = sampler ? (['spec', 'edge'] as const) : RECIPES[kind];
-
-	if (engine === 'v2') {
-		return (
-			<FoilV2
-				kind={kind}
-				width={width}
-				height={height}
-				rx={rx}
-				ry={ry}
-				seed={seed}
-				radius={radius}
-				intensity={intensity}
-				recipe={recipeId}
-			/>
-		);
-	}
-
-	if (engine === 'pokemon') {
-		return (
-			<FoilPokemon
-				kind={kind}
-				width={width}
-				height={height}
-				rx={rx}
-				ry={ry}
-				seed={seed}
-				radius={radius}
-				intensity={intensity}
-			/>
-		);
-	}
+	// Without a Skia runtime (the web target) every kind degrades to the plain
+	// card's gloss, so a foiled card still reads as a card, just a quiet one.
+	const recipe = kind === 'none' || !SKIA_AVAILABLE ? null : RECIPE_FOR_KIND[kind];
 
 	return (
-		// `isolation: isolate` is what keeps color-dodge from reaching through the
-		// card and blending with whatever is behind it.
-		<View
-			style={[StyleSheet.absoluteFill, styles.stack, { borderRadius: radius }]}
-			pointerEvents="none"
-		>
-			{sampler ? (
-				<SamplerFoil
-					preset={sampler}
-					width={width}
-					height={height}
-					rx={rx}
-					ry={ry}
-					seed={seed}
-					intensity={(samplerOptions?.intensity ?? SAMPLER_INTENSITY[kind] ?? 0.18) * intensity}
-					blend={samplerOptions?.blend}
-				/>
-			) : null}
-			{layers.map((name) => {
-				const o = overrides?.[name];
-				if (o?.enabled === false) return null;
-				return (
-					<Layer
-						key={name}
-						name={name}
-						blend={o?.blend ?? DEFAULTS[name].blend}
-						opacity={(o?.opacity ?? DEFAULTS[name].opacity) * intensity}
-						width={width}
-						height={height}
-						radius={radius}
-						rx={rx}
-						ry={ry}
-						seed={seed}
-						detail={detail}
-					/>
-				);
-			})}
-		</View>
-	);
-}
-
-interface LayerProps {
-	name: FoilLayerName;
-	blend: ViewStyle['mixBlendMode'];
-	opacity: number;
-	width: number;
-	height: number;
-	radius: number;
-	rx: SharedValue<number>;
-	ry: SharedValue<number>;
-	seed: string;
-	detail: 'full' | 'thumb';
-}
-
-function Layer({ name, blend, opacity, width, height, radius, rx, ry, seed, detail }: LayerProps) {
-	const parallax = PARALLAX[name] ?? 0;
-	const moves = parallax > 0;
-
-	// Translated layers are oversized and centred, so the slide never shows an edge.
-	const w = moves ? width * OVERSCAN : width;
-	const h = moves ? height * OVERSCAN : height;
-	const offX = moves ? -(w - width) / 2 : 0;
-	const offY = moves ? -(h - height) / 2 : 0;
-
-	const travelX = width * parallax * TILT_RANGE;
-	const travelY = height * parallax * TILT_RANGE;
-
-	const animated = useAnimatedStyle(() => {
-		if (!moves) return {};
-		// the light sits opposite the tilt, matching the web card's convention
-		return {
-			transform: [
-				{ translateX: interpolate(-ry.value, [-TILT_RANGE, TILT_RANGE], [-travelX, travelX]) },
-				{ translateY: interpolate(-rx.value, [-TILT_RANGE, TILT_RANGE], [-travelY, travelY]) }
-			]
-		};
-	});
-
-	const box: ViewStyle = {
-		position: 'absolute',
-		left: offX,
-		top: offY,
-		width: w,
-		height: h,
-		opacity,
-		mixBlendMode: blend
-	};
-
-	return (
-		<Animated.View style={[box, animated]} pointerEvents="none">
-			<LayerContent name={name} width={w} height={h} radius={radius} seed={seed} detail={detail} />
-		</Animated.View>
-	);
-}
-
-function LayerContent({
-	name,
-	width,
-	height,
-	radius,
-	seed,
-	detail
-}: {
-	name: FoilLayerName;
-	width: number;
-	height: number;
-	radius: number;
-	seed: string;
-	detail: 'full' | 'thumb';
-}) {
-	const numericSeed = useMemo(() => hashSeed(seed), [seed]);
-	const thumb = detail === 'thumb';
-
-	switch (name) {
-		case 'wash':
-			return <View style={[StyleSheet.absoluteFill, { experimental_backgroundImage: WASH }]} />;
-		case 'space':
-			return <View style={[StyleSheet.absoluteFill, { backgroundColor: '#0B0616' }]} />;
-		case 'nebula':
-			return (
-				<>
-					<View style={[StyleSheet.absoluteFill, { experimental_backgroundImage: NEBULA_A }]} />
-					<View style={[StyleSheet.absoluteFill, { experimental_backgroundImage: NEBULA_B }]} />
-				</>
-			);
-		case 'bars':
-			return (
-				<>
-					<View style={[StyleSheet.absoluteFill, { experimental_backgroundImage: BARS }]} />
-					<TiledFoilTexture
-						name="grain"
-						width={width}
-						height={height}
-						tileScale={0.32}
-						opacity={0.28}
-					/>
-				</>
-			);
-		case 'spec':
-			return <View style={[StyleSheet.absoluteFill, { experimental_backgroundImage: SPEC }]} />;
-		case 'edge':
-			// a lit top lip and a shadowed bottom one: the whole reason a flat
-			// rectangle reads as a card with thickness
-			return (
+		<>
+			<View
+				style={[StyleSheet.absoluteFill, styles.stack, { borderRadius: radius }]}
+				pointerEvents="none"
+			>
+				{recipe ? (
+					<View style={[styles.shader, { opacity: intensity, borderRadius: radius }]}>
+						<SkiaFoil
+							recipe={recipe}
+							width={width}
+							height={height}
+							radius={radius}
+							rx={rx}
+							ry={ry}
+							idle={detail === 'thumb' ? 'still' : 'drift'}
+						/>
+					</View>
+				) : null}
 				<View
 					style={[
 						StyleSheet.absoluteFill,
@@ -381,105 +124,97 @@ function LayerContent({
 						}
 					]}
 				/>
-			);
-		case 'glitter':
-			return (
-				<TiledFoilTexture
-					name="glitter"
-					width={width}
-					height={height}
-					tileScale={thumb ? 0.34 : 0.25}
-				/>
-			);
-		case 'stars':
-			return <CoverFoilTexture name="cosmosTop" opacity={0.9} />;
-		case 'facets':
-			return <FacetField seed={numericSeed} width={width} height={height} thumb={thumb} />;
-	}
+			</View>
+			<View
+				style={[StyleSheet.absoluteFill, styles.gloss, { borderRadius: radius }]}
+				pointerEvents="none"
+			>
+				<Glare width={width} height={height} rx={rx} ry={ry} opacity={intensity} />
+			</View>
+		</>
+	);
 }
 
-/** The mosaic tier: a jittered lattice of triangles, each sampling the holo
- *  spectrum at a different rotation. Eight shared gradient defs rather than one
- *  per facet — 70 gradient definitions would cost far more than they buy. */
-function FacetField({
-	seed,
+/** Built once: the gradient only depends on the panel in foil-sksl.ts. */
+const GLOSS = glossGradient();
+
+/**
+ * The glare's white wash, as a gradient ellipse that slides opposite the
+ * finger. Same centre, travel and falloff as the glare the shader lights its
+ * flecks with (`foil-sksl.ts`), so the gloss and the sparkle under it move as
+ * one light. White at alpha `a` drawn normally is exactly a screen blend of
+ * `a`, so this needs no blend mode.
+ */
+function Glare({
 	width,
 	height,
-	thumb
+	rx,
+	ry,
+	opacity
 }: {
-	seed: number;
 	width: number;
 	height: number;
-	thumb: boolean;
+	rx: SharedValue<number>;
+	ry: SharedValue<number>;
+	opacity: number;
 }) {
-	const facets = useMemo(
-		() => (thumb ? facetField(seed, 3, 4) : facetField(seed, 5, 7)),
-		[seed, thumb]
-	);
-	const bucket = 360 / FACET_ANGLES.length;
+	// The shader measures the glare in face heights, x and y alike.
+	const radiusX = GLOSS_RADII[0] * height;
+	const radiusY = GLOSS_RADII[1] * height;
+
+	// Mirrors `glareCentre = GLARE_REST + u_tilt * LIGHT_DIRECTION * GLARE_TRAVEL`,
+	// with u_tilt = [ry, -rx] / TILT_RANGE exactly as SkiaFoil feeds it.
+	const slide = useAnimatedStyle(() => ({
+		transform: [
+			{ translateX: (ry.value / TILT_RANGE) * LIGHT_DIRECTION[0] * GLARE_TRAVEL[0] * width },
+			{ translateY: (-rx.value / TILT_RANGE) * LIGHT_DIRECTION[1] * GLARE_TRAVEL[1] * height }
+		]
+	}));
 
 	return (
-		<Svg width={width} height={height} style={StyleSheet.absoluteFill}>
-			<Defs>
-				{FACET_ANGLES.map((deg, i) => {
-					const a = HOLO_SPECTRUM[i % HOLO_SPECTRUM.length];
-					const b = HOLO_SPECTRUM[(i + 2) % HOLO_SPECTRUM.length];
-					const rad = (deg * Math.PI) / 180;
-					return (
-						<LinearGradient
-							key={deg}
-							id={`facet${i}`}
-							x1={`${50 - Math.cos(rad) * 50}%`}
-							y1={`${50 - Math.sin(rad) * 50}%`}
-							x2={`${50 + Math.cos(rad) * 50}%`}
-							y2={`${50 + Math.sin(rad) * 50}%`}
-						>
-							<Stop offset="0" stopColor={a} />
-							<Stop offset="1" stopColor={b} />
-						</LinearGradient>
-					);
-				})}
-			</Defs>
-			{facets.map((f, i) => (
-				<Polygon
-					key={i}
-					points={f.points.map((p) => `${p.x * width},${p.y * height}`).join(' ')}
-					fill={`url(#facet${Math.floor(f.angle / bucket) % FACET_ANGLES.length})`}
-					opacity={f.opacity}
-				/>
-			))}
-		</Svg>
+		<Animated.View
+			style={[
+				{
+					position: 'absolute',
+					left: GLARE_REST[0] * width - radiusX,
+					top: GLARE_REST[1] * height - radiusY,
+					width: radiusX * 2,
+					height: radiusY * 2,
+					opacity,
+					experimental_backgroundImage: GLOSS
+				} as ViewStyle,
+				slide
+			]}
+		/>
 	);
 }
-
-const FACET_ANGLES = [0, 45, 90, 135, 180, 225, 270, 315] as const;
-
-// Built once at module load. Rebuilding a gradient string per frame is exactly
-// what the transform-based approach exists to avoid.
-const WASH = holoWash('118deg', 1);
-const BARS = repeatingLinear('102deg', HOLO_SPECTRUM, 4.5, 100);
-// A soft circular shine that fades smoothly to fully transparent at the far
-// corner. The old `radialGlare` ramped its highlight down to opaque black over
-// the 42%–78% band; under `screen` the black is a no-op, so all that ever
-// showed was the highlight *ending* mid-face — a steep brightness step that the
-// eye reads as a horizontal line across the card (a Mach band), most visible
-// near the vertical centre once the shine is bright. Spreading the fade across
-// the whole radius keeps the highlight but removes the edge. No dark stops.
-const SPEC =
-	'radial-gradient(circle farthest-corner at 50% 40%, ' +
-	'rgba(255,255,255,0.55) 0%, ' +
-	'rgba(255,255,255,0.32) 16%, ' +
-	'rgba(255,255,255,0.16) 34%, ' +
-	'rgba(255,255,255,0.07) 54%, ' +
-	'rgba(255,255,255,0.02) 76%, ' +
-	'rgba(255,255,255,0) 100%)';
-const NEBULA_A = nebula();
-const NEBULA_B = nebulaSecondary();
 
 const styles = StyleSheet.create({
 	stack: {
 		// scopes every blend mode below to the card
 		isolation: 'isolate',
 		overflow: 'hidden'
+	},
+	// Above CardFace's lifted blocks (1 / 2) and the face light (4): the gloss
+	// is the laminate, so the light reaches the photo and text. No background,
+	// so no Android shadow, and shadowColor makes sure of it.
+	gloss: {
+		overflow: 'hidden',
+		zIndex: 6,
+		elevation: 6,
+		shadowColor: 'transparent'
+	},
+	// zIndex/elevation here only order the shader over `edge` inside the
+	// stack; the stack itself stays under the card's content.
+	shader: {
+		position: 'absolute',
+		top: 0,
+		left: 0,
+		right: 0,
+		bottom: 0,
+		overflow: 'hidden',
+		mixBlendMode: 'screen',
+		zIndex: 5,
+		elevation: 5
 	}
-});
+} as Record<string, ViewStyle>);

@@ -1,57 +1,25 @@
+/**
+ * The foil lab: every foil kind on a real card, through the production path.
+ *
+ * There is nothing to toggle per layer any more — a foil is one shader recipe
+ * (`src/card/foil/foil-sksl.ts`), and its look is tuned by editing the named
+ * constants at the top of that file, which recompile on save. What this
+ * screen is for is judging each recipe against real photo, name and frame on
+ * a device, at rest and at full tilt, on both platforms.
+ */
+
 import { useState } from 'react';
-import {
-	Linking,
-	Pressable,
-	ScrollView,
-	StyleSheet,
-	Text,
-	View,
-	useWindowDimensions,
-	type ViewStyle
-} from 'react-native';
-import { Link } from 'expo-router';
+import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Card } from '@/card/Card';
 import { FlipCard } from '@/card/FlipCard';
 import { DEMO_CARD } from '@/card/demo-card';
 import { BGS, FRAME_KEYS, type BgKey, type FrameKey } from '@/card/card-style';
-import {
-	FOIL_LAYERS,
-	type FoilEngine,
-	type FoilLayerName,
-	type FoilOverride
-} from '@/card/foil/Foil';
-import {
-	FOIL_RECIPES,
-	FOIL_RECIPE_IDS,
-	V2_KIND_RECIPES,
-	type FoilRecipeId
-} from '@/card/foil/recipes';
+import { RECIPE_FOR_KIND } from '@/card/foil/Foil';
 import { FOIL_KINDS, type FoilKind } from '@/card/tiers';
 import { palette } from '@/theme/palette';
 import { radius, space, type } from '@/theme/tokens';
-
-/** Every CSS blend mode React Native 0.86 accepts, in `mixBlendMode`'s order. */
-const BLEND_MODES: NonNullable<ViewStyle['mixBlendMode']>[] = [
-	'normal',
-	'multiply',
-	'screen',
-	'overlay',
-	'darken',
-	'lighten',
-	'color-dodge',
-	'color-burn',
-	'hard-light',
-	'soft-light',
-	'difference',
-	'exclusion',
-	'hue',
-	'saturation',
-	'color',
-	'luminosity',
-	'plus-lighter'
-];
 
 const FACES: { value: BgKey; label: string }[] = [
 	{ value: 'paper', label: 'Paper' },
@@ -60,25 +28,27 @@ const FACES: { value: BgKey; label: string }[] = [
 	{ value: 'slate', label: 'Slate' }
 ];
 
+const RECIPE_NOTES: Record<FoilKind, string> = {
+	none: 'Tier 0. No shader — the sliding glare and the edge lip only.',
+	glitter: 'Recipe “sprayed”: a photographed spray of paint flecks, each lit in the sliding bands.',
+	holo: 'Recipe “linear”: stripes computed in the shader, rainbow repeating across the face.',
+	cosmic: 'Recipe “stars”: four-point stars over fine dust.',
+	mosaic: 'Recipe “mosaic”: a baked facet map, every triangle lit at its own tilt.'
+};
+
 export default function FoilLabScreen() {
 	const { width } = useWindowDimensions();
 	const insets = useSafeAreaInsets();
 	const cardWidth = Math.min(width - space.xl * 2, 320);
 
-	const [engine, setEngine] = useState<FoilEngine>('v2');
 	const [kind, setKind] = useState<FoilKind>('glitter');
-	const [recipeOverride, setRecipeOverride] = useState<FoilRecipeId | null>(null);
 	const [frame, setFrame] = useState<FrameKey>('silver');
 	const [bg, setBg] = useState<BgKey>('blush');
 	const [intensity, setIntensity] = useState(1);
-	const [overrides, setOverrides] = useState<Partial<Record<FoilLayerName, FoilOverride>>>({});
-
-	const patch = (layer: FoilLayerName, next: FoilOverride) =>
-		setOverrides((prev) => ({ ...prev, [layer]: { ...prev[layer], ...next } }));
+	const [detail, setDetail] = useState<'full' | 'thumb'>('full');
 
 	const view = { ...DEMO_CARD, style: { ...DEMO_CARD.style, frame, bg } };
-	const activeRecipe = recipeOverride ?? V2_KIND_RECIPES[kind];
-	const recipeDef = FOIL_RECIPES[activeRecipe];
+	const recipe = kind === 'none' ? null : RECIPE_FOR_KIND[kind];
 
 	return (
 		<ScrollView
@@ -89,9 +59,10 @@ export default function FoilLabScreen() {
 		>
 			<View style={styles.intro}>
 				<Text style={styles.eyebrow}>ON-DEVICE TEST BENCH</Text>
-				<Text style={styles.title}>Holo lab</Text>
+				<Text style={styles.title}>Foil lab</Text>
 				<Text style={styles.body}>
-					Drag the real card, then compare modes for clarity at rest and at full tilt.
+					Drag the card. The light moves away from your finger and the pattern stays put. Judge each
+					foil at rest and at full tilt, and check that the name and bio stay readable.
 				</Text>
 			</View>
 
@@ -104,84 +75,43 @@ export default function FoilLabScreen() {
 							view={view}
 							width={cardWidth}
 							foil={kind}
-							seed="production-holo-lab"
+							seed="foil-lab"
 							rx={rx}
 							ry={ry}
 							intensity={intensity}
-							foilOverrides={engine === 'legacy' ? overrides : undefined}
-							foilEngine={engine}
-							foilRecipe={engine === 'v2' ? (recipeOverride ?? undefined) : undefined}
+							detail={detail}
 						/>
 					)}
 				/>
 			</View>
-			<Text style={styles.hint}>DRAG TO MOVE THE LIGHT · WATCH TEXT AND EDGES</Text>
-
-			<Section title="Engine">
-				<Chips
-					options={['v2', 'pokemon', 'legacy'] as const}
-					value={engine}
-					onChange={(next) => {
-						setEngine(next);
-						setOverrides({});
-						if (next !== 'v2') setRecipeOverride(null);
-					}}
-				/>
-				<Text style={styles.note}>
-					{engine === 'v2'
-						? 'Shine + glare recipes (sampler techniques on a real card). Production still uses legacy.'
-						: engine === 'pokemon'
-							? 'Structural port of pokemon-cards-css: one color-dodge shine + one overlay glare per card.'
-							: 'Production layer stack — toggle layers / blend modes below.'}
-				</Text>
-				<Link href="/dev/foil-sampler" style={styles.link}>
-					Open blank-card sampler →
-				</Link>
-				<Link href="/dev/skia-smoke" style={styles.link}>
-					Open Skia smoke (dev client only) →
-				</Link>
-			</Section>
+			<Text style={styles.hint}>
+				{recipe ? `SHADER RECIPE · ${recipe.toUpperCase()}` : 'NO SHADER · PLAIN CARD'}
+			</Text>
 
 			<Section title="Foil kind">
-				<Chips
-					options={FOIL_KINDS}
-					value={kind}
-					onChange={(k) => {
-						setKind(k);
-						setOverrides({});
-						// kind change clears a forced recipe so the draft map applies
-						setRecipeOverride(null);
-					}}
-				/>
-				{engine === 'v2' ? (
-					<Text style={styles.note}>
-						Draft map: {kind} → {V2_KIND_RECIPES[kind]}
-					</Text>
-				) : null}
+				<Chips options={FOIL_KINDS} value={kind} onChange={setKind} />
+				<Text style={styles.note}>{RECIPE_NOTES[kind]}</Text>
 			</Section>
-
-			{engine === 'v2' ? (
-				<Section title="Recipe override">
-					<Chips
-						options={['auto', ...FOIL_RECIPE_IDS] as const}
-						value={recipeOverride ?? 'auto'}
-						onChange={(id) => setRecipeOverride(id === 'auto' ? null : (id as FoilRecipeId))}
-					/>
-					<Text style={styles.recipeTitle}>{recipeDef.title}</Text>
-					<Text style={styles.note}>{recipeDef.description}</Text>
-				</Section>
-			) : null}
 
 			<Section title="Frame">
 				<Chips options={FRAME_KEYS} value={frame} onChange={setFrame} />
+				<Text style={styles.note}>The holo frame draws the “linear” recipe on a plain card.</Text>
 			</Section>
 
 			<Section title={`Intensity · ${intensity.toFixed(2)}`}>
 				<View style={styles.stepRow}>
 					<Stepper label="− 0.05" onPress={() => setIntensity((value) => clamp(value - 0.05))} />
 					<Stepper label="+ 0.05" onPress={() => setIntensity((value) => clamp(value + 0.05))} />
-					<Stepper label="Reset" onPress={() => setIntensity(0.42)} />
+					<Stepper label="Reset" onPress={() => setIntensity(1)} />
 				</View>
+			</Section>
+
+			<Section title="Idle motion">
+				<Chips options={['full', 'thumb'] as const} value={detail} onChange={setDetail} />
+				<Text style={styles.note}>
+					“full” drifts the light when untouched, as the hero card does. “thumb” holds still, as
+					binder thumbnails do, so a grid never redraws every frame.
+				</Text>
 			</Section>
 
 			<Section title="Card face">
@@ -199,78 +129,15 @@ export default function FoilLabScreen() {
 				</View>
 			</Section>
 
-			{engine === 'legacy' ? (
-				<Section title="Layers">
-					<Text style={styles.note}>
-						Layers not used by the current foil are greyed out. Tap a blend mode to cycle it.
-					</Text>
-					{FOIL_LAYERS.map((layer) => (
-						<LayerRow
-							key={layer}
-							layer={layer}
-							override={overrides[layer]}
-							onPatch={(next) => patch(layer, next)}
-						/>
-					))}
-					<Stepper label="reset all layers" wide onPress={() => setOverrides({})} />
-				</Section>
-			) : (
-				<Section title="Reference">
-					<Pressable
-						onPress={() => Linking.openURL('https://poke-holo.simey.me/')}
-						style={styles.refBtn}
-					>
-						<Text style={styles.refText}>poke-holo.simey.me — technique reference</Text>
-					</Pressable>
-				</Section>
-			)}
+			<Section title="Tuning">
+				<Text style={styles.note}>
+					Every look value is a named constant in{' '}
+					<Text style={styles.mono}>src/card/foil/foil-sksl.ts</Text>. Edit one, save, and the
+					shader recompiles here. <Text style={styles.mono}>node scripts/foil-sksl.js</Text> prints
+					the source for skialabs.dev.
+				</Text>
+			</Section>
 		</ScrollView>
-	);
-}
-
-function LayerRow({
-	layer,
-	override,
-	onPatch
-}: {
-	layer: FoilLayerName;
-	override?: FoilOverride;
-	onPatch: (next: FoilOverride) => void;
-}) {
-	const enabled = override?.enabled !== false;
-	const blend = override?.blend;
-	const opacity = override?.opacity;
-
-	const cycleBlend = () => {
-		const i = blend ? BLEND_MODES.indexOf(blend) : -1;
-		onPatch({ blend: BLEND_MODES[(i + 1) % BLEND_MODES.length] });
-	};
-
-	return (
-		<View style={[styles.layerRow, !enabled && styles.layerRowOff]}>
-			<Pressable onPress={() => onPatch({ enabled: !enabled })} style={styles.layerToggle}>
-				<Text style={[styles.checkbox, enabled && styles.checkboxOn]}>{enabled ? '●' : '○'}</Text>
-				<Text style={styles.layerName}>{layer}</Text>
-			</Pressable>
-
-			<Pressable onPress={cycleBlend} style={styles.blendBtn}>
-				<Text style={styles.blendText}>{blend ?? 'default'}</Text>
-			</Pressable>
-
-			<View style={styles.opacityGroup}>
-				<Stepper
-					label="−"
-					small
-					onPress={() => onPatch({ opacity: clamp((opacity ?? 0.5) - 0.05) })}
-				/>
-				<Text style={styles.opacityText}>{opacity === undefined ? '—' : opacity.toFixed(2)}</Text>
-				<Stepper
-					label="+"
-					small
-					onPress={() => onPatch({ opacity: clamp((opacity ?? 0.5) + 0.05) })}
-				/>
-			</View>
-		</View>
 	);
 }
 
@@ -310,22 +177,9 @@ function Chips<T extends string>({
 	);
 }
 
-function Stepper({
-	label,
-	onPress,
-	wide,
-	small
-}: {
-	label: string;
-	onPress: () => void;
-	wide?: boolean;
-	small?: boolean;
-}) {
+function Stepper({ label, onPress }: { label: string; onPress: () => void }) {
 	return (
-		<Pressable
-			onPress={onPress}
-			style={[styles.stepper, wide && styles.stepperWide, small && styles.stepperSmall]}
-		>
+		<Pressable onPress={onPress} style={styles.stepper}>
 			<Text style={styles.stepperText}>{label}</Text>
 		</Pressable>
 	);
@@ -351,16 +205,7 @@ const styles = StyleSheet.create({
 	},
 	sectionTitle: { ...type.meta, color: palette.teal },
 	note: { ...type.small, color: palette.creamFaint },
-	recipeTitle: { ...type.subtitle, color: palette.cream },
-	link: { ...type.bodyStrong, color: palette.teal, paddingTop: space.xs },
-	refBtn: {
-		paddingVertical: space.sm,
-		paddingHorizontal: space.md,
-		borderRadius: radius.sm,
-		backgroundColor: palette.raisedHigh
-	},
-	refText: { ...type.small, color: palette.butter },
-	row: { flexDirection: 'row', gap: space.sm, alignItems: 'center' },
+	mono: { color: palette.warm },
 	chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs },
 	chip: {
 		paddingVertical: space.xs + 2,
@@ -376,29 +221,6 @@ const styles = StyleSheet.create({
 	},
 	chipText: { ...type.small, color: palette.creamMute },
 	chipTextOn: { color: palette.void, fontFamily: 'SpaceGrotesk-Bold' },
-	layerRow: {
-		flexDirection: 'row',
-		alignItems: 'center',
-		gap: space.sm,
-		paddingVertical: space.xs,
-		borderTopWidth: StyleSheet.hairlineWidth,
-		borderTopColor: palette.line
-	},
-	layerRowOff: { opacity: 0.45 },
-	layerToggle: { flexDirection: 'row', alignItems: 'center', gap: space.xs, width: 96 },
-	checkbox: { color: palette.creamFaint, fontSize: 13 },
-	checkboxOn: { color: palette.teal },
-	layerName: { ...type.small, color: palette.cream },
-	blendBtn: {
-		flex: 1,
-		paddingVertical: space.xs,
-		paddingHorizontal: space.sm,
-		borderRadius: radius.sm,
-		backgroundColor: palette.raisedHigh
-	},
-	blendText: { ...type.small, color: palette.butter, fontSize: 11 },
-	opacityGroup: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
-	opacityText: { ...type.small, color: palette.creamMute, width: 38, textAlign: 'center' },
 	stepRow: { flexDirection: 'row', gap: space.sm },
 	stepper: {
 		flex: 1,
@@ -409,21 +231,10 @@ const styles = StyleSheet.create({
 		borderWidth: StyleSheet.hairlineWidth,
 		borderColor: palette.line
 	},
-	stepperWide: { minWidth: 120 },
-	stepperSmall: { flex: 0, minWidth: 30, paddingVertical: 2 },
 	stepperText: { ...type.small, color: palette.butter },
 	faceRow: { flexDirection: 'row', gap: space.sm },
 	faceChoice: { flex: 1, gap: space.xs, padding: 3, borderRadius: radius.md, borderWidth: 2 },
 	faceChoiceOn: { borderColor: palette.teal },
 	faceSwatch: { height: 34, borderRadius: radius.sm },
-	faceLabel: { ...type.small, color: palette.creamMute, textAlign: 'center' },
-	readability: {
-		gap: space.sm,
-		padding: space.lg,
-		borderRadius: radius.lg,
-		backgroundColor: 'rgba(69,229,213,0.08)',
-		borderWidth: 1,
-		borderColor: 'rgba(69,229,213,0.25)'
-	},
-	readabilityTitle: { ...type.bodyStrong, color: palette.teal }
+	faceLabel: { ...type.small, color: palette.creamMute, textAlign: 'center' }
 });

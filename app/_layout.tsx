@@ -58,7 +58,6 @@ export default function RootLayout() {
 							<Stack.Screen name="(auth)" options={{ headerShown: false }} />
 							<Stack.Screen name="card/edit" options={{ title: 'Edit card' }} />
 							<Stack.Screen name="dev/foil-lab" options={{ title: 'Foil lab' }} />
-							<Stack.Screen name="dev/foil-sampler" options={{ title: 'Foil sampler' }} />
 							<Stack.Screen name="dev/cards" options={{ title: 'Card gallery' }} />
 							<Stack.Screen name="dev/stickers" options={{ title: 'Fandom stickers' }} />
 						</Stack>
