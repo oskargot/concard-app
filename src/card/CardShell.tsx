@@ -19,8 +19,6 @@ import { BGS, FRAMES, type CardStyle } from './card-style';
 import { TILT_RANGE } from './FlipCard';
 import { CARD_ASPECT } from '../theme/tokens';
 import { Foil } from './foil/Foil';
-import type { FoilEngine, FoilLayerName, FoilOverride, SamplerFoilOptions } from './foil/Foil';
-import type { FoilRecipeId } from './foil/recipes';
 import type { FoilKind } from './tiers';
 
 export interface CardShellProps {
@@ -31,18 +29,12 @@ export interface CardShellProps {
 	faceColor?: string;
 	/** Which foil to draw over the face. Omit for a face with no light at all. */
 	foil?: FoilKind;
-	/** Seeds the foil's deterministic fields — pass the card id. */
+	/** Reserved for per-card foil patterns — pass the card id. See `Foil`. */
 	seed?: string;
 	rx: SharedValue<number>;
 	ry: SharedValue<number>;
 	intensity?: number;
-	foilOverrides?: Partial<Record<FoilLayerName, FoilOverride>>;
-	foilSampler?: SamplerFoilOptions;
 	detail?: 'full' | 'thumb';
-	/** `v2` = shine+glare experiment. Production leaves unset (legacy). */
-	foilEngine?: FoilEngine;
-	/** Foil-lab: force a specific v2 recipe regardless of `foil` kind. */
-	foilRecipe?: FoilRecipeId;
 	/**
 	 * Draw a soft circular light over the face — bright at the centre, faint at
 	 * its edges. Opt-in so a collected card's frozen snapshot stays pixel-identical
@@ -90,15 +82,11 @@ export function CardShell({
 	width,
 	faceColor,
 	foil,
-	seed = 'card',
+	seed,
 	rx,
 	ry,
 	intensity = 1,
-	foilOverrides,
-	foilSampler,
 	detail = 'full',
-	foilEngine,
-	foilRecipe,
 	light,
 	children,
 	overlay
@@ -179,11 +167,7 @@ export function CardShell({
 						ry={ry}
 						seed={seed}
 						intensity={intensity}
-						overrides={foilOverrides}
-						samplerOptions={foilSampler}
 						detail={detail}
-						engine={foilEngine}
-						recipe={foilRecipe}
 					/>
 				) : null}
 			</View>

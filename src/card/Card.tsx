@@ -17,10 +17,7 @@ export interface CardProps extends Pick<
 	| 'rx'
 	| 'ry'
 	| 'intensity'
-	| 'foilOverrides'
 	| 'detail'
-	| 'foilEngine'
-	| 'foilRecipe'
 > {
 	view: CardView;
 	/** sticker_id → glyph when baked sticker art is not loaded. */
@@ -37,10 +34,7 @@ export function Card({
 	rx,
 	ry,
 	intensity,
-	foilOverrides,
 	detail,
-	foilEngine,
-	foilRecipe,
 	glyphs,
 	edit
 }: CardProps) {
@@ -53,10 +47,7 @@ export function Card({
 			rx={rx}
 			ry={ry}
 			intensity={intensity}
-			foilOverrides={foilOverrides}
 			detail={detail}
-			foilEngine={foilEngine}
-			foilRecipe={foilRecipe}
 			overlay={<CardOverlay view={view} width={width} glyphs={glyphs} />}
 		>
 			<CardFace view={view} width={width} edit={edit} />

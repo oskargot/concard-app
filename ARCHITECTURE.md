@@ -17,7 +17,7 @@ concard-app/                     # Expo/React Native app (this repo). Git root.
 │   ├── auth/                    # AuthProvider — session/profile state, route gating
 │   ├── card/                    # the card renderer (the core product surface)
 │   │   ├── editor/              # in-card style/photo/link editing controls
-│   │   └── foil/                # the blend-mode foil rendering engine
+│   │   └── foil/                # the Skia shader foil (one SkSL core, a recipe per tier)
 │   ├── stickers/                # fandom sticker catalog, layout, rendering
 │   ├── store/                   # zustand store + Supabase sync (scan queue, collections)
 │   ├── lib/                     # Supabase client, env handling, username/collect parsing,
@@ -72,8 +72,8 @@ them, and view a binder of everyone they've met. Routing and auth-status gating 
 `AuthStatus`: `unconfigured → signed-out → needs-username → needs-card → ready`.
 
 Technologies: Expo SDK 57, React Native 0.86, React 19.2, expo-router (file-based routing),
-react-native-reanimated 4 + gesture-handler (tilt/flip/drag), react-native-svg (foil dot/facet
-fields), zustand (client state), TypeScript (strict).
+react-native-reanimated 4 + gesture-handler (tilt/flip/drag), @shopify/react-native-skia (the foil
+shader), react-native-svg (card silhouettes, QR), zustand (client state), TypeScript (strict).
 
 Deployment: Distributed via Expo Go during development — including the Skia shader foil, since
 Expo Go ships Skia on SDK 57 (see "Why blend modes, and where Skia fits" in `CLAUDE.md`). No CI/CD
@@ -84,8 +84,8 @@ Key subsystems (see `CLAUDE.md` for full detail on each):
 - **Card renderer** (`src/card/`) — `CardShell` + `CardFace` + `CardOverlay` composed by
   `FlipCard`, mirroring the web app's `Card.svelte` pixel-for-pixel via a shared `CardView` shape
   (`src/card/types.ts`).
-- **Foil system** (`src/card/foil/`) — a from-scratch RN port of the CSS trading-card foil
-  technique, built on RN 0.86's `mixBlendMode`/`experimental_backgroundImage`/`filter`/`isolation`.
+- **Foil system** (`src/card/foil/`) — one SkSL runtime shader (`foil-sksl.ts`, drawn by
+  `SkiaFoil.tsx`) with a recipe per foil kind, screen-blended over the face by `Foil.tsx`.
 - **Card editor** (`app/card/edit.tsx`, `src/card/editor/`, `src/card/use-card-editor.ts`) — the
   card edits itself in place (no separate form UI); autosaves via a debounced update.
 - **The meet loop** (`app/(tabs)/card.tsx`, `scan.tsx`, `binder.tsx`, `src/store/`) — QR-based
@@ -170,7 +170,7 @@ present in the stack but no build/submit configuration exists in this repo yet.
 
 CI/CD Pipeline: None configured in this repo at present (no `.github/workflows`). Local gates before
 submitting changes are `npm run typecheck` and `npm run lint`, plus manual verification of card
-rendering/tilt/flip in Expo Go via `/dev/cards`, `/dev/foil-lab`, and `/dev/foil-sampler`.
+rendering/tilt/flip in Expo Go via `/dev/cards` and `/dev/foil-lab`.
 
 Monitoring & Logging: None configured in this repo.
 

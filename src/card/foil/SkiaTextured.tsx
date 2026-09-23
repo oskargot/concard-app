@@ -397,8 +397,10 @@ half4 main(float2 fragCoord) {
                  + float3(rim);
     light = clamp(light, 0.0, 1.0);
 
-    // Runtime effects return PREMULTIPLIED alpha.
-    return half4(half3(light * mask), half(mask));
+    // Runtime effects return PREMULTIPLIED alpha. Alpha tracks the light so
+    // black is transparent even without the screen blend -- see foil-sksl.ts.
+    float a = max(light.r, max(light.g, light.b)) * mask;
+    return half4(half3(light * mask), half(a));
 }
 `;
 

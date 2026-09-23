@@ -26,21 +26,35 @@ import { Card } from '@/card/Card';
 import { shellMetrics } from '@/card/CardShell';
 import { DEMO_CARD } from '@/card/demo-card';
 import { FlipCard } from '@/card/FlipCard';
+import { SkiaFoil, SKIA_RECIPE_NAMES } from '@/card/foil/SkiaFoil';
 import { SkiaSmoke } from '@/card/foil/SkiaSmoke';
 import { SkiaTextured } from '@/card/foil/SkiaTextured';
 import { palette } from '@/theme/palette';
 import { radius, space, type } from '@/theme/tokens';
 
 /**
- * The two engines draw the same five terms; they differ only in where the two
- * pinned fields come from. `procedural` computes them (a cosine for the bands,
- * hashes for the grain and flakes); `textured` samples them from illusion.png
- * and glitter.png. Everything else -- ramp, tilt response, glare, rim -- is
- * deliberately identical, so flipping between them compares the pattern source
- * and nothing else.
+ * `procedural` and `textured` draw the same five terms and differ only in
+ * where the two pinned fields come from: computed (a cosine for the bands,
+ * hashes for the grain and flakes) or sampled from illusion.png and
+ * glitter.png. Everything else -- ramp, tilt response, glare, rim -- is
+ * deliberately identical, so flipping between them compares the pattern
+ * source and nothing else.
+ *
+ * The rest are `SkiaFoil` recipes: the TiltHologramCard stack (rainbow x
+ * material, masked by two sliding light bands, plus a spotlight glare) as one
+ * shader core with a material per recipe -- see `foil-sksl.ts`.
  */
-const ENGINES = ['procedural', 'textured'] as const;
+const ENGINES = ['procedural', 'textured', ...SKIA_RECIPE_NAMES] as const;
 type Engine = (typeof ENGINES)[number];
+
+const HINTS: Record<Engine, string> = {
+	procedural: 'PATTERN COMPUTED — COSINE BANDS, HASH GRAIN, HASH FLAKES',
+	textured: 'PATTERN SAMPLED — ILLUSION.PNG CONTOURS, GLITTER.PNG FLAKES',
+	sprayed: 'SPRAY FOIL — SPRAYED.PNG FLECKS, SLIDING BANDS, SPOTLIGHT GLARE',
+	stars: 'STAR FOIL — STARS.PNG FLECKS, SLIDING BANDS, SPOTLIGHT GLARE',
+	linear: 'LINEAR HOLO — SHADER STRIPES, REPEATING RAINBOW, BANDS, GLARE',
+	mosaic: 'MOSAIC — BAKED FACET MAP, EACH TRIANGLE LIT AT ITS OWN TILT'
+};
 
 export default function SkiaSmokeScreen() {
 	const [engine, setEngine] = useState<Engine>('procedural');
@@ -114,8 +128,17 @@ export default function SkiaSmokeScreen() {
 											rx={rx}
 											ry={ry}
 										/>
-									) : (
+									) : engine === 'textured' ? (
 										<SkiaTextured
+											width={faceWidth}
+											height={faceHeight}
+											radius={faceRadius}
+											rx={rx}
+											ry={ry}
+										/>
+									) : (
+										<SkiaFoil
+											recipe={engine}
 											width={faceWidth}
 											height={faceHeight}
 											radius={faceRadius}
@@ -130,11 +153,7 @@ export default function SkiaSmokeScreen() {
 				</SkiaBoundary>
 			</View>
 			<Chips options={ENGINES} value={engine} onChange={setEngine} />
-			<Text style={styles.hint}>
-				{engine === 'procedural'
-					? 'PATTERN COMPUTED — COSINE BANDS, HASH GRAIN, HASH FLAKES'
-					: 'PATTERN SAMPLED — ILLUSION.PNG CONTOURS, GLITTER.PNG FLAKES'}
-			</Text>
+			<Text style={styles.hint}>{HINTS[engine]}</Text>
 			<Text style={styles.hint}>DRAG TO MOVE THE LIGHT, NOT THE GRAIN</Text>
 		</ScrollView>
 	);

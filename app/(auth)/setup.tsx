@@ -52,14 +52,8 @@ export default function SetupScreen() {
 				<Link href="/dev/foil-lab" style={styles.link}>
 					Open the foil lab →
 				</Link>
-				<Link href="/dev/foil-sampler" style={styles.link}>
-					Open the foil sampler →
-				</Link>
 				<Link href="/dev/stickers" style={styles.link}>
 					Open the fandom sticker lab →
-				</Link>
-				<Link href="/dev/skia-smoke" style={styles.link}>
-					Open the Skia smoke (dev client only) →
 				</Link>
 			</Panel>
 		</ScrollView>

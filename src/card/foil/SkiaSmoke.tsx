@@ -164,7 +164,7 @@ const GRAIN_GLARE = 0.35;
 /** How fine the flake field is, in cells across the card's height. Each cell
  *  holds at most one flake, so this is also the upper bound on how many there
  *  can be. 40 - 320. */
-const SPARKLE_SCALE = 150;
+const SPARKLE_SCALE = 300;
 
 /** What fraction of those cells actually hold a flake. Above about 0.3 it
  *  stops reading as glitter and starts reading as static. 0 - 0.5. */
@@ -668,8 +668,10 @@ half4 main(float2 fragCoord) {
     light = clamp(light, 0.0, 1.0);
 
     // Runtime effects return PREMULTIPLIED alpha. Returning straight alpha here
-    // fringes the anti-aliased corners.
-    return half4(half3(light * mask), half(mask));
+    // fringes the anti-aliased corners. Alpha tracks the light so black is
+    // transparent even without the screen blend -- see foil-sksl.ts.
+    float a = max(light.r, max(light.g, light.b)) * mask;
+    return half4(half3(light * mask), half(a));
 }
 `;
 
