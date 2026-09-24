@@ -11,7 +11,8 @@ import { FlipCard } from '@/card/FlipCard';
 import { StickerLayer } from '@/card/StickerLayer';
 import { normalizeStyle } from '@/card/card-style';
 import { foilForTier } from '@/card/tiers';
-import type { CardLink, PlacedSticker } from '@/card/types';
+import { normalizeLinks } from '@/card/links';
+import type { PlacedSticker } from '@/card/types';
 import { supabase } from '@/lib/supabase';
 import { useConcardStore } from '@/store/useConcardStore';
 import { palette } from '@/theme/palette';
@@ -56,7 +57,9 @@ export default function CardScreen() {
 				art_y: row.art_y,
 				art_scale: row.art_scale,
 				style: normalizeStyle(row.style),
-				links: Array.isArray(profile.links) ? (profile.links as unknown as CardLink[]) : [],
+				// The card's own links; a row from before per-card links falls back
+				// to the profile's, the same rule the editor loads with.
+				links: normalizeLinks(row.links ?? profile.links),
 				stickers: (stickerResult.data ?? []) as PlacedSticker[]
 			});
 		});

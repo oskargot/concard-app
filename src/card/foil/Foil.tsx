@@ -7,10 +7,10 @@
  * light on the rest of the card. Everything here is driven by the card's own
  * `rx`/`ry` tilt.
  *
- * It draws two layers, on either side of the card's content, the way a
- * printed holo card is built:
+ * It draws two layers over the card's content:
  *
- *  - The *holo*, under the name, photo, bio and links. One SkSL runtime
+ *  - The *holo*, over the whole face, photo included (card spec §7: the tier
+ *    foil covers the face; tiers replace each other rather than stack). One SkSL runtime
  *    shader (`SkiaFoil.tsx`, source in `foil-sksl.ts`) with a recipe per
  *    kind. It emits light only and is screen-blended over the face, so it
  *    brightens the card and never darkens it. Its alpha also tracks its
@@ -24,11 +24,12 @@
  *    shine a plain card used to borrow from the web card, so here tier 0's
  *    light moves with the tilt where the web card's holds still.
  *
- * CardFace lifts its blocks with `zIndex: 1` / `elevation: 2`, and both
- * platforms flatten the plain wrappers between them and this component, so
- * those blocks end up as siblings of these two layers. The holo stack has no
- * z at all and so stays under them; the gloss sits at 6, above them and above
- * CardShell's face light (4).
+ * CardFace lifts the photo with `zIndex: 1` / `elevation: 2` for flip
+ * stability, and both platforms flatten the plain wrappers between it and this
+ * component, so it ends up a sibling of these two layers. The holo stack sits
+ * at 3, over the photo and every other block; the gloss sits at 6, above that
+ * and above CardShell's face light (4). Stickers are drawn outside the face
+ * entirely, in CardShell's overlay, so they stay above the foil.
  *
  * `isolation: isolate` on the holo stack scopes the screen blend to the card,
  * so the foil never reaches whatever is behind it.
@@ -193,7 +194,12 @@ const styles = StyleSheet.create({
 	stack: {
 		// scopes every blend mode below to the card
 		isolation: 'isolate',
-		overflow: 'hidden'
+		overflow: 'hidden',
+		// Over the face's content, photo included (spec §7). No background, so
+		// no Android shadow, and shadowColor makes sure of it.
+		zIndex: 3,
+		elevation: 3,
+		shadowColor: 'transparent'
 	},
 	// Above CardFace's lifted blocks (1 / 2) and the face light (4): the gloss
 	// is the laminate, so the light reaches the photo and text. No background,
@@ -204,8 +210,7 @@ const styles = StyleSheet.create({
 		elevation: 6,
 		shadowColor: 'transparent'
 	},
-	// zIndex/elevation here only order the shader over `edge` inside the
-	// stack; the stack itself stays under the card's content.
+	// zIndex/elevation here only order the shader over `edge` inside the stack.
 	shader: {
 		position: 'absolute',
 		top: 0,

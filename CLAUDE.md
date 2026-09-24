@@ -48,24 +48,46 @@ but never fights ordinary navigation elsewhere, and leaves `dev/*` alone entirel
 
 ### The card renderer (`src/card/`)
 
-The core product surface. `Card.tsx` composes three pieces that must stay in lockstep — this mirrors
-the web app's `Card.svelte` and the two renderers must agree pixel-for-pixel, since a live card and a
-frozen collection snapshot both reduce to one `CardView` (`src/card/types.ts`) and must never drift
-from how they looked the day they were collected:
+The core product surface, built to the **card spec** (the "Concard Card Spec" handoff, which
+supersedes the style guide's Card Face section and the bible's card layout). The card is designed once
+in a fixed **250 × 350 unit** space (1 unit = 0.01 in, a 2.5 × 3.5 in trading card) and every render —
+hero, detail, binder (~106 px), the web `/username` page — draws that identical layout scaled by
+`width / 250`. Nothing reflows between sizes. A live card and a frozen collection snapshot both reduce
+to one `CardView` (`src/card/types.ts`) and must never drift from how they looked the day they were
+collected.
 
-- `CardShell.tsx` — the physical shell: metal frame band (gradient), inset face, foil stack. Sizes
-  everything off a single `width` prop using `u(n)` (`n cqw`, i.e. 1% of card width) since RN has no
-  container queries. `shellMetrics()` is the shared geometry other code can hook into.
-- `CardFace.tsx` — photo, name, handle, pronouns, bio, links: the content under the light.
-- `CardOverlay.tsx` — stickers and the fandom badge, drawn _outside_ the face clip so they can hang
-  over the card edge.
+- `layout/` — **the shared part; no React Native imports**, so the web card must import the same
+  files. `spec.ts` holds every number in the spec. `front.ts`'s `layoutFront()` turns content + style
+  into absolute rects in card coordinates _and the exact strings to draw_ (name ellipsised, pronoun
+  pill truncated, bio wrapped into whole lines, handles cut), plus divider stops, `H_max` and
+  `canAddLink`. `measure.ts` measures with `outfit-metrics.ts` — real Outfit advances + GPOS kerning
+  generated from the bundled TTFs by `scripts/make-outfit-metrics.py` (spec §9). Renderers only
+  position what `layoutFront` returns, one `Text` per line, so iOS, Android and web cannot break a
+  line in different places. `back.ts` is the back's geometry; `crop.ts` is the focal-point cover crop.
+- `CardShell.tsx` — the frame: 8-unit edge band in the card's edge colour (`FRAMES`), radius 12
+  outside / 4 inside, the face, the foil stack, and an `overlay` slot outside the face clip.
+  `shellMetrics(width)`'s `u(n)` converts design units to px. Every dimension is multiplied out
+  rather than one `scale` transform applied, so text lays out at its real pixel size and stays crisp.
+- `CardFace.tsx` — name, `@username` + pronoun pill, photo zone, bio box, link pills (Simple Icons
+  via `LinkIcon.tsx`, derived from the url's domain in `link-platforms.ts`). All card text is Outfit
+  with `allowFontScaling={false}`. `useFrontLayout(view)` normalises the view (old persisted
+  cards/snapshots included) and memoises the layout.
+- `CardOverlay.tsx` — stickers and the fandom affiliation, drawn in the overlay above everything,
+  tier foil included (spec §4, §7). Positions are card fractions; the affiliation's default spot is
+  the spec's 64 × 64 bottom-right corner of the content box (`BADGE_HOME`).
+- `CardBack.tsx` — graphite face, the card's own edge colour, the QR tile + `concard.me/username`
+  centred (`CardQr.tsx` draws the matrix itself so the quiet zone is exactly 4 modules). Variants:
+  `qr` (your card), `placeholder` (an offline scan: neutral edge, stand-in code) and `record`.
 - `FlipCard.tsx` — owns tilt (drag) and flip (tap) via Reanimated `SharedValue`s, and hands the same
   `rx`/`ry` down to both faces so their light can never desync. At rest the card is a flat view (no
   `perspective`); on drag it promotes to a hardware texture and applies `rotateX/Y` to that bitmap
   instead of re-compositing text/gradients under perspective (that was the "glassy pixelation" fix).
-- `card-style.ts` — style tokens (frames, backgrounds, shapes) **ported verbatim from the web app**
-  and must stay in sync with it and with the `cards_style_shape` DB check constraint. Also derives
-  text/hatch colors from the background (`inkFor`) so any background inverts to readable text.
+- `card-style.ts` — style tokens (edges, faces) **ported verbatim from the web app** and in sync
+  with the `cards_style_shape` DB check constraint, plus the spec's `photo_shape`, `alignment` and
+  `photo_height`. `inkFor` derives the spec's colour roles per face: primary text = `ink`, dim text =
+  `mute`, line colour = `line`, raised colour = `raised` (drawn at 60%). `normalizeStyle` reads both
+  photo-shape spellings (`square`/`round` are the DB's old names for `sharp`/`rounded`) and the old
+  `bio_align` key; `styleToJson` writes the old spellings while `WRITE_LEGACY_PHOTO_SHAPES` is on.
 - `tiers.ts` — the foil ladder. Two systems share one vocabulary here: **card tiers** (design bible
   §7, per card per collector, earned by repeat meetings) and **sticker foils** (web app enum, two
   copies at one tier combine into the next). `glitter` is a rung on both and must look identical in
@@ -90,10 +112,11 @@ card, so it brightens the face and never darkens it. Three files:
   `mosaic → mosaic`), wraps the canvas in the `isolation: isolate` + `mixBlendMode: screen` stack,
   and draws the two plain RN layers a shader cannot: the edge lip (needs to darken), and the
   _gloss_ — the glare's white wash as a sliding gradient built by `glossGradient()` from the same
-  numbers the shader lights its flecks with. The shader stack sits _under_ CardFace's lifted blocks
-  (`zIndex: 1` / `elevation: 2`), so the pattern never covers the photo or text; the gloss sits at
-  `zIndex: 6` over everything, so the light still does. Every card has the gloss, tier 0 included
-  (it replaced tier 0's static copy of the web card's specular shine).
+  numbers the shader lights its flecks with. Per spec §7 the tier foil covers the whole face,
+  photo included: the shader stack sits at `zIndex: 3` over CardFace's lifted photo (`1` / `2`), and
+  the gloss at `zIndex: 6` over everything. Stickers sit above both, in CardShell's overlay.
+  Every card has the gloss, tier 0 included (it replaced tier 0's static copy of the web card's
+  specular shine).
 
 Two rules hold everywhere: the material is sampled at `fragCoord` and never at a tilt offset, so
 the pattern is pinned to the card and only the light moves (a fleck that crawls on tilt reads as a
@@ -106,21 +129,31 @@ runs every kind through the production card path on real hardware.
 
 ### The card editor (`app/card/edit.tsx`, `src/card/editor/`, `src/card/use-card-editor.ts`)
 
-The card is the interface — there are no option panels. Three things follow from that and are
+The card is the interface — there are no option panels. These follow from that and are
 load-bearing:
 
-- **`CardFace` edits itself.** It takes an optional `edit` prop and swaps its `Text` nodes for
-  `TextInput`s carrying the identical style (`FaceText`). The editor deliberately has no copy of the
-  face layout: that geometry is what keeps the app and the web card pixel-identical, and a forked
-  editing renderer would be a second place for it to drift. With `edit` absent every branch collapses
-  to what it drew before. `faceBands()` exports the same measurements so controls can sit beside the
-  band they change.
-- **Style axes are arrows in the gutter**, one per band — frame at the header, photo shape at the
-  photo, bio alignment at the bio, outline at the bottom edge — plus swatch rails down the outer
-  edges for the eighteen face colours. `stageLayout()` claims the gutters in priority order and drops
-  the rails below the card rather than let it shrink past `COMPACT_BELOW`, where the face would
-  collapse to a thumbnail mid-edit. `link_layout` has no control because `CardFace` does not render
-  it yet — adding one before it draws would be a dead switch.
+- **`CardFace` edits itself.** With an `edit` prop, a tapped name / pronoun pill / bio becomes a
+  `TextInput` with the identical style in the identical box until it blurs, then the exact card
+  rendering (real ellipsis, whole-line bio) returns — that is the live preview. The photo takes a
+  drag to reframe and a pinch to zoom (`art_x`/`art_y`/`art_scale` are the spec's focal point +
+  zoom); the picker no longer pre-crops. `Card` draws the **divider** (`editor/DividerHandle.tsx`) in
+  the overlay: 14-unit steps from 112 to `H_max`, a haptic tick per step, a 44 pt touch target.
+  Editor-only affordances never render without `edit`. `faceBands()` reads the same layout so the
+  side controls follow the photo as it moves.
+- **Nothing is clipped silently.** `editor/fit-notices.ts` turns the layout into sentences under the
+  card (cut name, truncated pronouns, hidden bio, hidden bio lines); `LinkRows` previews each pill's
+  cut and blocks adding a row the photo leaves no room for (links never shrink the photo).
+- **Style axes are arrows in the gutter**, one per band — alignment at the header, photo shape at
+  the photo, edge colour at the links — plus one row of the eighteen face colours spanning the
+  width above the card.
+- **No Supabase, or nobody signed in, edits the on-device card.** Dev builds skip `AuthGate`, so
+  the tabs are reachable without either; `useLocalCardEditor` then edits the store's persisted
+  `active_card` (what Home and the Card tab draw) and the screen says so, rather than spinning on a
+  card row that can never load.
+- **Links are paste-a-url.** The domain picks the icon, the handle is parsed from the path per
+  platform (`link-platforms.ts`) and pre-filled, then it's the user's. Icons are generated from the
+  `simple-icons` devDependency by `node scripts/make-link-icons.mjs`; the app ships only the paths.
+  `/dev/card-editor` runs the whole editor on local state, no sign-in needed.
 - **Autosave, no save button.** `useCardEditor` debounces the whole editable row into one update.
   Reads and writes both honour the inherit rule: null `display_name` / `pronouns` / `bio` mean "use
   the profile's", so the editor resolves them for display and writes null back whenever the value
@@ -144,10 +177,9 @@ by the `concard` web repo.
 
 `palette.ts` / `tokens.ts` hold the palette and non-color tokens for the "dark velvet display case"
 chrome (Concard style guide): a neutral dark ground → surface → raised ramp, one holo accent
-(`#b9c9ff`) per screen, and **Outfit** for all app-chrome type. The card face keeps its own fonts
-(`font.display` = Fredoka, `font.body*` = Space Grotesk) so a rendered card stays pixel-identical to
-the web card and to a frozen collection snapshot — chrome must never borrow them, and the card face
-must never borrow Outfit. `src/ui/index.tsx` holds the chrome kit (`Button`, `HoloButton`, `Chip`,
+(`#b9c9ff`) per screen, and **Outfit** for all app-chrome type. Per the card spec the card face is
+Outfit too (400 / 600 / 700), measured from the same TTFs; Fredoka and Space Grotesk remain only in
+stickers and older chrome. `src/ui/index.tsx` holds the chrome kit (`Button`, `HoloButton`, `Chip`,
 `IconCircle`, `CountBadge`, `ScreenHeader`, `QrGlyph`, `AmbientGlow`, `Field`, `Panel`, …): quiet flat
 surfaces with a real hairline, with the holo gradient reserved for primary CTAs and the Scan control
 so cards stay the loudest thing on screen. `palette.ts` also keeps the old "arcade dusk" role names
@@ -176,18 +208,22 @@ app is the source of truth:
   exactly what the cooldown is meant to prevent. Matches the web app's `collect_card()`.
 - **Card fields are a union** of the bible's §6 list and the web app's existing fields (background
   tint, fandom badge) — nothing already shipping was dropped to match the bible.
-- **`bio_align` / `link_layout` live in the `style` jsonb**, not as their own DB columns, despite the
-  bible listing them as card fields — one check constraint to extend beats two new columns.
+- **`alignment` / `photo_height` live in the `style` jsonb**, not as their own DB columns, despite
+  the spec listing them as card fields — `collect_card()` freezes `style` whole, so snapshots carry
+  them with no function change. `bio_align` is still written alongside `alignment` for the web card.
+- **Collected cards keep the `record` back**, not the spec's QR back, so a binder card still can't be
+  re-scanned remotely; the spec's offline placeholder back is used for scans still pending sync.
 - **Bio cap stays at the DB's 200 chars**; the bible's 140 is enforced only in the app's editor, so
   cards already written by the web app remain valid.
 
 ## Status
 
 Phase 2 of 7, plus the card editor and the meet loop (My Card QR → Scan → `collect_card` → Binder).
-In: card renderer, foil lab, email/password auth, username claim, forced first card, card editor (text
-in place, style, per-card links, affiliation, photo upload), and the meet loop end to end — see "The
-meet loop" below. Not in: card switcher, stickers inventory/combine/placement UI, photo pan/zoom,
-events, friends, DMs, purchases, settings. Nothing has been exercised against a live Supabase project
+In: card renderer (to the card spec), foil lab, email/password auth, username claim, forced first
+card, card editor (text in place, style, photo/bio divider, photo reframing, per-card links with
+parsed handles, affiliation, photo upload), and the meet loop end to end — see "The meet loop" below.
+Not in: card switcher, stickers inventory/combine/placement UI (the overlay renders them; placing
+them doesn't exist yet), the web card's port to the spec, events, friends, DMs, purchases, settings. Nothing has been exercised against a live Supabase project
 on a device yet — the code paths are wired, but no one has run the scan → collect → binder loop between
 two real accounts.
 
@@ -214,11 +250,19 @@ scan, and `not_authenticated` pauses the whole drain rather than losing anything
 
 The binder's starter demo cards (`DEMO_BINDER`) are a first-run fixture, not a fallback that coexists
 with real data forever: the first successful live `collections` fetch (`fetchMyCollections`, run once
-per signed-in session by `ConcardSync`) or synced scan clears them. A collected card's back is always
-`CardBack`'s `record` variant — no QR — so a binder card can never be re-scanned remotely; only my own
-active card's back is `qr`.
+per signed-in session by `ConcardSync`) or synced scan clears them. A collected card's back is `CardBack`'s
+`record` variant — no QR — so a binder card can never be re-scanned remotely; only my own active card's
+back is `qr`. A scan still pending sync shows the `placeholder` back (neutral edge, stand-in code).
 
-**The editor needs a migration this repo does not own.** `supabase/migrations/20260915000000_card_links_and_art.sql`
-adds `cards.links` and the `card-art` storage bucket; copy it into the `concard` web repo and apply it
-there. Until then the editor detects the missing column, saves everything else, and says so — links
-are the only thing that won't persist.
+**The editor needs migrations this repo does not own.** `supabase/migrations/20260915000000_card_links_and_art.sql`
+adds `cards.links` and the `card-art` storage bucket; `20260923000000_card_spec_v2.sql` widens the
+style and links constraints for the card spec (eight links with handles, new photo-shape names,
+`photo_height`), moves the default sticker spot, adds `sticker_placements.size`, and makes
+`collect_card()` snapshot the card's own name / pronouns / bio / links. Copy both into the `concard`
+web repo and apply them there. Until then the editor degrades rather than failing: a missing column
+is dropped from the save and named, photo shapes are written under their old names, and a seventh or
+eighth link is kept on screen while only the first six save.
+
+**The web card must be ported to the spec too.** Parity is a hard requirement: the web renderer should
+import `src/card/layout/`, `link-platforms.ts`, `link-icons.ts` and `card-style.ts` verbatim and only
+position what `layoutFront()` returns.

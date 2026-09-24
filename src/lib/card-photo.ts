@@ -13,6 +13,7 @@
  * The cost is orphaned objects, which a later sweep can collect.
  */
 
+import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 
 import { requireSupabase } from './supabase';
@@ -37,42 +38,46 @@ export class PhotoPermissionError extends Error {
 /**
  * Open the library and return the chosen image, or null if the user backed out.
  *
- * `allowsEditing` hands framing to the OS crop UI rather than building a
- * pan/zoom gesture onto the card's photo well — that well is already a tap
- * target for this picker, and the two gestures would fight. The aspect follows
- * the card's own photo shape so what gets cropped is what gets drawn:
- * `circle` is a square well, every other shape is the 47.33cqw letterbox strip.
- *
- * `art_x` / `art_y` / `art_scale` stay at their defaults as a result. They are
- * still honoured by the renderer and by the web card, so an in-app pan/zoom can
- * be added later without touching the stored photo.
+ * No OS crop step. The card spec stores a photo as a focal point plus zoom
+ * (`art_x` / `art_y` / `art_scale`), not a crop rectangle, because the photo
+ * zone's height moves with the divider and its shape can change: a crop baked
+ * in at upload would be the wrong aspect the moment either did. The whole image
+ * is uploaded, and framing happens on the card itself (drag and pinch).
  */
-export async function pickCardPhoto(photoShape: string): Promise<PickedPhoto | null> {
+export async function pickCardPhoto(): Promise<PickedPhoto | null> {
 	const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
 	if (!permission.granted) throw new PhotoPermissionError();
 
 	const result = await ImagePicker.launchImageLibraryAsync({
 		mediaTypes: ['images'],
-		allowsEditing: true,
-		aspect: photoShape === 'circle' ? [1, 1] : [2, 1],
-		// The bucket caps objects at 5 MB and a card photo is never rendered wider
-		// than a phone screen, so there is nothing to gain from a full-size upload.
-		quality: 0.8,
-		base64: true,
+		allowsEditing: false,
 		exif: false
 	});
 
 	if (result.canceled || !result.assets.length) return null;
-
 	const asset = result.assets[0];
-	if (!asset.base64) throw new Error('That image could not be read.');
 
-	return {
-		uri: asset.uri,
-		base64: asset.base64,
-		mimeType: allowedMime(asset.mimeType)
-	};
+	// Without the OS crop a full camera photo would come through whole, which
+	// is far past the bucket's 5 MB cap. A card photo is at most ~210 units
+	// wide at 3× zoom on a dense screen, so a 1600px long edge loses nothing.
+	const long = Math.max(asset.width, asset.height);
+	const context = ImageManipulator.manipulate(asset.uri);
+	if (long > MAX_EDGE) {
+		context.resize(
+			asset.width >= asset.height
+				? { width: MAX_EDGE, height: null }
+				: { width: null, height: MAX_EDGE }
+		);
+	}
+	const image = await context.renderAsync();
+	const saved = await image.saveAsync({ compress: 0.8, format: SaveFormat.JPEG, base64: true });
+	if (!saved.base64) throw new Error('That image could not be read.');
+
+	return { uri: saved.uri, base64: saved.base64, mimeType: 'image/jpeg' };
 }
+
+/** Longest edge a card photo is uploaded at, in px. */
+const MAX_EDGE = 1600;
 
 /** Upload a picked photo and return its public url. */
 export async function uploadCardPhoto(
@@ -91,13 +96,6 @@ export async function uploadCardPhoto(
 
 	const { data } = client.storage.from(BUCKET).getPublicUrl(key);
 	return data.publicUrl;
-}
-
-/** The bucket's `allowed_mime_types`; anything else is sent as jpeg. */
-function allowedMime(mime: string | null | undefined): string {
-	return mime === 'image/png' || mime === 'image/webp' || mime === 'image/jpeg'
-		? mime
-		: 'image/jpeg';
 }
 
 function extFor(mime: string): string {

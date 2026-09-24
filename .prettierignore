@@ -6,3 +6,7 @@ pnpm-lock.yaml
 .expo/
 dist/
 assets/fonts/
+
+# Generated card-face data (scripts/make-outfit-metrics.py, scripts/make-link-icons.mjs)
+src/card/layout/outfit-metrics.ts
+src/card/link-icons.ts

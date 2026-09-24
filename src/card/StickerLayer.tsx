@@ -5,6 +5,7 @@ import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from 'react-nativ
 import { STICKER_BY_ID } from '@/stickers/catalog';
 import { palette } from '@/theme/palette';
 import { font } from '@/theme/tokens';
+import { CARD_H, CARD_W } from './layout/spec';
 import type { PlacedSticker } from './types';
 
 interface StickerLayerProps {
@@ -26,7 +27,7 @@ export function StickerLayer({
 	onChange,
 	onDelete
 }: StickerLayerProps) {
-	const height = width * 1.4;
+	const height = (width * CARD_H) / CARD_W;
 	return (
 		<View style={StyleSheet.absoluteFill} pointerEvents={editable ? 'box-none' : 'none'}>
 			{stickers.map((sticker) => (
@@ -75,7 +76,9 @@ function PlacedStickerView({
 	};
 
 	const id = sticker.id ?? sticker.sticker_id;
-	const baseSize = width * 0.16;
+	// Size is a fraction of the card width (card spec §4); older placements
+	// carry only `scale` over the original 16% base.
+	const baseSize = width * (sticker.size ?? 0.16);
 	const x = useSharedValue(sticker.x * width);
 	const y = useSharedValue(sticker.y * height);
 	const scale = useSharedValue(sticker.scale);
@@ -139,7 +142,9 @@ function PlacedStickerView({
 					style={[styles.disc, { backgroundColor: definition.color }]}
 					onPress={() => onSelect?.(id)}
 				>
-					<Text style={[styles.glyph, { fontSize: baseSize * 0.58 }]}>{definition.glyph}</Text>
+					<Text allowFontScaling={false} style={[styles.glyph, { fontSize: baseSize * 0.58 }]}>
+						{definition.glyph}
+					</Text>
 				</Pressable>
 
 				{editable && selected ? (

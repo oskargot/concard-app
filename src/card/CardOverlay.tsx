@@ -5,6 +5,11 @@
  * over the metal frame, so they live in CardShell's `overlay` slot rather than
  * inside the face. Affiliation art goes through `StickerRenderer`; deco glyphs
  * remain a Stage 1/2 prototype until the unified sticker pass.
+ *
+ * Card spec §4: stickers are an overlay above everything on the front, tier
+ * foil included, and never part of the layout — nothing reflows around them.
+ * Positions are centres in fractions of the card and sizes are fractions of its
+ * width, so a sticker lands in the same spot at every render scale.
  */
 
 import { Text, View } from 'react-native';
@@ -14,11 +19,16 @@ import { definitionFromAffiliation, recipeFor } from '../stickers/fandom-styles'
 import { StickerRenderer } from '../stickers/StickerRenderer';
 import { BADGE_HOME, stickerRotation } from './card-style';
 import { shellMetrics } from './CardShell';
+import { DEFAULT_STICKER } from './layout/spec';
 import { DEMO_STICKER_GLYPHS } from './demo-card';
 import type { Affiliation, CardView, PlacedSticker } from './types';
 
-/** Base width of the affiliation sticker in card units (cqw), before `scale`. */
-const AFFILIATION_WIDTH_U = 28;
+/** Base width of the affiliation sticker in design units, before `scale`: the
+ *  spec's 64 × 64 default spot. */
+const AFFILIATION_WIDTH_U = DEFAULT_STICKER.size;
+/** Base width of a deco sticker, as a fraction of the card, when a placement
+ *  predates `size`. The old 15.33cqw. */
+const STICKER_SIZE_DEFAULT = 0.1533;
 
 export function CardOverlay({
 	view,
@@ -49,7 +59,7 @@ export function CardOverlay({
 }
 
 function AffiliationMark({ affiliation, width }: { affiliation: Affiliation; width: number }) {
-	const m = shellMetrics(width, 'rounded');
+	const m = shellMetrics(width);
 	const size = m.u(AFFILIATION_WIDTH_U);
 	const x = affiliation.x ?? BADGE_HOME.x;
 	const y = affiliation.y ?? BADGE_HOME.y;
@@ -91,8 +101,8 @@ function StickerMark({
 	glyph: string;
 	width: number;
 }) {
-	const m = shellMetrics(width, 'rounded');
-	const size = m.u(15.33);
+	const m = shellMetrics(width);
+	const size = (sticker.size ?? STICKER_SIZE_DEFAULT) * m.width;
 	const wobble = stickerRotation(sticker.id ?? sticker.sticker_id);
 	const rotation = sticker.rotation + wobble;
 
@@ -113,20 +123,23 @@ function StickerMark({
 		>
 			{/* Die-cut rim approximation: soft paper outline behind the glyph. */}
 			<Text
+				allowFontScaling={false}
 				style={{
 					position: 'absolute',
-					fontSize: m.u(11),
-					lineHeight: m.u(11),
+					fontSize: size * 0.72,
+					lineHeight: size * 0.72,
 					color: '#fbf9f3',
 					textShadowColor: '#fbf9f3',
 					textShadowOffset: { width: 0, height: 0 },
-					textShadowRadius: m.u(2.2),
+					textShadowRadius: size * 0.14,
 					opacity: 0.95
 				}}
 			>
 				{glyph}
 			</Text>
-			<Text style={{ fontSize: m.u(11), lineHeight: m.u(11) }}>{glyph}</Text>
+			<Text allowFontScaling={false} style={{ fontSize: size * 0.72, lineHeight: size * 0.72 }}>
+				{glyph}
+			</Text>
 		</View>
 	);
 }

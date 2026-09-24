@@ -1,6 +1,7 @@
 import * as FileSystem from 'expo-file-system/legacy';
 
 import { normalizeStyle } from '@/card/card-style';
+import { normalizeLinks } from '@/card/links';
 import { DEMO_CARD } from '@/card/demo-card';
 import { tierForMeetings } from '@/card/tiers';
 import type { CardView, CollectedCard } from '@/card/types';
@@ -42,7 +43,8 @@ function snapshotToView(snapshot: Json): { view: CardView; ownerId: string } {
 		// lookup this drain doesn't do, so a collected card's badge is left off
 		// rather than drawn wrong. Out of scope for the meet loop.
 		affiliation: null,
-		links: Array.isArray(s.links) ? (s.links as CardView['links']) : [],
+		// Normalised: pre-spec snapshots carry `label` where handles now live.
+		links: normalizeLinks(s.links),
 		stickers: Array.isArray(s.stickers) ? (s.stickers as CardView['stickers']) : []
 	};
 	return { view, ownerId: String(owner.id ?? '') };

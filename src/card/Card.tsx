@@ -2,22 +2,23 @@
  * One component draws a live card or a frozen snapshot — same contract as the
  * web app's `Card.svelte`. Shell, face and overlay stay in lockstep so a card
  * never looks different on concard.me than in the app.
+ *
+ * Layering, bottom to top (card spec §7): face colour; photo, text, bio box and
+ * pills; the tier foil over the whole face; stickers. In the editor the divider
+ * handle rides on top of all of it.
  */
 
-import { CardFace, type CardFaceEdit } from './CardFace';
+import { CardFace, useFrontLayout, type CardFaceEdit } from './CardFace';
 import { CardOverlay } from './CardOverlay';
 import { CardShell, type CardShellProps } from './CardShell';
+import { inkFor } from './card-style';
+import { DividerHandle } from './editor/DividerHandle';
+import { normalizeLinks } from './links';
 import type { CardView } from './types';
 
 export interface CardProps extends Pick<
 	CardShellProps,
-	| 'width'
-	| 'foil'
-	| 'seed'
-	| 'rx'
-	| 'ry'
-	| 'intensity'
-	| 'detail'
+	'width' | 'foil' | 'seed' | 'rx' | 'ry' | 'intensity' | 'detail' | 'light'
 > {
 	view: CardView;
 	/** sticker_id → glyph when baked sticker art is not loaded. */
@@ -35,12 +36,15 @@ export function Card({
 	ry,
 	intensity,
 	detail,
+	light,
 	glyphs,
 	edit
 }: CardProps) {
+	const { style, layout } = useFrontLayout(view);
+
 	return (
 		<CardShell
-			style={view.style}
+			style={style}
 			width={width}
 			foil={foil}
 			seed={seed}
@@ -48,7 +52,22 @@ export function Card({
 			ry={ry}
 			intensity={intensity}
 			detail={detail}
-			overlay={<CardOverlay view={view} width={width} glyphs={glyphs} />}
+			light={light}
+			overlay={
+				<>
+					<CardOverlay view={view} width={width} glyphs={glyphs} />
+					{edit?.onChangePhotoHeight ? (
+						<DividerHandle
+							layout={layout}
+							linkCount={normalizeLinks(view.links).length}
+							width={width}
+							ink={inkFor(style.bg)}
+							onChange={edit.onChangePhotoHeight}
+							onInteraction={edit.onInteraction}
+						/>
+					) : null}
+				</>
+			}
 		>
 			<CardFace view={view} width={width} edit={edit} />
 		</CardShell>
