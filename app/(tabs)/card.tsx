@@ -8,7 +8,7 @@ import { useAuth } from '@/auth/AuthProvider';
 import { CardFace } from '@/card/CardFace';
 import { CardShell } from '@/card/CardShell';
 import { FlipCard } from '@/card/FlipCard';
-import { StickerLayer } from '@/card/StickerLayer';
+import { CardOverlay } from '@/card/CardOverlay';
 import { normalizeStyle } from '@/card/card-style';
 import { foilForTier } from '@/card/tiers';
 import { normalizeLinks } from '@/card/links';
@@ -73,7 +73,7 @@ export default function CardScreen() {
 			seed={card.id}
 			rx={rx}
 			ry={ry}
-			overlay={<StickerLayer stickers={card.stickers} width={cardWidth} />}
+			overlay={<CardOverlay view={card} width={cardWidth} rx={rx} ry={ry} />}
 		>
 			<CardFace view={card} width={cardWidth} />
 		</CardShell>

@@ -122,7 +122,7 @@ const STARTER_CARD: EditableCard = {
 	stickers: [
 		{
 			id: 'starter-spark',
-			sticker_id: 'spark',
+			sticker_id: 'sparkles',
 			x: 0.84,
 			y: 0.19,
 			rotation: 11,

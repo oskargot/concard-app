@@ -17,7 +17,7 @@ import { CardBack } from '@/card/CardBack';
 import { CardFace } from '@/card/CardFace';
 import { CardShell } from '@/card/CardShell';
 import { FlipCard, type FlipCardHandle } from '@/card/FlipCard';
-import { StickerLayer } from '@/card/StickerLayer';
+import { CardOverlay } from '@/card/CardOverlay';
 import { foilForTier } from '@/card/tiers';
 import { SITE_ORIGIN } from '@/lib/env';
 import { profileUrl } from '@/lib/username';
@@ -68,7 +68,7 @@ export default function HomeScreen() {
 			rx={rx}
 			ry={ry}
 			light
-			overlay={<StickerLayer stickers={card.stickers} width={cardWidth} />}
+			overlay={<CardOverlay view={card} width={cardWidth} rx={rx} ry={ry} />}
 		>
 			<CardFace view={card} width={cardWidth} />
 		</CardShell>

@@ -14,7 +14,7 @@ import { CardBack } from '@/card/CardBack';
 import { CardFace } from '@/card/CardFace';
 import { CardShell } from '@/card/CardShell';
 import { FlipCard, StaticCard } from '@/card/FlipCard';
-import { StickerLayer } from '@/card/StickerLayer';
+import { CardOverlay } from '@/card/CardOverlay';
 import { foilForTier, meetingsToNextTier, tierLabel } from '@/card/tiers';
 import type { CollectedCard } from '@/card/types';
 import { formatRetryIn } from '@/lib/collect';
@@ -140,7 +140,7 @@ export default function BinderScreen() {
 										rx={rx}
 										ry={ry}
 										detail="thumb"
-										overlay={<StickerLayer stickers={card.view.stickers} width={cardWidth} />}
+										overlay={<CardOverlay view={card.view} width={cardWidth} rx={rx} ry={ry} />}
 									>
 										<CardFace view={card.view} width={cardWidth} />
 									</CardShell>
@@ -204,7 +204,7 @@ export default function BinderScreen() {
 											rx={rx}
 											ry={ry}
 											overlay={
-												<StickerLayer stickers={selected.view.stickers} width={detailCardWidth} />
+												<CardOverlay view={selected.view} width={detailCardWidth} rx={rx} ry={ry} />
 											}
 										>
 											<CardFace view={selected.view} width={detailCardWidth} />

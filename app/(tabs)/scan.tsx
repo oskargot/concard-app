@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CardFace } from '@/card/CardFace';
 import { CardShell } from '@/card/CardShell';
 import { StaticCard } from '@/card/FlipCard';
-import { StickerLayer } from '@/card/StickerLayer';
+import { CardOverlay } from '@/card/CardOverlay';
 import { foilForTier } from '@/card/tiers';
 import { formatRetryIn } from '@/lib/collect';
 import { ALLOWED_QR_HOSTS, SITE_ORIGIN } from '@/lib/env';
@@ -167,7 +167,7 @@ export default function ScanScreen() {
 											rx={rx}
 											ry={ry}
 											detail="thumb"
-											overlay={<StickerLayer stickers={card.view.stickers} width={thumbWidth} />}
+											overlay={<CardOverlay view={card.view} width={thumbWidth} rx={rx} ry={ry} />}
 										>
 											<CardFace view={card.view} width={thumbWidth} />
 										</CardShell>
