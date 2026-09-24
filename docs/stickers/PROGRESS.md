@@ -2,9 +2,31 @@
 
 ## Current phase
 
-Phase 6 — Collect integration. Status: in progress
+Phase 7 — Web parity (web repo). Status: in progress
 
 ## Phase summaries
+
+### Phase 6 — Collect integration (done 2026-09-23)
+
+Shipped: `src/card/snapshot.ts` reads v2/v3/v4 snapshots (v4 stickers carry kind, asset paths,
+label and style; the affiliation — previously dropped from collected cards — now draws, from its
+placement when there is one). Sync reads the collect's `stickers` grants (falling back to
+`bonus_sticker_id`) onto the binder card; `fetchMyCollections` reads them from
+`collection_sticker_grants`. A quiet "You got … + …" line with thumbnails sits under the binder
+card's detail and under the Scan screen's recent strip. With no Supabase, a demo scan replays a
+**real** v4 `collect_card()` response — printed by the migrated function in PGlite
+(concard `scripts/collect-fixture.mjs`) — through the same parsing, and credits the grants to the
+on-device inventory. Also fixed: the demo scan's username had a hyphen, which usernames can't have,
+so it never worked.
+Shots: [binder](shots/phase-6/scan--binder.png),
+[binder detail + grants](shots/phase-6/scan--binder-detail-grants.png),
+[inventory after the collect](shots/phase-6/scan--inventory-after-collect.png).
+Check on device:
+
+1. Scan → "Preview with a demo scan" → Binder: does the new card match the owner's card (stickers, foils, the Sci-fi affiliation) at mini size and in the detail view?
+2. Is the "You got …" line quiet enough next to the card?
+3. After migrations are applied, a real collect between two accounts: both stickers arrive in the collector's Stickers tab.
+   Needs Oskar: nothing new.
 
 ### Phase 5 — Inventory and combining (done 2026-09-23)
 
@@ -123,6 +145,8 @@ Needs Oskar: open the draft PRs; the product bible (both under "Needs Oskar").
 
 ## Questions (defaults taken)
 
+- Q: Live `cards.bio` is `NOT NULL DEFAULT ''`, so `coalesce(card.bio, profile.bio)` in `collect_card()` never falls back to the profile's bio — a card with no bio of its own snapshots an empty one. Pre-existing (the app's `20260914000000_card_inherit_text.sql` made it nullable, but live never got that part). → took: left alone, not a sticker change; flagged here. (§4)
+
 - Q: Where does a tapped drawer sticker land? → took: the card's centre, slightly high (0.5, 0.45), per §2.2's tap-to-place. Drag-out is implemented too (hold ~140 ms, then drag), so tap is a convenience, not a fallback. (§2.2)
 - Q: Removing when the drawer is closed? → took: removal is only by dropping on the open drawer, as specified; nothing else deletes. (§1.4)
 - Q: The affiliation in the editor. → took: it's movable like any sticker; its position saves through the card's affiliation columns (which the schema mirrors into its placement), its rotation / scale through its placement row once the migrations are live (on-device, through the store). Dropping it on the drawer clears the affiliation — it was never an inventory copy. (§1.1, §1.4)
@@ -234,11 +258,20 @@ schema predates the migrations).
 
 ## Tasks — Phase 6
 
-- [ ] Snapshots: read v4 (`card_snapshot.stickers[]` with kind / asset paths / label / style / is_affiliation) into `CardView`, keeping v2/v3 working; the affiliation drawn from its placement when present.
-- [ ] Sync: read `stickers` (the grants) from the `collect_card` response, add them to the local inventory view, and keep the legacy `bonus_*` fallback.
-- [ ] Collect feedback (§2.5): a quiet line / small thumbnails of the granted stickers in the scan result and on the binder card.
-- [ ] Binder cards draw stickers correctly at mini size (they already go through `CardOverlay`); check against the owner's card.
-- [ ] A faithful fixture of a v4 collect response, exercised through the real sync code path, with screenshots.
+- [x] Snapshots: read v4 (`card_snapshot.stickers[]` with kind / asset paths / label / style / is_affiliation) into `CardView`, keeping v2/v3 working; the affiliation drawn from its placement when present. — `src/card/snapshot.ts`.
+- [x] Sync: read `stickers` (the grants) from the `collect_card` response, add them to the local inventory view, and keep the legacy `bonus_*` fallback.
+- [x] Collect feedback (§2.5): a quiet line / small thumbnails of the granted stickers in the scan result and on the binder card. — `src/stickers/GrantLine.tsx`.
+- [x] Binder cards draw stickers correctly at mini size (they already go through `CardOverlay`); check against the owner's card. — binder shot vs the fixture's placements: same stickers, positions, foils.
+- [x] A faithful fixture of a v4 collect response, exercised through the real sync code path, with screenshots. — commit `b5328c6`; web `e0ca01d`.
+
+## Tasks — Phase 7
+
+- [ ] Survey the web card (`Card.svelte`, `FoilFx`, `HoloFoilFx`, `StickerGlyph`, `lib/card.ts`, `/username`) and how it gets placements + definitions.
+- [ ] Deco stickers on web from the same baked assets (`full` + foil masked by `mask`), positioned by the same centre / size / scale / rotation / wobble maths as the app's `CardOverlay`.
+- [ ] Fandom stickers on web: port the generative renderer (`fandom-layout.ts`, `fandom-styles.ts`, `font-metrics.ts` are RN-free) as SVG, foil masked to its silhouette.
+- [ ] Foil on web: the same five looks — reuse the app's SkSL? (WebGL/CanvasKit vs CSS) — decide, record, build.
+- [ ] Web reads v4 snapshots + placements with definitions; `/username` and the binder.
+- [ ] Side-by-side screenshots: the same card in the app (web target) and the web app.
 
 ## Log
 
@@ -250,3 +283,4 @@ schema predates the migrations).
 - 2026-09-23 — Phase 3: foil engine extended (FoilFill), deco + fandom renderers, shimmer clock, fixtures, web CanvasKit, /dev/stickers; every card screen on CardOverlay; StickerLayer deleted. Commits `7ba4ab9`, `71a6855`, `39a0ba0`. Starting Phase 4.
 - 2026-09-23 — Phase 4: sticker button, drawer, on-card editing + autosave (live and on-device), harness `--actions`. Commit `cf0f834`. Starting Phase 5.
 - 2026-09-23 — Phase 5: Stickers tab inventory + combine + reveal; fandom submission; prototype catalog deleted. Commits `993c917`, `610ee6f`. Starting Phase 6.
+- 2026-09-23 — Phase 6: v4 snapshots, collect grants → binder + inventory, GrantLine, faithful collect fixture from PGlite, demo-scan username fix. App `b5328c6`, web `e0ca01d`. Starting Phase 7.
