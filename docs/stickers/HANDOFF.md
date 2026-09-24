@@ -323,17 +323,19 @@ Needs Oskar: …
 
 These are the working defaults. Use them, and flag any that turn out wrong in practice.
 
-| Decision | Default | Notes |
-|---|---|---|
-| Chance a copied sticker keeps its foil | 10% | Server-side constant |
-| Base sticker size | 24% of card width | Tune by eye |
-| Scale clamp | 0.5×–2× | From Oskar |
-| Max stickers per card | 20 | Soft cap, DB-enforced |
-| Sticker foil ladder | none → glitter → holo → cosmic → mosaic | Holo sits between glitter and cosmic; confirm it reads as an upgrade |
-| Pending fandom usable by submitter? | No | Shown as "In review" only |
-| Pending submissions per user | 3 | |
-| Own affiliation consumes inventory? | No, it's free | Extra fandom stickers do consume inventory |
-| Drawer layout | Deco/Fandom switch, 4 rows visible, scroll | Column count: agent picks, logs it |
-| Remove a sticker | Drag back onto drawer | Returns to inventory |
-| Emoji source | Noto Emoji PNG, Apache 2.0 | ~40 to start |
-| Asset format | WebP with alpha, content-hashed | Immutable |
+| Decision | Default | Notes | Decided (build, 2026-09-23) |
+|---|---|---|---|
+| Chance a copied sticker keeps its foil | 10% | Server-side constant | As default: `sticker_copy_foil_chance()` = 0.10, rolled in `collect_card()` |
+| Base sticker size | 24% of card width | Tune by eye | As default, measured on a deco sticker's **long edge** (its whole baked canvas) and a fandom sticker's width; older placements keep 15.33%, the affiliation 64/250 |
+| Scale clamp | 0.5×–2× | From Oskar | As default, in the UI and a DB check |
+| Max stickers per card | 20 | Soft cap, DB-enforced | As default; the affiliation counts |
+| Sticker foil ladder | none → glitter → holo → cosmic → mosaic | Holo sits between glitter and cosmic; confirm it reads as an upgrade | As default; "reads as an upgrade" is on the Phase 3 device checklist |
+| Pending fandom usable by submitter? | No | Shown as "In review" only | As default; a rejected name may be resubmitted |
+| Pending submissions per user | 3 | | As default (trigger + RPC lock) |
+| Own affiliation consumes inventory? | No, it's free | Extra fandom stickers do consume inventory | As default: an `is_affiliation` placement, foil none, skipped by `sticker_available_count()` |
+| Drawer layout | Deco/Fandom switch, 4 rows visible, scroll | Column count: agent picks, logs it | **5 columns** (≈65 pt tiles); 4 made the sheet cover most of the card |
+| Remove a sticker | Drag back onto drawer | Returns to inventory | As default |
+| Emoji source | Noto Emoji PNG, Apache 2.0 | ~40 to start | 45, the 12 live ids kept; Noto's root LICENSE file is OFL at that tag, so both notices are vendored |
+| Asset format | WebP with alpha, content-hashed | Immutable | As default; one hash per bake (source + recipe) names all three files, stored as bucket paths |
+| Fandom name cap | — | §1.2: "whatever fandom-layout.ts can fit" | 24 characters (type holds its size to 20, ~85% at 24, halves by 36) |
+| Web foil engine | — | Not covered | Open — logged for Oskar in PROGRESS.md |

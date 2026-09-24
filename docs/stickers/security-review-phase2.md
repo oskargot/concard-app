@@ -45,3 +45,22 @@ No critical or high findings.
 | Races                                  | Pending cap under a per-user advisory lock; per-card cap under a row lock on the card; combine under the existing per-pile lock and now counts only spare (unplaced) copies.                                                                                                                                                                           |
 | Storage                                | `stickers` bucket: public read by design, `image/webp` only, 1 MB cap, **no** `storage.objects` policies, so only the service role writes. Objects are never overwritten (`upsert: false`).                                                                                                                                                            |
 | Deletion                               | Sticker definitions can't be deleted by anyone, service role included (trigger); retiring is `is_active = false`.                                                                                                                                                                                                                                      |
+
+## Client side (Phase 8)
+
+Reviewed the app's and the web's sticker code against the same checklist. No findings.
+
+- **Secrets.** The only privileged key anywhere is the ingest's `SUPABASE_SERVICE_ROLE_KEY`, read
+  by `scripts/stickers/ingest.ts` from git-ignored `.env.local`; nothing in `src/` or `app/` can
+  reach it. Both clients use the publishable key only. The web's local dev `.env` holds
+  placeholders, not a real project, and is git-ignored.
+- **Client trust.** Every limit the clients show — spare copies, the 20 cap, the scale clamp, the
+  24-character name, the 3-pending cap, combining — is advisory; the database enforces each one
+  again (Phase 2). Writes go through RLS-checked `sticker_placements` rows or the
+  `combine_stickers()` / `submit_fandom()` / `collect_card()` RPCs, and a refused write snaps the
+  editor back to the server's state.
+- **Rendering untrusted text.** Fandom names are user-submitted. The app draws them through
+  react-native-svg `Text`, the web through Svelte text interpolation inside `<text>` — both escape;
+  nothing is injected as markup. Pending names are visible only to their submitter (RLS).
+- **URLs.** Sticker art URLs are built from `*_path` columns the schema pins to
+  `<id>/<16 hex>-<kind>.webp`, so a row can't point an `<img>` or Skia image elsewhere.

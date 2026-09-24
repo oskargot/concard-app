@@ -241,7 +241,7 @@ Phase 2 of 7, plus the card editor and the meet loop (My Card QR → Scan → `c
 In: card renderer (to the card spec), foil lab, email/password auth, username claim, forced first
 card, card editor (text in place, style, photo/bio divider, photo reframing, per-card links with
 parsed handles, affiliation, photo upload), and the meet loop end to end — see "The meet loop" below.
-Not in: card switcher, stickers inventory/combine/placement UI (being built — see "Stickers" below), the web card's port to the spec, events, friends, DMs, purchases, settings. Nothing has been exercised against a live Supabase project
+Stickers are in (see "Stickers" below; their schema waits on the migrations being applied). Not in: card switcher, the web card's port to the spec, events, friends, DMs, purchases, settings. Nothing has been exercised against a live Supabase project
 on a device yet — the code paths are wired, but no one has run the scan → collect → binder loop between
 two real accounts.
 
@@ -289,28 +289,52 @@ eighth link is kept on screen while only the first six save.
 import `src/card/layout/`, `link-platforms.ts`, `link-icons.ts` and `card-style.ts` verbatim and only
 position what `layoutFront()` returns.
 
-## Stickers (in progress on `feat/stickers`)
+## Stickers
 
 `docs/stickers/HANDOFF.md` is the spec and wins over this file for stickers; `docs/stickers/PROGRESS.md`
-is where the build stands. The short version:
+records how it was built, every default taken, and what still waits on Oskar. In short:
 
-- **Two kinds, kept apart everywhere in the UI.** _Deco_ stickers are art, each generated from one PNG
-  (emoji are just a Noto Emoji deco set, never live emoji text). _Fandom_ stickers are the generative
-  text stickers in `src/stickers/` (`FandomSticker`, `fandom-layout`, `fandom-styles`); names are
-  user-submitted and live only after Oskar approves them. Within a kind, order is `sort_order`.
-- **Getting them.** Collecting a card grants up to one deco and up to one fandom sticker, each a
-  uniformly random copy of one placed on that card, decided server-side in `collect_card()` from the
-  snapshot; the copy keeps its foil with probability `STICKER_COPY_FOIL_CHANCE` (10%), else `none`.
-  Starter stickers come from `grant_starter_stickers()`. Your own affiliation is placed free.
-- **Foil ladder** `none → glitter → holo → cosmic → mosaic`: two copies at one foil combine into one at
-  the next (`combine_stickers()`), mosaic is the ceiling. Stickers extend the card's foil engine —
-  never a second one — and any foil on both a card and a sticker must look identical in both places.
-- **Placing.** Anywhere on the card, centre kept inside it; drag / pinch (0.5×–2× of a 24%-of-card-width
-  base) / two-finger rotate; last touched on top; drag back onto the drawer to remove. Positions are
-  0..1 of the card. At most 20 per card, enforced in the DB too. Autosaves.
-- **Snapshots** freeze placed stickers with everything needed to redraw them forever (kind, immutable
-  asset URLs or label + style category). Sticker rows and storage objects are never deleted;
-  `is_active = false` only retires one from acquisition.
-- **Rendering is cheap by construction**: the die-cut outline, mask and thumbnail are baked once at
-  ingest (`scripts/stickers/ingest.ts`), so drawing a deco sticker is one image plus, if foiled, the
-  foil clipped to its mask. The only animation is foil shimmer, on one shared clock.
+- **Two kinds, kept apart everywhere in the UI.** _Deco_ stickers are art, each baked from one PNG
+  (emoji are the Noto Emoji set, never live emoji text). _Fandom_ stickers are generative text
+  (`FandomSticker`, `fandom-layout`, `fandom-styles`); names are user-submitted and live only once
+  Oskar sets `fandoms.status = 'approved'`. Order within a kind is `sort_order`, then foil.
+- **Foil ladder** `none → glitter → holo → cosmic → mosaic` (`STICKER_FOILS`, `nextStickerFoil`
+  in `src/card/tiers.ts`); two spare copies combine into one at the next (`combine_stickers()`).
+- **Getting them**: `collect_card()` grants up to one deco and one fandom sticker, picked server-side
+  from the snapshot, keeping their foil 10% of the time; the free affiliation is a placement.
+
+Where things live:
+
+- `scripts/stickers/` — the ingest. `pipeline.ts` is the pure `png → {full, mask, thumb}` core
+  (die-cut by Gaussian blur + threshold, baked shadow, content-hashed names); `ingest.ts` bakes,
+  dry-runs, uploads and upserts rows (service-role key from `.env.local` only);
+  `fetch-noto.ts` vendors the emoji; `make-fixtures.ts` bundles a few bakes for offline use;
+  `make-button-icon.ts` bakes the editor's die-cut button icon.
+- `src/stickers/` — rendering and data. `StickerRenderer` (dispatch + `stickerBox`), `DecoSticker`
+  (one image; one canvas when foiled), `FandomSticker` (SVG; foil through a MaskedView of its own
+  die cut, native only), `StickerFoil` (the card's `FoilFill` evaluated in the card's light field
+  — see below), `shimmer.tsx` (the one shared idle clock), `definitions.ts` / `assets.ts`
+  (placement → drawable, fixture → bucket URL → glyph fallback), `inventory.ts` / `live.ts` /
+  `local-catalog.ts` (live and on-device inventories, schema-era tolerant),
+  `use-card-stickers.ts` (editor placements + autosave), `use-sticker-inventory.ts` (Stickers tab +
+  combine), `fandoms.ts` (submission), `GrantLine.tsx` (collect feedback).
+- `src/card/editor/` — `StickerButton`, `StickerDrawer`, `StickerEditLayer` (drag / pinch 0.5–2× /
+  rotate, drop on the drawer to remove), `AffiliationRow` (with "Submit a fandom").
+- `src/card/snapshot.ts` reads v2–v4 collection snapshots and a collect's grants.
+
+**A sticker's foil is the card's foil.** `SkiaFoil.tsx` exports `FoilFill`, the shader element the
+card's own canvas draws; a sticker draws the same element with `edge={0}` (no card clip / rim), a
+local matrix that maps each sticker pixel to the point of the card it covers (so it's lit by the
+card's `rx`/`ry` and glare), and a texture matrix that pins the flecks to the sticker at the card's
+fleck size. It's composited like the card's foil actually lands (premultiplied source-over — the
+card's stack is isolated), clipped with mask → `srcIn` foil → `srcATop` gloss. Plain stickers are
+a plain image: no canvas, no clock. Minis (`detail="thumb"`) draw stickers without foil.
+
+The web target loads CanvasKit (`index.web.js`, wasm copied by `scripts/setup-skia-web.mjs`), so
+`npm run shots` shows real foil; it caps at ~16 Skia canvases per page (one WebGL context each).
+The harness takes `--actions=<json>` scripts (click / text / type / tap / drag / eval / shot) —
+see `docs/stickers/shots/phase-*/*.json`.
+
+The web repo draws the same stickers from the same files: `scripts/sync-sticker-renderer.mjs` copies
+the fandom layout verbatim, and `src/lib/stickers/resolve.ts` mirrors `definitions.ts`. Its foil is
+still its own CSS `FoilFx` (a decision logged for Oskar).
