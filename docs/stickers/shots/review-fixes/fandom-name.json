@@ -1,0 +1,5 @@
+[
+	{ "click": "Submit a fandom", "after": 700 },
+	{ "type": ["e.g. Dungeon Meshi", "Dungeon Meshi 🍲🍲"], "after": 700 },
+	{ "shot": "fandom-name-count" }
+]

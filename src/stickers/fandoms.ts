@@ -24,6 +24,15 @@ export const FANDOM_NAME_MAX = 24;
 /** Submissions one person may have waiting at once (`fandom_pending_cap()`). */
 export const FANDOM_PENDING_MAX = 3;
 
+/**
+ * A name's length as the server counts it (`char_length`): characters, not the
+ * UTF-16 units `string.length` counts, so an emoji or other astral character
+ * is one, not two.
+ */
+export function fandomNameLength(name: string): number {
+	return [...name].length;
+}
+
 /** Trimmed, with runs of spaces collapsed — exactly what the server stores. */
 export function normalizeFandomName(name: string): string {
 	return name.replace(/\s+/g, ' ').trim();
@@ -82,7 +91,7 @@ export interface SubmittedFandom {
 export async function submitFandom(rawName: string): Promise<SubmittedFandom> {
 	const name = normalizeFandomName(rawName);
 	if (!name) throw new Error('Type the fandom’s name first.');
-	if (name.length > FANDOM_NAME_MAX) {
+	if (fandomNameLength(name) > FANDOM_NAME_MAX) {
 		throw new Error(`Fandom names are ${FANDOM_NAME_MAX} characters at most.`);
 	}
 	const style = styleCategoryForFandom({ id: slugifyFandomLabel(name), name });

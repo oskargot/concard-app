@@ -191,6 +191,9 @@ export function normalizeRotation(deg: number): number {
 	return r === -180 ? 180 : r;
 }
 
+// Writes throw the server's hint when it has one: the placement rules raise
+// codes like `too_many_stickers` with a sentence a person can read as the hint.
+
 /** Inserts a placement under the id the editor already gave it (a uuid), so
  *  the row's id never changes under the sticker once it lands. */
 export async function insertPlacement(
@@ -215,18 +218,18 @@ export async function insertPlacement(
 		})
 		.select('id')
 		.single();
-	if (error) throw new Error(error.message);
+	if (error) throw new Error(error.hint ?? error.message);
 	return String((data as Row).id);
 }
 
 export async function updatePlacement(id: string, patch: Partial<PlacedSticker>): Promise<void> {
 	const client = requireSupabase();
 	const { error } = await client.from('sticker_placements').update(wire(patch)).eq('id', id);
-	if (error) throw new Error(error.message);
+	if (error) throw new Error(error.hint ?? error.message);
 }
 
 export async function deletePlacement(id: string): Promise<void> {
 	const client = requireSupabase();
 	const { error } = await client.from('sticker_placements').delete().eq('id', id);
-	if (error) throw new Error(error.message);
+	if (error) throw new Error(error.hint ?? error.message);
 }

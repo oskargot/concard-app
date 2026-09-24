@@ -18,6 +18,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
 	FANDOM_NAME_MAX,
 	FANDOM_PENDING_MAX,
+	fandomNameLength,
 	fandomStatus,
 	normalizeFandomName,
 	styleCategoryOf,
@@ -155,6 +156,7 @@ function SubmitFandom({
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const clean = normalizeFandomName(name);
+	const length = fandomNameLength(clean);
 	const preview = useMemo(
 		() =>
 			makeFandomDefinition(
@@ -184,20 +186,21 @@ function SubmitFandom({
 			<Field
 				label="Fandom name"
 				value={name}
-				onChangeText={(t) => setName(t.slice(0, FANDOM_NAME_MAX + 4))}
-				maxLength={FANDOM_NAME_MAX + 4}
+				// cut in characters, as the server counts; maxLength counts UTF-16 units
+				onChangeText={(t) => setName([...t].slice(0, FANDOM_NAME_MAX + 4).join(''))}
+				maxLength={(FANDOM_NAME_MAX + 4) * 2}
 				placeholder="e.g. Dungeon Meshi"
 				autoCapitalize="words"
 				autoCorrect={false}
-				hint={`${clean.length}/${FANDOM_NAME_MAX} · Oskar reviews every fandom before it goes live.`}
+				hint={`${length}/${FANDOM_NAME_MAX} · Oskar reviews every fandom before it goes live.`}
 			/>
 			<FormError
 				message={
 					error ??
 					(atCap
 						? `You have ${FANDOM_PENDING_MAX} fandoms waiting for review already.`
-						: clean.length > FANDOM_NAME_MAX
-							? `That's ${clean.length} characters — ${FANDOM_NAME_MAX} is the most a sticker can hold.`
+						: length > FANDOM_NAME_MAX
+							? `That's ${length} characters — ${FANDOM_NAME_MAX} is the most a sticker can hold.`
 							: null)
 				}
 			/>
@@ -205,7 +208,7 @@ function SubmitFandom({
 				label="Submit for review"
 				onPress={send}
 				busy={busy}
-				disabled={atCap || !clean || clean.length > FANDOM_NAME_MAX}
+				disabled={atCap || !clean || length > FANDOM_NAME_MAX}
 			/>
 		</View>
 	);
