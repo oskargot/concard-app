@@ -2,11 +2,19 @@
 
 ## Current phase
 
-Phase 0 — Orientation and ground truth. Status: in progress
+Phase 1 — Ingest pipeline. Status: in progress
 
 ## Phase summaries
 
-_(none yet)_
+### Phase 0 — Orientation and ground truth (done 2026-09-23)
+
+Shipped: `feat/stickers` in both repos (pushed); web repo found (SvelteKit 2 / Svelte 5); Skia
+confirmed Expo-Go-safe (2.6.2 = SDK 57's bundled version), so no dev-client blocker; live schema
+read; `npm run shots` harness; lint green on Windows; `.env` ignored; CLAUDE.md corrected and given
+a Stickers section; `docs/design-bible.md`.
+Check on device: 1. `npm start` still opens the app in Expo Go (only tooling changed — a
+`playwright-core` devDependency and prettier config).
+Needs Oskar: open the draft PRs; the product bible (both under "Needs Oskar").
 
 ## Needs Oskar
 
@@ -31,11 +39,21 @@ _(none yet)_
 - [x] `.gitignore`: ignore `.env` (was only `.env*.local`).
 - [x] Verification harness: `npm run shots -- [--phase=N] [--name=x] <route>…` (`scripts/shots.mjs`). Starts Expo web on :8082 if needed, drives the installed Chrome via `playwright-core` (no browser download), 390×844 @2x, waits for React to paint, writes `docs/stickers/shots/phase-N/<route>.png`. Cold start ≈30 s. — shots: [dev-cards](shots/phase-0/dev-cards.png), [dev-stickers](shots/phase-0/dev-stickers.png)
 - [x] Make `npm run lint` green: `endOfLine: 'auto'` in `prettier.config.mjs` (CRLF from `core.autocrlf` was failing every file); `.prettierignore` gains `package.json`/`app.json` (npm/expo rewrite them), `.claude/`, and `HANDOFF.md` (kept verbatim); formatted `ARCHITECTURE.md`.
-- [ ] Update CLAUDE.md to the truth (web repo location + stack, cooldown, foil lab files, harness, lint) and add a Stickers section summarising HANDOFF §1.
-- [ ] `docs/design-bible.md`: copy the bible on disk, correct it, add a Stickers section.
-- [ ] Push both branches.
+- [x] Update CLAUDE.md to the truth (web repo location + stack, cooldown, foil lab files, harness, lint) and add a Stickers section summarising HANDOFF §1.
+- [x] `docs/design-bible.md`: copy the bible on disk, correct it, add a Stickers section.
+- [x] Push both branches. — commits `2072d30`, `8f06dd8`
+
+## Tasks — Phase 1
+
+- [ ] `scripts/stickers/`: pure core `buffer → {full, mask, thumb}` (trim, fit 512, pad, blur-threshold die-cut at r ≈ 3.5% of long edge, white fill under art, content hashes) with `sharp`.
+- [ ] Vendor the Noto Emoji set: ~40 con-culture emoji as 512px PNGs at a pinned ref, Apache 2.0 licence alongside; add the credit to the repo (and to the app's credits later, when there is a screen for it).
+- [ ] `scripts/stickers/ingest.ts` CLI: folder + optional manifest in; `--dry-run` writes to a local folder; idempotent; upload + row upsert when `SUPABASE_SERVICE_ROLE_KEY` is in `.env.local` (dry-only otherwise, and say so).
+- [ ] Contact sheet from the dry run → `docs/stickers/shots/ingest-contact-sheet.png`; eyeball outline consistency and tune r.
+- [ ] Verify idempotency by re-running (no changed hashes / files).
+- [ ] Render the die-cut sticker-button icon through the same pipeline (§2.1), for Phase 4.
 
 ## Log
 
 - 2026-09-23 — Started Phase 0. No PROGRESS.md existed; created it.
 - 2026-09-23 — Harness up; first screenshots of `/dev/cards` and `/dev/stickers` look right (card gallery + fandom sticker lab render on the web target; Skia foil absent there, as expected).
+- 2026-09-23 — CLAUDE.md + design-bible.md done, branches pushed. Phase 0 done; starting Phase 1. `sticker-src/` doesn't exist (no placeholder PNGs from Oskar yet) → proceeding with the emoji set alone (§3.4).
