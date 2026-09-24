@@ -1,0 +1,8 @@
+[
+	{ "click": "Stickers", "after": 900 },
+	{
+		"eval": "const x = 194, y = 581; const el = document.elementFromPoint(x, y); for (let i = 0; i < 2; i++) for (const t of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) el.dispatchEvent(new (t.startsWith('pointer') ? PointerEvent : MouseEvent)(t, { bubbles: true, cancelable: true, clientX: x, clientY: y, pointerId: 1, isPrimary: true, button: 0 }));",
+		"after": 900
+	},
+	{ "shot": "double-tap-one-copy" }
+]

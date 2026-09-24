@@ -8,7 +8,10 @@
  *  - v4 (migration 20260924000004): each sticker also carries what it *is* —
  *    `kind`, deco asset paths + aspect, fandom label + style category — and the
  *    affiliation is among them as `is_affiliation`. `affiliation` is still
- *    written, now with its `style_category`.
+ *    written, now with its `style_category`. Each sticker also carries its
+ *    placement's `id`, which seeds its wobble (`stickerRotation`) exactly as
+ *    it does on the owner's own card; older snapshots have none, and fall
+ *    back to a seed of their own.
  * Older snapshots stay drawable: stickers without definitions resolve through
  * `definitionForPlacement` (bundled fixture art, then a glyph), and an
  * affiliation without a style category gets the renderer's own guess.
@@ -44,6 +47,7 @@ export function placedFromSnapshot(input: unknown, index = 0): PlacedSticker {
 		(isFandomStickerId(stickerId) ? 'fandom' : 'deco');
 	const style = str(e.style_category);
 	return {
+		// the placement's own id, so a collector's copy wobbles like the owner's
 		id: str(e.id) ?? `${stickerId}-${index}`,
 		sticker_id: stickerId,
 		x: num(e.x, 0.5),

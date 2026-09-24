@@ -58,6 +58,8 @@ export function StickerEditLayer({
 	const sorted = useMemo(() => [...stickers].sort((a, b) => a.z_index - b.z_index), [stickers]);
 	return (
 		<>
+			{/* A placement's id never changes once made (the editor makes it, not
+			    the insert), so neither does this key or the wobble it seeds. */}
 			{sorted.map((s) => (
 				<EditableSticker
 					key={s.id ?? s.sticker_id}

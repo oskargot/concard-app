@@ -17,7 +17,8 @@
 // Starts Expo's web target on WEB_PORT if nothing is listening there, visits
 // each route in headless Chrome at 390 x 844 (an iPhone 14/15's points), and
 // writes a PNG per route to docs/stickers/shots/phase-N/. N comes from
-// --phase, else from "Phase N" under "## Current phase" in PROGRESS.md.
+// --phase, else from "Phase N" under "## Current phase" in PROGRESS.md;
+// --out=<dir> writes to that folder instead.
 //
 // Uses the installed Chrome through playwright-core rather than a downloaded
 // Playwright browser. Set CHROME_PATH to use another Chromium.
@@ -187,7 +188,10 @@ if (!executablePath) {
 	process.exit(1);
 }
 
-const outDir = path.join(ROOT, 'docs/stickers/shots', `phase-${currentPhase()}`);
+// --out=<dir> (relative to the repo) writes somewhere other than phase-N/.
+const outDir = flag('out')
+	? path.resolve(ROOT, flag('out'))
+	: path.join(ROOT, 'docs/stickers/shots', `phase-${currentPhase()}`);
 mkdirSync(outDir, { recursive: true });
 
 // the web entry loads Skia's CanvasKit from public/ (see index.web.js)

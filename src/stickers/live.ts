@@ -191,9 +191,12 @@ export function normalizeRotation(deg: number): number {
 	return r === -180 ? 180 : r;
 }
 
+/** Inserts a placement under the id the editor already gave it (a uuid), so
+ *  the row's id never changes under the sticker once it lands. */
 export async function insertPlacement(
 	cardId: string,
 	p: Pick<PlacedSticker, 'sticker_id' | 'foil' | 'x' | 'y' | 'rotation' | 'scale' | 'z_index'> & {
+		id?: string;
 		size?: number | null;
 	}
 ): Promise<string> {
@@ -202,6 +205,7 @@ export async function insertPlacement(
 		.from('sticker_placements')
 		.insert({
 			...wire(p),
+			...(p.id ? { id: p.id } : {}),
 			card_id: cardId,
 			sticker_id: p.sticker_id,
 			foil: p.foil,
