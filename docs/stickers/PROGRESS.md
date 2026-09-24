@@ -2,9 +2,31 @@
 
 ## Current phase
 
-Phase 3 — Renderer. Status: in progress
+Phase 4 — Editor: button, drawer, placement. Status: in progress
 
 ## Phase summaries
+
+### Phase 3 — Renderer (done 2026-09-23)
+
+Shipped: stickers are drawn by the card's own foil engine. `SkiaFoil` now exposes `FoilFill` (the
+same shader element the card draws) with a local matrix, a sticker-anchored texture matrix and a
+`u_edge` switch; a foiled sticker is lit as the patch of card it covers (same `rx`/`ry`, same glare
+and gloss), with its flecks at the card's size and clipped to its baked mask. Deco: one image, or one
+canvas when foiled. Fandom: the SVG plus the foil through a MaskedView of its own die cut (native
+only). All five rungs; one shared shimmer clock; bundled fixtures; `/dev/stickers` rewritten. Every
+card screen (Home, Card, Binder, Scan) now draws real stickers through `CardOverlay`; the prototype
+`StickerLayer` is gone. The web target now runs real Skia (CanvasKit) so screenshots show foil.
+Shots: [lab at rest](shots/phase-3/dev-stickers.png),
+[lab tilted](shots/phase-3/dev-stickers-tilt-0-6-0-6--tilt.png),
+[home + binder](shots/phase-3/root--regress.png).
+Check on device:
+
+1. `/dev/stickers`, tilt the glitter card: do the sparkles sticker's flecks match the card's in size and colour, and move with the same light?
+2. Same page: does each rung (glitter, holo, cosmic, mosaic) read as a step up from the one before? (§9 asks whether holo reads as an upgrade over glitter.)
+3. Fandom stickers at every rung (ladder rows 3–4): is the foil on the letters and white rim only, never the shadow? (Web can't show this.)
+4. `/dev/stickers?perf=1`: 20 foiled stickers on one card — does tilting it stay smooth?
+5. Home / Binder: stickers sit where they did, and nothing is drawn twice.
+   Needs Oskar: nothing new.
 
 ### Phase 2 — Schema (done 2026-09-23; applying it is Oskar's)
 
@@ -54,6 +76,12 @@ Needs Oskar: open the draft PRs; the product bible (both under "Needs Oskar").
 - [ ] **The product Design Bible isn't on this machine.** CLAUDE.md cites its §6 (card fields), §7 (tiers), §10 (signup) and §12 (chrome physicality), but the only "bible" on disk is the web repo's `DESIGN.md` ("Design & Brand Bible v0.1 — Creative Direction"), whose §12 is Color and which never mentions a web stack. I copied that one into `docs/design-bible.md` with a correction and stickers section; drop the product bible in there (or tell me where it is) and I'll fold it in. Blocking: nothing; I'm following CLAUDE.md, the style guide as implemented in `src/theme`/`src/ui`, and this spec.
 
 ## Questions (defaults taken)
+
+- Q: Base size for non-square deco art. → took: STICKER_BASE_WIDTH (24% of card width) is a deco sticker's **long edge** (its whole baked canvas, rim and shadow included); for fandom stickers it's the width. Otherwise tall art (penguin, boba) would come out much bigger than wide art. (§1.4)
+- Q: Should flecks scale when a sticker is pinched bigger? → took: no — a foil's flecks stay the card's size wherever it is, like one sheet of foil stock cut into stickers of different sizes. The _light_ is the card's too. (§1.3, §3.2)
+- Q: Web can't show fandom foil — react-native-masked-view's web build drops its children. → recorded; web shots show deco foil only. Native is unaffected. (§6.2)
+- Q: Web can't draw more than ~16 Skia canvases per page (one WebGL context each). `/dev/cards` hits it (its foiled demo stickers go white on web); `/dev/stickers` stays under it by showing two ladder rows on web and five on native. Web-only; recorded. (§6.2)
+- Q: Plain stickers get no gloss (the spec keeps `none` fully static), foiled ones do, clipped to their die cut. (§1.6)
 
 - Q: The free affiliation's size. → took: its placement stores `size = 0.256` (the card spec's 64-unit badge spot / 250), not the 0.24 deco base, so existing affiliations look unchanged. (§1.4)
 - Q: Snapshot asset "URLs" (§1.5). → took: store object **paths** in the immutable `stickers` bucket; clients prepend their own `<SUPABASE_URL>/storage/v1/object/public/stickers/`. Same permanence, no project host baked into rows. (§1.5, §4)
@@ -117,14 +145,27 @@ bake ≈ 0.7 s per sticker.
 
 ## Tasks — Phase 3
 
-- [ ] Extend `STICKER_FOILS` to all five rungs; `PlacedSticker` carries `kind` + deco asset paths / fandom label + style (snapshot v4 shape) and `is_affiliation`; one placement → definition resolver.
-- [ ] Local fixtures from the dry run: a subset of baked stickers bundled under `assets/stickers/fixtures/` + a generated index, for `/dev/stickers` with no Supabase.
-- [ ] One shared shimmer clock (a single shared value) that foiled stickers read; paused when nothing foiled is on screen.
-- [ ] Deco renderer: `full` image + the card's own foil engine clipped to `mask` (no second foil implementation).
-- [ ] Fandom stickers: accept every foil rung, masked to the renderer's own shape.
-- [ ] Make Skia render on the web target (CanvasKit) so screenshots can show foil at all — or record why not.
-- [ ] Rewrite `/dev/stickers`: every sticker at every foil, loose and on a card; a glitter sticker beside a glitter card.
-- [ ] Performance check: 20 foiled stickers on one card.
+- [x] Extend `STICKER_FOILS` to all five rungs; `PlacedSticker` carries `kind` + deco asset paths / fandom label + style (snapshot v4 shape) and `is_affiliation`; one placement → definition resolver. — `src/card/tiers.ts`, `src/card/types.ts`, `src/stickers/definitions.ts`, `assets.ts`, `constants.ts`.
+- [x] Local fixtures from the dry run: a subset of baked stickers bundled under `assets/stickers/fixtures/` + a generated index, for `/dev/stickers` with no Supabase. — 14 stickers, 844 KB, `scripts/stickers/make-fixtures.ts` → `src/stickers/fixtures.generated.ts`.
+- [x] One shared shimmer clock (a single shared value) that foiled stickers read; paused when nothing foiled is on screen. — `src/stickers/shimmer.tsx`, mounted at the root; its frame callback only runs while a foiled sticker is mounted and nothing has paused it.
+- [x] Deco renderer: `full` image + the card's own foil engine clipped to `mask` (no second foil implementation). — `DecoSticker.tsx`, `StickerFoil.tsx`; engine change in `SkiaFoil.tsx` / `foil-sksl.ts` (card output verified unchanged: 0.026/255 mean diff on the foil-lab card).
+- [x] Fandom stickers: accept every foil rung, masked to the renderer's own shape. — `FandomSticker` `silhouette` mode is the mask; native only (see Questions).
+- [x] Make Skia render on the web target (CanvasKit) so screenshots can show foil at all — or record why not. — `index.web.js` loads CanvasKit before the router; `scripts/setup-skia-web.mjs` copies the wasm to `public/` (git-ignored). `package.json` `main` is now `index` (native `index.js` just imports `expo-router/entry`).
+- [x] Rewrite `/dev/stickers`: every sticker at every foil, loose and on a card; a glitter sticker beside a glitter card. — `?tilt=x,y` pins a light for screenshots; `?perf=1` is the 20-sticker card.
+- [x] Performance check: 20 foiled stickers on one card. — can't be measured headless; built as `/dev/stickers?perf=1` and put on the device checklist. Each foiled sticker is one Skia canvas (native: one Metal/GL surface each); if 20 stutters on device, Phase 8's fallback is one shared canvas per card.
+
+Phase 3 notes (what I checked): tilted, the glitter sticker on the glitter card carries flecks of the card's size in the card's local hue (blue where the card is blue) — the light field lines up. The loose ladder reads as five distinct rungs. Found and fixed on the way: (1) sticker foil was screen-blended, but the card's foil actually lands as premultiplied source-over (Foil.tsx isolates its stack), so the sticker washed out where the card showed flecks — now composited the same way; (2) masking with `dstIn` left a 1-px foil line / faint box edge past the mask image on fractional-size canvases — now mask → foil `srcIn` → gloss `srcATop`.
+
+## Tasks — Phase 4
+
+- [ ] Floating sticker button pinned bottom-right (safe area, clear of the swatch rail at every `stageLayout()`), die-cut icon, bevel + pressed-in state.
+- [ ] Bottom-sheet drawer over the lower editor: Deco / Fandom switch, 4 columns × 4 rows visible, scrolls; available count > 0 only; count badge when > 1; order `sort_order` then foil desc; thumbnails.
+- [ ] Inventory source: live `sticker_inventory` + available counts when signed in; a local fixture inventory otherwise (the editor already runs Supabase-less).
+- [ ] Place: drag a tile out onto the card (tap-to-place at centre as fallback); new placements `size = 0.24`, scale 1, top z.
+- [ ] Move / pinch (0.5–2 clamp) / two-finger rotate on the card; last touched to the top; centre kept on the card.
+- [ ] Remove by dragging back onto the drawer; returns to inventory.
+- [ ] Autosave placements (insert / update / delete on `sticker_placements`; local store when Supabase-less); 20 cap in the UI.
+- [ ] Screenshots: button at rest + pressed, drawer on both kinds, a card with stickers moved / scaled at both clamps / rotated / one removed.
 
 ## Log
 
@@ -133,3 +174,4 @@ bake ≈ 0.7 s per sticker.
 - 2026-09-23 — CLAUDE.md + design-bible.md done, branches pushed. Phase 0 done; starting Phase 1. `sticker-src/` doesn't exist (no placeholder PNGs from Oskar yet) → proceeding with the emoji set alone (§3.4).
 - 2026-09-23 — Phase 1: pipeline, ingest, Noto set (45), contact sheet, button icon; idempotency verified. Committed `86422ee` + icon/credits. Starting Phase 2.
 - 2026-09-23 — Phase 2: five migrations + PGlite test on the reconstructed live schema, security review, types in both repos. Web `676abd0`, `26a82a4`; app `788f4d3`. Starting Phase 3.
+- 2026-09-23 — Phase 3: foil engine extended (FoilFill), deco + fandom renderers, shimmer clock, fixtures, web CanvasKit, /dev/stickers; every card screen on CardOverlay; StickerLayer deleted. Commits `7ba4ab9`, `71a6855`, `39a0ba0`. Starting Phase 4.
