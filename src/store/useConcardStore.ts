@@ -8,6 +8,7 @@ import type { StickerFoil } from '@/card/tiers';
 import type { CardView, CollectedCard, PlacedSticker } from '@/card/types';
 import type { CollectErrorCode } from '@/lib/collect';
 import type { InventoryRow } from '@/stickers/inventory';
+import type { FandomStyleCategory } from '@/stickers/types';
 import { LOCAL_STARTER_INVENTORY } from '@/stickers/local-catalog';
 
 export interface PendingScan {
@@ -21,6 +22,13 @@ export interface SyncError {
 	code: CollectErrorCode;
 	hint: string;
 	retryAt: string | null;
+}
+
+export interface LocalFandomSubmission {
+	id: string;
+	name: string;
+	style_category: FandomStyleCategory;
+	created_at: string;
 }
 
 export interface EditableCard extends CardView {
@@ -37,6 +45,9 @@ interface ConcardState {
 	/** The on-device sticker inventory, used when there's no live one (no
 	 *  Supabase, or nobody signed in). Seeded from the bundled fixtures. */
 	sticker_inventory: InventoryRow[];
+	/** Fandoms submitted from this device while offline or signed out; they
+	 *  stay "In review" here, since only the live project can approve one. */
+	fandom_submissions: LocalFandomSubmission[];
 	last_sync_at: string | null;
 	sync_error: SyncError | null;
 	hydrated: boolean;
@@ -60,6 +71,7 @@ interface ConcardState {
 	removeSticker: (id: string) => void;
 	/** Adds (or, negative, removes) copies of one (sticker, foil) pile. */
 	adjustStickerInventory: (stickerId: string, foil: StickerFoil, delta: number) => void;
+	addFandomSubmission: (submission: LocalFandomSubmission) => void;
 	markSynced: () => void;
 	setSyncError: (error: SyncError | null) => void;
 	setHydrated: (ready: boolean) => void;
@@ -175,6 +187,7 @@ export const useConcardStore = create<ConcardState>()(
 			demo_binder: true,
 			active_card: STARTER_CARD,
 			sticker_inventory: LOCAL_STARTER_INVENTORY,
+			fandom_submissions: [],
 			last_sync_at: null,
 			sync_error: null,
 			hydrated: false,
@@ -285,6 +298,8 @@ export const useConcardStore = create<ConcardState>()(
 							];
 					return { sticker_inventory: rows.filter((row) => row.quantity > 0) };
 				}),
+			addFandomSubmission: (submission) =>
+				set((state) => ({ fandom_submissions: [...state.fandom_submissions, submission] })),
 			markSynced: () => set({ last_sync_at: new Date().toISOString() }),
 			setSyncError: (error) => set({ sync_error: error }),
 			setHydrated: (hydrated) => set({ hydrated })
@@ -298,6 +313,7 @@ export const useConcardStore = create<ConcardState>()(
 				demo_binder,
 				active_card,
 				sticker_inventory,
+				fandom_submissions,
 				last_sync_at
 			}) => ({
 				scan_queue,
@@ -305,6 +321,7 @@ export const useConcardStore = create<ConcardState>()(
 				demo_binder,
 				active_card,
 				sticker_inventory,
+				fandom_submissions,
 				last_sync_at
 			}),
 			onRehydrateStorage: () => (state) => state?.setHydrated(true)

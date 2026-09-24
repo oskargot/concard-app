@@ -48,6 +48,8 @@ import { supabase } from '@/lib/supabase';
 import { useConcardStore } from '@/store/useConcardStore';
 import { STICKER_BASE_WIDTH } from '@/stickers/constants';
 import { definitionForPlacement } from '@/stickers/definitions';
+import { localFandomRows, submitFandom, type FandomRow } from '@/stickers/fandoms';
+import { slugifyFandomLabel, styleCategoryForFandom } from '@/stickers/fandom-styles';
 import { placementFields, type InventoryEntry } from '@/stickers/inventory';
 import { StickerRenderer } from '@/stickers/StickerRenderer';
 import { useCardStickers, type PlacementPatch } from '@/stickers/use-card-stickers';
@@ -120,6 +122,37 @@ export default function EditCardScreen() {
 		hasAffiliation: !!view?.affiliation
 	});
 	const updateActiveCard = useConcardStore((s) => s.updateActiveCard);
+	const addFandomSubmission = useConcardStore((s) => s.addFandomSubmission);
+	/** Fandoms submitted this session, shown "In review" before any reload. */
+	const [submitted, setSubmitted] = useState<FandomRow[]>([]);
+	const pickerFandoms = useMemo(
+		() => [
+			...editor.fandoms,
+			...submitted.filter((f) => !editor.fandoms.some((e) => e.id === f.id))
+		],
+		[editor.fandoms, submitted]
+	);
+
+	const submitNewFandom = useCallback(
+		async (name: string) => {
+			if (remote) {
+				const made = await submitFandom(name);
+				setSubmitted((list) => [
+					...list,
+					{ ...localFandomRows([])[0], ...made, status: 'pending', sort_order: 1000 }
+				]);
+				return;
+			}
+			// No live project to review it: keep it on this device, in review.
+			addFandomSubmission({
+				id: `local-${slugifyFandomLabel(name)}-${Date.now().toString(36)}`,
+				name,
+				style_category: styleCategoryForFandom({ id: slugifyFandomLabel(name), name }),
+				created_at: new Date().toISOString()
+			});
+		},
+		[remote, addFandomSubmission]
+	);
 	const [drawerOpen, setDrawerOpen] = useState(false);
 	const [kind, setKind] = useState<StickerKindTab>('deco');
 	const drawer = useMemo(() => drawerLayout(width, insets.bottom), [width, insets.bottom]);
@@ -410,9 +443,10 @@ export default function EditCardScreen() {
 					) : null}
 
 					<AffiliationRow
-						fandoms={editor.fandoms}
+						fandoms={pickerFandoms}
 						value={draft.affiliation}
 						onChange={(affiliation) => set({ affiliation })}
+						onSubmit={submitNewFandom}
 					/>
 				</ScrollView>
 			</KeyboardAvoidingView>

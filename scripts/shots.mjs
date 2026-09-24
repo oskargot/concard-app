@@ -7,7 +7,7 @@
 //
 // --actions runs a JSON list of steps on the (single) route instead of one
 // shot: { "click": "<accessibility label>" }, { "text": "<visible text>" },
-// { "tap": [x, y] },
+// { "type": ["<placeholder>", "<text>"] }, { "tap": [x, y] },
 // { "drag": [x1, y1, x2, y2], "hold": ms }, { "wait": ms },
 // { "storage": { "<localStorage key>": <json> } } (applied, then reloads),
 // { "eval": "<js run in the page>", "reload": true },
@@ -157,6 +157,9 @@ async function runStep(page, step, shoot) {
 		}
 	} else if (step.text) {
 		await page.getByText(step.text, { exact: true }).first().click();
+	} else if (step.type) {
+		const [placeholder, value] = step.type;
+		await page.getByPlaceholder(placeholder).first().fill(value);
 	} else if (step.tap) {
 		await page.mouse.click(step.tap[0], step.tap[1]);
 	} else if (step.drag) {

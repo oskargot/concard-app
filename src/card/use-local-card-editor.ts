@@ -15,8 +15,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { localFandomRows, type FandomRow } from '../stickers/fandoms';
 import { useConcardStore, type EditableCard } from '../store/useConcardStore';
 import { BADGE_HOME, normalizeStyle, type CardStyle } from './card-style';
+import { affiliationFor } from './card-view';
 import { normalizeLinks } from './links';
 import type { CardView } from './types';
 import type { CardDraft, CardEditor } from './use-card-editor';
@@ -40,7 +42,7 @@ function draftFrom(card: EditableCard): CardDraft {
 }
 
 /** The draft as the card it describes. Blank link rows ride along; the renderer drops them. */
-function viewFrom(draft: CardDraft, card: EditableCard): EditableCard {
+function viewFrom(draft: CardDraft, card: EditableCard, fandoms: FandomRow[]): EditableCard {
 	return {
 		...card,
 		title: draft.display_name,
@@ -53,18 +55,21 @@ function viewFrom(draft: CardDraft, card: EditableCard): EditableCard {
 		art_scale: draft.art_scale,
 		style: draft.style,
 		links: draft.links,
-		// There is no fandom list offline, so the affiliation can only be kept,
-		// moved or removed.
+		// The same fandom keeps its turn and scale; a new pick starts fresh.
 		affiliation:
-			draft.affiliation && card.affiliation
+			draft.affiliation && card.affiliation?.id === draft.affiliation
 				? { ...card.affiliation, x: draft.affiliation_x, y: draft.affiliation_y }
-				: null
+				: affiliationFor(draft.affiliation, draft.affiliation_x, draft.affiliation_y, fandoms)
 	};
 }
 
 export function useLocalCardEditor(enabled: boolean): CardEditor {
 	const card = useConcardStore((state) => state.active_card);
 	const updateActiveCard = useConcardStore((state) => state.updateActiveCard);
+	const submissions = useConcardStore((state) => state.fandom_submissions);
+	// The live fandoms as of the sticker migrations, plus this device's
+	// submissions (always "In review" here).
+	const fandoms = useMemo(() => localFandomRows(submissions), [submissions]);
 	const [draft, setDraft] = useState<CardDraft>(() => draftFrom(card));
 	/** Skips writing the untouched draft straight back on mount. */
 	const touched = useRef(false);
@@ -72,9 +77,9 @@ export function useLocalCardEditor(enabled: boolean): CardEditor {
 	// Write every change through to the store, which persists it on the device.
 	useEffect(() => {
 		if (!enabled || !touched.current) return;
-		const { links, ...rest } = viewFrom(draft, useConcardStore.getState().active_card);
+		const { links, ...rest } = viewFrom(draft, useConcardStore.getState().active_card, fandoms);
 		updateActiveCard({ ...rest, links: links.filter((l) => l.url.trim()) });
-	}, [draft, enabled, updateActiveCard]);
+	}, [draft, enabled, updateActiveCard, fandoms]);
 
 	const set = useCallback((patch: Partial<CardDraft>) => {
 		touched.current = true;
@@ -86,14 +91,14 @@ export function useLocalCardEditor(enabled: boolean): CardEditor {
 		setDraft((d) => ({ ...d, style: { ...d.style, ...patch } }));
 	}, []);
 
-	const view = useMemo<CardView>(() => viewFrom(draft, card), [draft, card]);
+	const view = useMemo<CardView>(() => viewFrom(draft, card, fandoms), [draft, card, fandoms]);
 
 	return {
 		loading: false,
 		draft: enabled ? draft : null,
 		cardId: card.id,
 		view: enabled ? view : null,
-		fandoms: [],
+		fandoms,
 		saveState: 'idle',
 		error: null,
 		linksBlocked: false,

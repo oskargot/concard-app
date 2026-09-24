@@ -14,7 +14,7 @@
  */
 
 import type { Database } from '../lib/database.types';
-import { styleCategoryForFandom } from '../stickers/fandom-styles';
+import { styleCategoryOf } from '../stickers/fandoms';
 import { BADGE_HOME, BADGE_HOME_LEGACY, normalizeStyle } from './card-style';
 import { normalizeLinks } from './links';
 import type { Affiliation, CardView } from './types';
@@ -51,7 +51,7 @@ export function affiliationFor(
 	return {
 		id: fandom.id,
 		name: fandom.name,
-		style_category: styleCategoryForFandom(fandom),
+		style_category: styleCategoryOf(fandom),
 		x: unmoved ? BADGE_HOME.x : x,
 		y: unmoved ? BADGE_HOME.y : y,
 		rotation: AFFILIATION_DEFAULTS.rotation,
