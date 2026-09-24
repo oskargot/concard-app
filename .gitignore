@@ -30,7 +30,9 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files
+# local env files. `.env` too: one was committed (and deleted) once already,
+# and the sticker ingest reads SUPABASE_SERVICE_ROLE_KEY from .env.local.
+.env
 .env*.local
 
 # typescript

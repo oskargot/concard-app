@@ -236,7 +236,7 @@ Date of Last Update: 2026-09-18
 - **Design Bible**: The Concard product spec this app implements the app-half of (referenced
   throughout `CLAUDE.md` as "the bible").
 - **Card**: A user's digital trading card — the core content object, rendered by `src/card/`.
-- **Tier**: The foil ladder for a *collected* card, earned by repeat meetings between the same two
+- **Tier**: The foil ladder for a _collected_ card, earned by repeat meetings between the same two
   people (`plain → glitter → cosmic → mosaic`), computed client-side from `collections` row counts.
 - **Foil**: The shine/holo rendering effect applied to a card or sticker, implemented in
   `src/card/foil/`.
