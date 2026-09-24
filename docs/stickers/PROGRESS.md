@@ -2,9 +2,33 @@
 
 ## Current phase
 
-Phase 4 — Editor: button, drawer, placement. Status: in progress
+Phase 5 — Inventory and combining. Status: in progress
 
 ## Phase summaries
+
+### Phase 4 — Editor: button, drawer, placement (done 2026-09-23)
+
+Shipped: the floating die-cut sticker button (bottom-right, rides above the drawer, sinks in when
+pressed or open); the drawer (Deco / Fandom, 5 × 4 visible, spare copies only, ×N badges, foil
+order, tap to place at centre, hold-and-drag out to place anywhere, drag a sticker back onto it to
+put it away); on-card editing (drag, pinch 0.5–2×, two-finger rotate, last touched on top, centre
+kept on the card, the affiliation included); autosave per gesture — live `sticker_placements`
+writes with rollback on refusal, or the on-device store with a seeded local inventory.
+Shots: [button at rest](shots/phase-4/card-edit--button-rest.png),
+[drawer / pressed](shots/phase-4/card-edit--drawer-deco.png),
+[fandom tab](shots/phase-4/card-edit--drawer-fandom.png),
+[tap-placed](shots/phase-4/card-edit--placed-by-tap.png), [moved](shots/phase-4/card-edit--moved.png),
+[dragged out](shots/phase-4/card-edit--dragged-out.png),
+[put back](shots/phase-4/card-edit--removed-into-drawer.png),
+[clamps + rotation](shots/phase-4/card-edit--clamps-rotated.png).
+Check on device:
+
+1. Edit card → sticker button: does it feel physical (bevel, sinks in), and never hide something you can't scroll past?
+2. Pinch a sticker to both ends: does it stop cleanly at ½× and 2×? Twist it with two fingers while dragging.
+3. Hold a drawer tile and drag it onto the card: does it land under your finger? Is a quick swipe still a scroll?
+4. Drag a sticker onto the open drawer: "Drop to put it back" shows, and the tile's count goes up.
+5. Move your fandom affiliation: does it stay where you put it after leaving and reopening the editor?
+   Needs Oskar: nothing new (the live path needs the Phase 2 migrations to be fully exercised).
 
 ### Phase 3 — Renderer (done 2026-09-23)
 
@@ -76,6 +100,11 @@ Needs Oskar: open the draft PRs; the product bible (both under "Needs Oskar").
 - [ ] **The product Design Bible isn't on this machine.** CLAUDE.md cites its §6 (card fields), §7 (tiers), §10 (signup) and §12 (chrome physicality), but the only "bible" on disk is the web repo's `DESIGN.md` ("Design & Brand Bible v0.1 — Creative Direction"), whose §12 is Color and which never mentions a web stack. I copied that one into `docs/design-bible.md` with a correction and stickers section; drop the product bible in there (or tell me where it is) and I'll fold it in. Blocking: nothing; I'm following CLAUDE.md, the style guide as implemented in `src/theme`/`src/ui`, and this spec.
 
 ## Questions (defaults taken)
+
+- Q: Where does a tapped drawer sticker land? → took: the card's centre, slightly high (0.5, 0.45), per §2.2's tap-to-place. Drag-out is implemented too (hold ~140 ms, then drag), so tap is a convenience, not a fallback. (§2.2)
+- Q: Removing when the drawer is closed? → took: removal is only by dropping on the open drawer, as specified; nothing else deletes. (§1.4)
+- Q: The affiliation in the editor. → took: it's movable like any sticker; its position saves through the card's affiliation columns (which the schema mirrors into its placement), its rotation / scale through its placement row once the migrations are live (on-device, through the store). Dropping it on the drawer clears the affiliation — it was never an inventory copy. (§1.1, §1.4)
+- Q: While a sticker is being dragged, its foil's light field updates on release rather than every frame (the placement is committed then). Worth a look on device; cheap to change if it shows. (§1.6)
 
 - Q: Base size for non-square deco art. → took: STICKER_BASE_WIDTH (24% of card width) is a deco sticker's **long edge** (its whole baked canvas, rim and shadow included); for fandom stickers it's the width. Otherwise tall art (penguin, boba) would come out much bigger than wide art. (§1.4)
 - Q: Should flecks scale when a sticker is pinched bigger? → took: no — a foil's flecks stay the card's size wherever it is, like one sheet of foil stock cut into stickers of different sizes. The _light_ is the card's too. (§1.3, §3.2)
@@ -158,14 +187,28 @@ Phase 3 notes (what I checked): tilted, the glitter sticker on the glitter card 
 
 ## Tasks — Phase 4
 
-- [ ] Floating sticker button pinned bottom-right (safe area, clear of the swatch rail at every `stageLayout()`), die-cut icon, bevel + pressed-in state.
-- [ ] Bottom-sheet drawer over the lower editor: Deco / Fandom switch, 4 columns × 4 rows visible, scrolls; available count > 0 only; count badge when > 1; order `sort_order` then foil desc; thumbnails.
-- [ ] Inventory source: live `sticker_inventory` + available counts when signed in; a local fixture inventory otherwise (the editor already runs Supabase-less).
-- [ ] Place: drag a tile out onto the card (tap-to-place at centre as fallback); new placements `size = 0.24`, scale 1, top z.
-- [ ] Move / pinch (0.5–2 clamp) / two-finger rotate on the card; last touched to the top; centre kept on the card.
-- [ ] Remove by dragging back onto the drawer; returns to inventory.
-- [ ] Autosave placements (insert / update / delete on `sticker_placements`; local store when Supabase-less); 20 cap in the UI.
-- [ ] Screenshots: button at rest + pressed, drawer on both kinds, a card with stickers moved / scaled at both clamps / rotated / one removed.
+- [x] Floating sticker button pinned bottom-right (safe area, clear of the swatch rail at every `stageLayout()`), die-cut icon, bevel + pressed-in state. — `src/card/editor/StickerButton.tsx`; the page's bottom padding grows by the button's height (and by the whole drawer while it's open) so nothing is stuck behind either.
+- [x] Bottom-sheet drawer over the lower editor: Deco / Fandom switch, 4 columns × 4 rows visible, scrolls; available count > 0 only; count badge when > 1; order `sort_order` then foil desc; thumbnails. — `src/card/editor/StickerDrawer.tsx`. **5 columns** (tiles ≈ 65 pt on a 390 pt screen): four columns made a four-row sheet ~440 pt tall, covering most of the card.
+- [x] Inventory source: live `sticker_inventory` + available counts when signed in; a local fixture inventory otherwise (the editor already runs Supabase-less). — `src/stickers/inventory.ts`, `live.ts` (works before and after the migrations), `local-catalog.ts`, store `sticker_inventory`.
+- [x] Place: drag a tile out onto the card (tap-to-place at centre as fallback); new placements `size = 0.24`, scale 1, top z.
+- [x] Move / pinch (0.5–2 clamp) / two-finger rotate on the card; last touched to the top; centre kept on the card. — `src/card/editor/StickerEditLayer.tsx`.
+- [x] Remove by dragging back onto the drawer; returns to inventory.
+- [x] Autosave placements (insert / update / delete on `sticker_placements`; local store when Supabase-less); 20 cap in the UI. — `src/stickers/use-card-stickers.ts`.
+- [x] Screenshots: button at rest + pressed, drawer on both kinds, a card with stickers moved / scaled at both clamps / rotated / one removed. — driven by the harness's new `--actions` scripts (`docs/stickers/shots/phase-4/*.json`); commit `cf0f834`.
+
+Phase 4 notes (what I checked): every shot above against §2.1/§2.2/§1.4. Found and fixed: on web a
+sticker's `<img>` swallowed the drag (browser image-drag) — the art is now never the touch target.
+Couldn't check headless: pinch and rotate (mouse has one pointer — clamp states were staged through
+the store instead), haptics, and the live write path (no signed-in session here, and the live
+schema predates the migrations).
+
+## Tasks — Phase 5
+
+- [ ] Stickers tab reads the real inventory (live or local): Deco / Fandom switch + five foil filter chips; tiles with foil + counts.
+- [ ] Sticker detail: name, foil, owned / placed counts; **Combine** when ≥ 2 spare at one foil below mosaic → `combine_stickers()` (local: store) + a short reveal with the existing reveal/foil machinery.
+- [ ] Delete `src/stickers/catalog.ts` (and anything else of the prototype glyph path) once nothing imports it.
+- [ ] Fandom submission in `AffiliationRow`: "Submit a fandom", text field (24-char cap), live preview with the real renderer, submit → `submit_fandom()`; pending shows "In review", unselectable.
+- [ ] Screenshots: inventory, detail, combine before/after, a pending submission.
 
 ## Log
 
@@ -175,3 +218,4 @@ Phase 3 notes (what I checked): tilted, the glitter sticker on the glitter card 
 - 2026-09-23 — Phase 1: pipeline, ingest, Noto set (45), contact sheet, button icon; idempotency verified. Committed `86422ee` + icon/credits. Starting Phase 2.
 - 2026-09-23 — Phase 2: five migrations + PGlite test on the reconstructed live schema, security review, types in both repos. Web `676abd0`, `26a82a4`; app `788f4d3`. Starting Phase 3.
 - 2026-09-23 — Phase 3: foil engine extended (FoilFill), deco + fandom renderers, shimmer clock, fixtures, web CanvasKit, /dev/stickers; every card screen on CardOverlay; StickerLayer deleted. Commits `7ba4ab9`, `71a6855`, `39a0ba0`. Starting Phase 4.
+- 2026-09-23 — Phase 4: sticker button, drawer, on-card editing + autosave (live and on-device), harness `--actions`. Commit `cf0f834`. Starting Phase 5.
