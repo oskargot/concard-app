@@ -2,9 +2,25 @@
 
 ## Current phase
 
-Phase 7 — Web parity (web repo). Status: in progress
+Phase 8 — Hardening. Status: in progress
 
 ## Phase summaries
+
+### Phase 7 — Web parity (sticker layer done 2026-09-23; full pixel parity waits on two decisions)
+
+Shipped (web, `feat/stickers`): the web card draws deco stickers from the ingest's art and fandom
+stickers from the **same layout code** as the app (`fandom-layout.ts`, `fandom-styles.ts`,
+`font-metrics.ts` copied verbatim by `scripts/sync-sticker-renderer.mjs`, with the app's own TTFs
+under the app's family names), at the app's geometry (centre, `size` as a fraction of card width —
+long edge for deco — `scale`, rotation + the same wobble). The affiliation is now the fandom
+sticker on the web too (the old badge is gone), drawn from its placement once migrated. v4
+snapshots and `size` / `is_affiliation` are read. `FoilFx` clips to the new masks.
+Shot: [app vs web, same v4 snapshot](shots/phase-7/side-by-side.png) — positions and sizes agree.
+What still differs, and why it isn't fixable inside this phase: the **card** underneath (the web
+card hasn't been ported to the card spec — CLAUDE.md lists that as its own job) and the **foil**
+(the web's CSS `FoilFx` isn't the app's SkSL engine; see Needs Oskar).
+Check on device / in a browser: 1. `pnpm dev` → `/dev/stickers` next to the app's binder view of the demo scan: same stickers, same places?
+Needs Oskar: the two decisions below.
 
 ### Phase 6 — Collect integration (done 2026-09-23)
 
@@ -136,6 +152,9 @@ Needs Oskar: open the draft PRs; the product bible (both under "Needs Oskar").
 
 ## Needs Oskar
 
+- [ ] **Decide the web's foil engine.** Sticker foil can only match across platforms if both run the same engine. Options: (a) load CanvasKit on the web card and run the app's SkSL as-is — exact parity, ~8 MB wasm (the app's web target already does this, `index.web.js`); (b) port `foil-sksl.ts` to a WebGL shader — small, but a second implementation to keep in step (holo-lab's GLSL is close to it); (c) keep the web's CSS `FoilFx` — cheapest, visibly different (see the holo heart in the side-by-side). I'd suggest (a) for the card component only, lazily loaded. Blocking: foil parity on the web.
+- [ ] **Schedule the web card's port to the card spec.** Sticker geometry already matches, but pixel parity of a whole card needs the web card itself on `src/card/layout/` (listed in CLAUDE.md as pending). Blocking: HANDOFF §5 Phase 7's "pixel-for-pixel".
+
 - [ ] **Apply the sticker migrations** — `concard` repo, `supabase/migrations/20260924000000_sticker_enums.sql` through `20260924000004_collect_sticker_grants.sql`, **in order, each on its own** (the first adds enum values, which Postgres won't let later statements in the same transaction use). Paste each into the SQL editor (the CLI history is out of step — see the drift item). They were written against the live schema as it is today and tested on a reconstruction of it (`pnpm db:test:stickers`). Blocking: live sticker placement / collect / submission; the app works on fixtures until then.
 - [ ] **Then upload the sticker art**: put `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in `concard-app/.env.local` (git-ignored) and run `node scripts/stickers/ingest.ts`. Needs the migrations first (bucket + columns). Blocking: real deco art on live cards.
 - [ ] **FYI, migration history has drifted.** Live has four migrations applied by hand from the app repo (`20260914`–`20260923`, incl. card_spec_v2) that the web repo's folder doesn't have — and the web folder's `20260914000000_card_identity_fields.sql` has the _same_ version number as the app's `20260914000000_card_inherit_text.sql`. Live also lacks columns the web history creates (`stickers.glyph`/`rarity` — re-added by my migration — and `profiles.is_admin`) and still has `cards.title`. I didn't reconcile it (renumbering applied migrations is your call); `supabase/dev/live_schema_20260923.sql` records what live actually is. Blocking: nothing, but `supabase db push` won't do the right thing until it's sorted.
@@ -266,12 +285,20 @@ schema predates the migrations).
 
 ## Tasks — Phase 7
 
-- [ ] Survey the web card (`Card.svelte`, `FoilFx`, `HoloFoilFx`, `StickerGlyph`, `lib/card.ts`, `/username`) and how it gets placements + definitions.
-- [ ] Deco stickers on web from the same baked assets (`full` + foil masked by `mask`), positioned by the same centre / size / scale / rotation / wobble maths as the app's `CardOverlay`.
-- [ ] Fandom stickers on web: port the generative renderer (`fandom-layout.ts`, `fandom-styles.ts`, `font-metrics.ts` are RN-free) as SVG, foil masked to its silhouette.
-- [ ] Foil on web: the same five looks — reuse the app's SkSL? (WebGL/CanvasKit vs CSS) — decide, record, build.
-- [ ] Web reads v4 snapshots + placements with definitions; `/username` and the binder.
-- [ ] Side-by-side screenshots: the same card in the app (web target) and the web app.
+- [x] Survey the web card (`Card.svelte`, `FoilFx`, `HoloFoilFx`, `StickerGlyph`, `lib/card.ts`, `/username`) and how it gets placements + definitions. — pre-spec card; CSS foil (`FoilFx`, glitter/holo looks only); own older bakes at a fixed 15.33% box; no fandom stickers (a gradient badge instead).
+- [x] Deco stickers on web from the same baked assets (`full` + foil masked by `mask`), positioned by the same centre / size / scale / rotation / wobble maths as the app's `CardOverlay`.
+- [x] Fandom stickers on web: port the generative renderer (`fandom-layout.ts`, `fandom-styles.ts`, `font-metrics.ts` are RN-free) as SVG, foil masked to its silhouette. — copied verbatim + `FandomSticker.svelte`; the foil mask lives inside the SVG because an SVG mask _image_ can't load web fonts.
+- [~] Foil on web: the same five looks — reuse the app's SkSL? (WebGL/CanvasKit vs CSS) — decide, record, build. → **logged as a decision for Oskar** (Needs Oskar); the web keeps its CSS foil, now clipped to the new masks.
+- [x] Web reads v4 snapshots + placements with definitions; `/username` and the binder. — `catalogFrom(stickers, fandoms)` carries style categories.
+- [x] Side-by-side screenshots: the same card in the app (web target) and the web app. — web `4e53e67`, `3edc380`; web `/dev/stickers` runs on a placeholder `.env` (no real project) with `PUBLIC_STICKER_ASSET_BASE=/sticker-fixtures/`.
+
+## Tasks — Phase 8
+
+- [ ] Performance: count what a card with 20 foiled stickers and a full drawer costs (canvases, images, frame callbacks); cut what's cheap to cut; list what needs a device to judge.
+- [ ] Security review of the client-side sticker code (RPC use, what's trusted, secrets).
+- [ ] Dead code: anything the sticker work orphaned; propose (not delete) the old foil lab engines.
+- [ ] Docs: CLAUDE.md (stickers architecture + status), design bible stickers section, HANDOFF §9 marked with what was decided.
+- [ ] Final summary + device checklist.
 
 ## Log
 
@@ -284,3 +311,4 @@ schema predates the migrations).
 - 2026-09-23 — Phase 4: sticker button, drawer, on-card editing + autosave (live and on-device), harness `--actions`. Commit `cf0f834`. Starting Phase 5.
 - 2026-09-23 — Phase 5: Stickers tab inventory + combine + reveal; fandom submission; prototype catalog deleted. Commits `993c917`, `610ee6f`. Starting Phase 6.
 - 2026-09-23 — Phase 6: v4 snapshots, collect grants → binder + inventory, GrantLine, faithful collect fixture from PGlite, demo-scan username fix. App `b5328c6`, web `e0ca01d`. Starting Phase 7.
+- 2026-09-23 — Phase 7: web sticker layer at the app's geometry, verbatim fandom renderer, v4 snapshots on web, side-by-side. Web `4e53e67`, `3edc380`. Foil engine + card-spec port logged for Oskar. Starting Phase 8.
