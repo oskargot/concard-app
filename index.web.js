@@ -12,5 +12,4 @@ LoadSkiaWeb({ locateFile: (file) => `/${file}` })
 	.catch((e) => console.warn('[skia-web] CanvasKit did not load; foil is off on web.', e))
 	// require, not import(): Metro bundles it with everything else but only runs
 	// it here, after CanvasKit exists. (A lazy import() chunk fails in dev.)
-	// eslint-disable-next-line @typescript-eslint/no-require-imports
 	.then(() => require('expo-router/entry'));
