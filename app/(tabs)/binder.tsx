@@ -15,6 +15,7 @@ import { CardFace } from '@/card/CardFace';
 import { CardShell } from '@/card/CardShell';
 import { FlipCard, StaticCard } from '@/card/FlipCard';
 import { CardOverlay } from '@/card/CardOverlay';
+import { GrantLine } from '@/stickers/GrantLine';
 import { foilForTier, meetingsToNextTier, tierLabel } from '@/card/tiers';
 import type { CollectedCard } from '@/card/types';
 import { formatRetryIn } from '@/lib/collect';
@@ -238,6 +239,7 @@ export default function BinderScreen() {
 								/>
 							</View>
 							<Text style={styles.tiltHint}>DRAG TO MOVE THE LIGHT · TAP TO FLIP</Text>
+							<GrantLine granted={selected.granted} />
 							<View style={styles.progress}>
 								<View style={styles.progressHead}>
 									<Text style={styles.progressTier}>{tierLabel(selected.tier)} tier</Text>

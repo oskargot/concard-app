@@ -144,4 +144,7 @@ export interface CollectedCard {
 	/** True for an optimistic entry queued offline that hasn't reached
 	 *  Supabase yet — the binder shows it but flags it as unconfirmed. */
 	pending?: boolean;
+	/** What the latest collect of this card gave you: up to one deco and one
+	 *  fandom sticker, each carrying enough to draw it. */
+	granted?: PlacedSticker[];
 }
