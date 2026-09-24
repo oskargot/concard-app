@@ -119,7 +119,8 @@ export default function EditCardScreen() {
 	const stickers = useCardStickers({
 		live: remote && session && cardId ? { cardId, userId: session.user.id } : null,
 		enabled: !!draft,
-		hasAffiliation: !!view?.affiliation
+		hasAffiliation: !!view?.affiliation,
+		affiliation: { current: draft?.affiliation ?? null, saved: remoteEditor.savedAffiliation }
 	});
 	const updateActiveCard = useConcardStore((s) => s.updateActiveCard);
 	const addFandomSubmission = useConcardStore((s) => s.addFandomSubmission);
@@ -209,17 +210,18 @@ export default function EditCardScreen() {
 		if (!view) return [];
 		const list = [...stickers.placements];
 		if (view.affiliation) {
+			// live, the turn comes from its placement row (reset for a new fandom)
 			const base = affiliationPlacement(view.affiliation);
-			const row = stickers.affiliationRow;
+			const turn = stickers.affiliationTurn;
 			list.push({
 				...base,
 				id: AFFILIATION_ID,
-				rotation: row?.rotation ?? base.rotation,
-				scale: row?.scale ?? base.scale
+				rotation: turn?.rotation ?? base.rotation,
+				scale: turn?.scale ?? base.scale
 			});
 		}
 		return list;
-	}, [view, stickers.placements, stickers.affiliationRow]);
+	}, [view, stickers.placements, stickers.affiliationTurn]);
 
 	const changeAffiliation = (patch: PlacementPatch) => {
 		if (!draft) return;
@@ -235,7 +237,7 @@ export default function EditCardScreen() {
 		};
 		if (!Object.keys(turn).length) return;
 		if (remote) {
-			stickers.updateAffiliationRow(turn);
+			stickers.updateAffiliation(turn);
 		} else {
 			const current = useConcardStore.getState().active_card.affiliation;
 			if (current) updateActiveCard({ affiliation: { ...current, ...turn } });

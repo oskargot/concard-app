@@ -1,0 +1,14 @@
+[
+	{ "click": "Sci-fi", "after": 900 },
+	{
+		"eval": "for (const el of document.querySelectorAll('div')) if (el.scrollTop > 0) el.scrollTop = 0;",
+		"after": 700
+	},
+	{ "shot": "affiliation-picked" },
+	{ "click": "Gaming", "after": 900 },
+	{
+		"eval": "for (const el of document.querySelectorAll('div')) if (el.scrollTop > 0) el.scrollTop = 0;",
+		"after": 700
+	},
+	{ "shot": "affiliation-changed" }
+]

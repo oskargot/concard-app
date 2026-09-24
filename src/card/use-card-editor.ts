@@ -40,6 +40,17 @@ const SAVE_DELAY = 800;
 
 export type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
+/**
+ * The fandom the database has for this card, as of the last save that landed.
+ * Saving a different one makes the server replace the affiliation's placement
+ * row (a new id, rotation 0, scale 1), and `rev` counts those replacements, so
+ * the sticker editor knows when to read the new row back.
+ */
+export interface SavedAffiliation {
+	value: string | null;
+	rev: number;
+}
+
 export interface CardDraft {
 	/** Resolved for display; `toRow` converts back to null when it matches the profile. */
 	display_name: string;
@@ -123,6 +134,8 @@ export interface CardEditor {
 	/** Write immediately rather than waiting out the debounce — used on the way out. */
 	flush: () => Promise<void>;
 	dismissError: () => void;
+	/** Null until the card loads, and always on-device (nothing is replaced there). */
+	savedAffiliation: SavedAffiliation | null;
 }
 
 export function useCardEditor(cardId: string | null, profile: Profile | null): CardEditor {
@@ -141,6 +154,7 @@ export function useCardEditor(cardId: string | null, profile: Profile | null): C
 	/** Same kind of standing fact: the live constraint still caps links at six. */
 	const [linksCapped, setLinksCapped] = useState(false);
 	const capLinks = useRef(false);
+	const [savedAffiliation, setSavedAffiliation] = useState<SavedAffiliation | null>(null);
 
 	/** The newest draft, readable from a timer without re-arming it on every keystroke. */
 	const latest = useRef<CardDraft | null>(null);
@@ -195,6 +209,7 @@ export function useCardEditor(cardId: string | null, profile: Profile | null): C
 			} else if (card.data) {
 				dirty.current = false;
 				setDraft(toDraft(card.data as CardRow, owner));
+				setSavedAffiliation({ value: (card.data as CardRow).affiliation, rev: 0 });
 			} else {
 				// No row and no error: deleted, or not this user's. Say so rather than
 				// leave the screen spinning on a draft that will never arrive.
@@ -258,6 +273,12 @@ export function useCardEditor(cardId: string | null, profile: Profile | null): C
 			setError(err.hint ?? err.message);
 			return;
 		}
+		// The card row landed: if its fandom changed, so did its affiliation row.
+		setSavedAffiliation((saved) =>
+			saved && saved.value !== row.affiliation
+				? { value: row.affiliation, rev: saved.rev + 1 }
+				: saved
+		);
 
 		const profilePatch = profileFallback(current, missingCardColumns.current);
 		if (profilePatch) {
@@ -369,7 +390,8 @@ export function useCardEditor(cardId: string | null, profile: Profile | null): C
 		set,
 		setStyle,
 		flush,
-		dismissError: useCallback(() => setError(null), [])
+		dismissError: useCallback(() => setError(null), []),
+		savedAffiliation
 	};
 }
 

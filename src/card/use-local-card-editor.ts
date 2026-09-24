@@ -106,6 +106,7 @@ export function useLocalCardEditor(enabled: boolean): CardEditor {
 		set,
 		setStyle,
 		flush: async () => {},
-		dismissError: () => {}
+		dismissError: () => {},
+		savedAffiliation: null
 	};
 }

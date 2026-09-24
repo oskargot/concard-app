@@ -18,12 +18,15 @@
  *
  * The affiliation is not in `placements`: it's still edited as the card's own
  * `affiliation` columns (the schema mirrors them into its free placement), so
- * the screen draws and moves it from the card view.
+ * the screen draws and moves it from the card view. Only its twist and pinch
+ * live on its placement row, and that row is replaced whenever a card save
+ * changes the fandom — see `useLiveAffiliation`.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { PlacedSticker } from '@/card/types';
+import type { SavedAffiliation } from '@/card/use-card-editor';
 import { useConcardStore } from '@/store/useConcardStore';
 import { clampStickerScale, MAX_STICKERS_PER_CARD, STICKER_BASE_WIDTH } from './constants';
 import { buildInventory, placementFields, type InventoryEntry } from './inventory';
@@ -56,15 +59,25 @@ export interface CardStickers {
 	/** Takes a sticker off the card; its copy goes back to the inventory. */
 	remove: (id: string) => void;
 	dismissError: () => void;
-	/** Live, once the schema has moved the affiliation into a placement: that
-	 *  row, whose rotation and scale only it stores. Null otherwise. */
-	affiliationRow: PlacedSticker | null;
-	updateAffiliationRow: (patch: PlacementPatch) => void;
+	/**
+	 * Live: the affiliation's rotation and scale, which only its placement row
+	 * stores (0 / 1 while that row is being replaced for a new fandom). Null
+	 * on-device, where the card's own affiliation carries them.
+	 */
+	affiliationTurn: { rotation: number; scale: number } | null;
+	/** Saves a twist or pinch of the affiliation (live only). */
+	updateAffiliation: (patch: PlacementPatch) => void;
 }
 
 export interface LiveTarget {
 	cardId: string;
 	userId: string;
+}
+
+/** The card's fandom as the editor shows it, and as its last landed save wrote it. */
+export interface AffiliationState {
+	current: string | null;
+	saved: SavedAffiliation | null;
 }
 
 /** Keeps a placement's centre on the card and its scale in the clamp. */
@@ -79,17 +92,31 @@ export function clampPlacement<T extends PlacementPatch>(patch: T): T {
 export function useCardStickers({
 	live,
 	enabled,
-	hasAffiliation
+	hasAffiliation,
+	affiliation
 }: {
 	/** The card row and its owner when editing live; null edits the on-device card. */
 	live: LiveTarget | null;
 	enabled: boolean;
 	/** Whether the card carries an affiliation, which counts toward the cap. */
 	hasAffiliation: boolean;
+	affiliation: AffiliationState;
 }): CardStickers {
 	const local = useLocalStickers(enabled && !live);
 	const remote = useLiveStickers(enabled ? live : null);
-	const source = live ? remote : local;
+	const turn = useLiveAffiliation(enabled ? live : null, affiliation);
+	const source: Source = live
+		? {
+				...remote,
+				affiliationTurn: turn.affiliationTurn,
+				updateAffiliation: turn.updateAffiliation,
+				error: remote.error ?? turn.error,
+				dismissError: () => {
+					remote.dismissError();
+					turn.dismissError();
+				}
+			}
+		: local;
 	const count = source.placements.length + (hasAffiliation ? 1 : 0);
 	return { ...source, canPlace: count < MAX_STICKERS_PER_CARD };
 }
@@ -203,17 +230,18 @@ function useLocalStickers(enabled: boolean): Source {
 		},
 		remove: removeSticker,
 		dismissError: () => setError(null),
-		affiliationRow: null,
-		updateAffiliationRow: () => {}
+		affiliationTurn: null,
+		updateAffiliation: () => {}
 	};
 }
 
 // ── live ─────────────────────────────────────────────────────────────────────
 
-function useLiveStickers(target: LiveTarget | null): Source {
+function useLiveStickers(
+	target: LiveTarget | null
+): Omit<Source, 'affiliationTurn' | 'updateAffiliation'> {
 	const [placements, placementsRef, setPlacements] = useMirror<PlacedSticker[]>([]);
 	const [inventory, inventoryRef, setInventory] = useMirror<InventoryEntry[]>([]);
-	const [affiliationRow, setAffiliationRow] = useState<PlacedSticker | null>(null);
 	const [loading, setLoading] = useState(!!target);
 	const [error, setError] = useState<string | null>(null);
 	const alive = useRef(true);
@@ -264,7 +292,6 @@ function useLiveStickers(target: LiveTarget | null): Source {
 					return;
 				}
 				setPlacements(() => p.filter((s) => !s.is_affiliation));
-				setAffiliationRow(p.find((s) => s.is_affiliation) ?? null);
 				setInventory(() => inv);
 				setLoading(false);
 			},
@@ -346,13 +373,134 @@ function useLiveStickers(target: LiveTarget | null): Source {
 			if (p && p.z_index < top - 1) update(id, { z_index: top });
 		},
 		remove,
-		dismissError: () => setError(null),
-		affiliationRow,
-		updateAffiliationRow: (patch) => {
-			if (!affiliationRow?.id) return;
+		dismissError: () => setError(null)
+	};
+}
+
+// ── live: the affiliation's turn ─────────────────────────────────────────────
+
+/** The affiliation's chain: one row per card, whatever its id is today. */
+const AFFILIATION_KEY = 'affiliation';
+
+/** Twists and pinches waiting for the affiliation's new row. */
+interface Held {
+	/** The fandom they were made on; they're dropped if it changes again. */
+	fandom: string | null;
+	patch: PlacementPatch;
+}
+const NOTHING_HELD: Held = { fandom: null, patch: {} };
+
+/**
+ * The affiliation's rotation and scale, live.
+ *
+ * Picking a fandom is a card save; when it lands, a server trigger deletes the
+ * old affiliation row and inserts a new one (new id, rotation 0, scale 1). So
+ * the row read at open is only good until the fandom changes. From then until
+ * the editor says that save landed (`saved.rev` moves on) and the new row has
+ * been read back, the sticker draws at 0 / 1, and twists and pinches are held
+ * rather than sent to a row that's about to go; they go to the new row once
+ * it's known. That covers a card with no affiliation at open, too. Every read
+ * and write of the row takes its turn on one chain, so a write always goes to
+ * the row that was read last.
+ */
+function useLiveAffiliation(target: LiveTarget | null, { current, saved }: AffiliationState) {
+	const [row, rowRef, setRow] = useMirror<PlacedSticker | null>(null);
+	/** The `saved.rev` the row was read for; −1 before the first read. */
+	const [rowRev, rowRevRef, setRowRev] = useMirror(-1);
+	const [held, heldRef, setHeld] = useMirror<Held>(NOTHING_HELD);
+	const [error, setError] = useState<string | null>(null);
+	const alive = useRef(true);
+	useEffect(() => {
+		alive.current = true;
+		return () => {
+			alive.current = false;
+		};
+	}, []);
+
+	const chains = useRef<WriteChains<PlacementPatch> | null>(null);
+	const writes = useCallback(() => {
+		chains.current ??= new WriteChains<PlacementPatch>({
+			update: async (_key, patch) => {
+				// no row: no affiliation, or a schema from before it was a placement
+				const id = rowRef.current?.id;
+				if (id) await updatePlacement(id, patch);
+			},
+			remove: async () => {},
+			onError: (e) => {
+				if (alive.current) setError(messageOf(e));
+			}
+		});
+		return chains.current;
+	}, [rowRef]);
+
+	const send = useCallback(
+		(patch: PlacementPatch) => {
+			setRow((r) => (r ? { ...r, ...patch } : r));
+			writes().update(AFFILIATION_KEY, patch);
+		},
+		[setRow, writes]
+	);
+
+	const cardId = target?.cardId ?? null;
+	const savedRev = saved?.rev ?? -1;
+	const savedFandom = saved?.value ?? null;
+
+	// Read the row once the card has loaded, and again after every landed save
+	// that replaced it.
+	useEffect(() => {
+		if (!cardId || savedRev < 0) return;
+		writes().task(AFFILIATION_KEY, async () => {
+			let read: PlacedSticker | null;
+			try {
+				read = (await fetchCardPlacements(cardId)).find((p) => p.is_affiliation) ?? null;
+			} catch (e) {
+				if (alive.current) setError(messageOf(e));
+				return;
+			}
+			if (!alive.current) return;
+			setRow(() => read);
+			setRowRev(() => savedRev);
+			// what was twisted on this fandom while its row was being replaced
+			const waiting = heldRef.current;
+			if (waiting.fandom === savedFandom && Object.keys(waiting.patch).length) {
+				setHeld(() => NOTHING_HELD);
+				if (read) send(waiting.patch);
+			}
+		});
+	}, [cardId, savedRev, savedFandom, writes, setRow, setRowRev, heldRef, setHeld, send]);
+
+	const updateAffiliation = useCallback(
+		(patch: PlacementPatch) => {
 			const clamped = clampPlacement(patch);
-			setAffiliationRow({ ...affiliationRow, ...clamped });
-			writes().update(affiliationRow.id, clamped);
-		}
+			// the row we have is the one the server has for the fandom on screen
+			if (rowRevRef.current === savedRev && current === savedFandom) {
+				send(clamped);
+				return;
+			}
+			setHeld((h) => ({
+				fandom: current,
+				patch: { ...(h.fandom === current ? h.patch : {}), ...clamped }
+			}));
+		},
+		[rowRevRef, savedRev, savedFandom, current, send, setHeld]
+	);
+
+	const dismissError = useCallback(() => setError(null), []);
+
+	const known = rowRev === savedRev && current === savedFandom;
+	const base = known && row ? row : { rotation: 0, scale: 1 };
+	const extra = held.fandom === current ? held.patch : {};
+	const rotation = extra.rotation ?? base.rotation;
+	const scale = extra.scale ?? base.scale;
+	const live = !!target;
+	const affiliationTurn = useMemo(
+		() => (live ? { rotation, scale } : null),
+		[live, rotation, scale]
+	);
+	return {
+		affiliationTurn,
+		updateAffiliation,
+		error,
+		dismissError
 	};
 }
