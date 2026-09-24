@@ -387,6 +387,7 @@ export const NEUTRAL_EDGE = 'linear-gradient(140deg,#77737f,#4d4a56 50%,#77737f)
 export const ART_DEFAULT = { x: 0.5, y: 0.5, scale: 1 } as const;
 export const ART_SCALE_RANGE = [1, 3] as const;
 
-/** Sticker position range on the card face (0..1); stickers may overhang the edge. */
-export const STICKER_X_RANGE = [-0.14, 1.02] as const;
-export const STICKER_Y_RANGE = [-0.1, 0.96] as const;
+/** Where a sticker's centre may sit, as a fraction of the card (the placement
+ *  checks' 0..1); the sticker itself may still hang past the edge. */
+export const STICKER_X_RANGE = [0, 1] as const;
+export const STICKER_Y_RANGE = [0, 1] as const;

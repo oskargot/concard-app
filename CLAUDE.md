@@ -240,7 +240,7 @@ Phase 2 of 7, plus the card editor and the meet loop (My Card QR → Scan → `c
 In: card renderer (to the card spec), foil lab, email/password auth, username claim, forced first
 card, card editor (text in place, style, photo/bio divider, photo reframing, per-card links with
 parsed handles, affiliation, photo upload), and the meet loop end to end — see "The meet loop" below.
-Stickers are in (see "Stickers" below; their schema waits on the migrations being applied). Not in: card switcher, the web card's port to the spec, events, friends, DMs, purchases, settings. Nothing has been exercised against a live Supabase project
+Stickers are in (see "Stickers" below; their schema waits on the migrations being applied). Not in: card switcher, events, friends, DMs, purchases, settings. Nothing has been exercised against a live Supabase project
 on a device yet — the code paths are wired, but no one has run the scan → collect → binder loop between
 two real accounts.
 
@@ -284,9 +284,16 @@ web repo and apply them there. Until then the editor degrades rather than failin
 is dropped from the save and named, photo shapes are written under their old names, and a seventh or
 eighth link is kept on screen while only the first six save.
 
-**The web card must be ported to the spec too.** Parity is a hard requirement: the web renderer should
-import `src/card/layout/`, `link-platforms.ts`, `link-icons.ts` and `card-style.ts` verbatim and only
-position what `layoutFront()` returns.
+**The web card runs on this repo's files.** Parity is a hard requirement, so the web repo's
+`scripts/sync-card-spec.mjs` copies `src/card/layout/`, `card-style.ts`, `tiers.ts`, `links.ts`,
+`link-platforms.ts`, `link-icons.ts`, `editor/fit-notices.ts`, `foil/foil-sksl.ts`, the palette, the
+sticker constants and fixtures, the Outfit TTFs and the foil textures into its `src/lib/app-card/`
+verbatim (import paths only). Its card only positions what `layoutFront()` returns, and its foil is
+this SkSL run through CanvasKit (`canvaskit-wasm` 0.41.0, the version react-native-skia 2.6.2 ships)
+on one shared GPU surface. **Change any of those files here, then re-run the sync there.** Modules
+that pull in React Native (`Foil.tsx`'s recipe map, `StickerFoil.tsx`'s light field, `snapshot.ts`,
+`card-view.ts`) are hand-ported on the web; splitting their logic into RN-free files would let them
+sync too. `docs/card-port/` in the web repo has the app-vs-web geometry and pixel evidence.
 
 ## Stickers
 
@@ -338,5 +345,5 @@ The harness takes `--actions=<json>` scripts (click / text / type / tap / drag /
 see `docs/stickers/shots/phase-*/*.json`.
 
 The web repo draws the same stickers from the same files: `scripts/sync-sticker-renderer.mjs` copies
-the fandom layout verbatim, and `src/lib/stickers/resolve.ts` mirrors `definitions.ts`. Its foil is
-still its own CSS `FoilFx` (a decision logged for Oskar).
+the fandom layout verbatim, and `src/lib/stickers/resolve.ts` mirrors `definitions.ts`. Its sticker
+foil is this repo's engine too, painted into each card's one canvas (see the card section above).
