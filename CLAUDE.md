@@ -8,7 +8,9 @@ Concard is an Expo/React Native (iOS + Android) app for meeting people at conven
 collecting each other's digital trading cards. It implements the app half of the **Concard Design
 Bible** product spec. The web half (`concard.me` + public `/username` pages) lives in the separate
 `concard` repository, which also owns the shared Supabase schema and migrations — coordinate schema
-changes there, not here.
+changes there, not here. On this machine it is checked out at `../concard-web/concard`:
+**SvelteKit 2 with Svelte 5**, TypeScript, Tailwind v4, Netlify adapter, pnpm (not on PATH —
+`npx pnpm@10.33.0 …`). Its checks are `pnpm check`, `pnpm lint` and `pnpm test`.
 
 Run all commands from this directory (`concard-app/`, the Git repository root).
 
@@ -22,11 +24,22 @@ npm run ios           # start targeting iOS
 npm run typecheck     # tsc --noEmit, strict mode
 npm run lint          # ESLint (Expo flat config) + Prettier check
 npm run format        # Prettier write
+npm run shots -- /dev/stickers   # screenshot routes on the web target (see below)
 ```
+
+Prettier runs with `endOfLine: 'auto'`: `core.autocrlf` checks files out as CRLF here, and without it
+`prettier --check` failed every file. `package.json` / `app.json` are prettier-ignored because npm and
+Expo rewrite them in their own style.
 
 There is no test framework or build script configured. Before submitting changes, run `typecheck` and
 `lint`, then verify affected flows in Expo Go — especially card rendering, tilt, and flip on both
 platforms via `/dev/cards` and `/dev/foil-lab`.
+
+`npm run shots -- [--phase=N] [--name=x] <route>…` (`scripts/shots.mjs`) is the autonomous check: it
+starts Expo's web target on :8082 if nothing is there, drives the installed Chrome through
+`playwright-core` at 390 × 844 @2x, and writes PNGs to `docs/stickers/shots/phase-N/`. It proves layout
+and logic only — the web target has no Skia runtime, so foil is absent, and blend modes and gestures
+differ from native. Device checks in Expo Go still own how foil and gestures feel.
 
 Copy `.env.example` to `.env` and fill in Supabase settings before running. Without a `.env` the app
 shows a setup screen naming what's missing rather than failing on every screen (`src/lib/env.ts`,
@@ -96,7 +109,10 @@ collected.
 ### The foil system (`src/card/foil/`)
 
 A foil is one SkSL runtime shader, screen-blended over the face. It emits light only and draws no
-card, so it brightens the face and never darkens it. Three files:
+card, so it brightens the face and never darkens it. Production is three files (the rest of `foil/` —
+`FoilPokemon`, `FoilSwatch`, `FoilTexture`, `FoilV2`, `SkiaSmoke`, `SkiaTextured`, `layers`, `recipes`,
+… — are earlier lab engines reached only from `/dev/foil-sampler` and `/dev/skia-smoke`; never build on
+them):
 
 - `foil-sksl.ts` — the shader source and every look value. One core (the TiltHologramCard stack as
   maths: a rainbow and two soft light bands read along one tilt-driven axis, plus a spotlight glare)
@@ -125,7 +141,9 @@ matching `CardShell`'s face light.
 
 This replaced the earlier blend-mode layer stack (RN 0.86 `mixBlendMode` + gradient views) and its
 experimental engines. Expo Go ships Skia on SDK 57, so no dev client is needed. `/dev/foil-lab`
-runs every kind through the production card path on real hardware.
+runs every kind through the production card path on real hardware. `@shopify/react-native-skia` must
+stay at the exact version in `node_modules/expo/bundledNativeModules.json` (2.6.2 on SDK 57) — Expo Go's
+native side is built against that one, and Oskar has no Apple developer licence for a dev client.
 
 ### The card editor (`app/card/edit.tsx`, `src/card/editor/`, `src/card/use-card-editor.ts`)
 
@@ -205,7 +223,8 @@ app is the source of truth:
   glitter layer; the app's tier 0 has none, so the first upgrade to tier 1 (Glitter) is visible.
 - **Collect rate limiting is per-person, not per-card**, despite bible §7 saying per-card — with 5
   cards per user, per-card would let one person farm five collects a day by swapping actives, which is
-  exactly what the cooldown is meant to prevent. Matches the web app's `collect_card()`.
+  exactly what the cooldown is meant to prevent. Matches the web app's `collect_card()`. The window is
+  **72 hours** (`collect_cooldown()`, live and in the web repo's `docs/DESIGN.md`), not the bible's 24.
 - **Card fields are a union** of the bible's §6 list and the web app's existing fields (background
   tint, fandom badge) — nothing already shipping was dropped to match the bible.
 - **`alignment` / `photo_height` live in the `style` jsonb**, not as their own DB columns, despite
@@ -222,8 +241,7 @@ Phase 2 of 7, plus the card editor and the meet loop (My Card QR → Scan → `c
 In: card renderer (to the card spec), foil lab, email/password auth, username claim, forced first
 card, card editor (text in place, style, photo/bio divider, photo reframing, per-card links with
 parsed handles, affiliation, photo upload), and the meet loop end to end — see "The meet loop" below.
-Not in: card switcher, stickers inventory/combine/placement UI (the overlay renders them; placing
-them doesn't exist yet), the web card's port to the spec, events, friends, DMs, purchases, settings. Nothing has been exercised against a live Supabase project
+Not in: card switcher, stickers inventory/combine/placement UI (being built — see "Stickers" below), the web card's port to the spec, events, friends, DMs, purchases, settings. Nothing has been exercised against a live Supabase project
 on a device yet — the code paths are wired, but no one has run the scan → collect → binder loop between
 two real accounts.
 
@@ -254,7 +272,11 @@ per signed-in session by `ConcardSync`) or synced scan clears them. A collected 
 `record` variant — no QR — so a binder card can never be re-scanned remotely; only my own active card's
 back is `qr`. A scan still pending sync shows the `placeholder` back (neutral edge, stand-in code).
 
-**The editor needs migrations this repo does not own.** `supabase/migrations/20260915000000_card_links_and_art.sql`
+**The editor needs migrations this repo does not own.** (As of 2026-09-23 the live project already has
+the `card_spec_v2` constraints, the v3 `collect_card()` snapshot, `sticker_placements.size` and the
+`card-art` bucket, but the web repo's `supabase/migrations/` has none of this repo's four files — they
+were applied by hand. Check the live `pg_constraint` before assuming either way.)
+`supabase/migrations/20260915000000_card_links_and_art.sql`
 adds `cards.links` and the `card-art` storage bucket; `20260923000000_card_spec_v2.sql` widens the
 style and links constraints for the card spec (eight links with handles, new photo-shape names,
 `photo_height`), moves the default sticker spot, adds `sticker_placements.size`, and makes
@@ -266,3 +288,29 @@ eighth link is kept on screen while only the first six save.
 **The web card must be ported to the spec too.** Parity is a hard requirement: the web renderer should
 import `src/card/layout/`, `link-platforms.ts`, `link-icons.ts` and `card-style.ts` verbatim and only
 position what `layoutFront()` returns.
+
+## Stickers (in progress on `feat/stickers`)
+
+`docs/stickers/HANDOFF.md` is the spec and wins over this file for stickers; `docs/stickers/PROGRESS.md`
+is where the build stands. The short version:
+
+- **Two kinds, kept apart everywhere in the UI.** _Deco_ stickers are art, each generated from one PNG
+  (emoji are just a Noto Emoji deco set, never live emoji text). _Fandom_ stickers are the generative
+  text stickers in `src/stickers/` (`FandomSticker`, `fandom-layout`, `fandom-styles`); names are
+  user-submitted and live only after Oskar approves them. Within a kind, order is `sort_order`.
+- **Getting them.** Collecting a card grants up to one deco and up to one fandom sticker, each a
+  uniformly random copy of one placed on that card, decided server-side in `collect_card()` from the
+  snapshot; the copy keeps its foil with probability `STICKER_COPY_FOIL_CHANCE` (10%), else `none`.
+  Starter stickers come from `grant_starter_stickers()`. Your own affiliation is placed free.
+- **Foil ladder** `none → glitter → holo → cosmic → mosaic`: two copies at one foil combine into one at
+  the next (`combine_stickers()`), mosaic is the ceiling. Stickers extend the card's foil engine —
+  never a second one — and any foil on both a card and a sticker must look identical in both places.
+- **Placing.** Anywhere on the card, centre kept inside it; drag / pinch (0.5×–2× of a 24%-of-card-width
+  base) / two-finger rotate; last touched on top; drag back onto the drawer to remove. Positions are
+  0..1 of the card. At most 20 per card, enforced in the DB too. Autosaves.
+- **Snapshots** freeze placed stickers with everything needed to redraw them forever (kind, immutable
+  asset URLs or label + style category). Sticker rows and storage objects are never deleted;
+  `is_active = false` only retires one from acquisition.
+- **Rendering is cheap by construction**: the die-cut outline, mask and thumbnail are baked once at
+  ingest (`scripts/stickers/ingest.ts`), so drawing a deco sticker is one image plus, if foiled, the
+  foil clipped to its mask. The only animation is foil shimmer, on one shared clock.

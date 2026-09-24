@@ -15,6 +15,7 @@ src/card/link-icons.ts
 package.json
 app.json
 
-# Vendored skills, and Oskar's sticker spec kept verbatim
+# Vendored skills, and Oskar's documents kept verbatim
+docs/design-bible.md
 .claude/
 docs/stickers/HANDOFF.md
