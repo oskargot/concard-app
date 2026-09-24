@@ -2,9 +2,31 @@
 
 ## Current phase
 
-Phase 5 — Inventory and combining. Status: in progress
+Phase 6 — Collect integration. Status: in progress
 
 ## Phase summaries
+
+### Phase 5 — Inventory and combining (done 2026-09-23)
+
+Shipped: the Stickers tab is the real inventory (live or on-device): Deco / Fandom, five foil
+chips, tiles with real foil and counts; a detail sheet you can tilt, with owned / on cards / spare,
+and **Combine** (two spare → one at the next foil; `combine_stickers()` live) that re-opens on the new
+pile with a reveal — the foil engine's own light swept across it, plus a pop. Fandom submission in
+the affiliation picker: name field capped at 24, live preview by the real renderer, "In review"
+tiles that can't be picked, the 3-pending cap. The prototype catalog and glyph map are deleted.
+Shots: [inventory](shots/phase-5/stickers--inventory.png),
+[detail](shots/phase-5/stickers--detail-before-combine.png),
+[after combine](shots/phase-5/stickers--combine-after.png),
+[fandom inventory](shots/phase-5/stickers--inventory-fandom.png),
+[submission preview](shots/phase-5/card-edit--submit-preview.png),
+[pending](shots/phase-5/card-edit--submit-pending.png).
+Check on device:
+
+1. Stickers → a sticker you have two spare of → Combine: does the reveal read as "it got shinier"? Is it short enough?
+2. Tilt the sticker in its detail sheet: does its foil move like a card's?
+3. Is "Combine 2 → 1 Glitter" readable on the holo button? (The web target can't draw that gradient.)
+4. Submit a fandom with a long name (20–24 characters): is the preview still readable?
+   Needs Oskar: approve or reject submissions by setting `fandoms.status` in the dashboard (optionally fix `style_category` while you're there).
 
 ### Phase 4 — Editor: button, drawer, placement (done 2026-09-23)
 
@@ -204,11 +226,19 @@ schema predates the migrations).
 
 ## Tasks — Phase 5
 
-- [ ] Stickers tab reads the real inventory (live or local): Deco / Fandom switch + five foil filter chips; tiles with foil + counts.
-- [ ] Sticker detail: name, foil, owned / placed counts; **Combine** when ≥ 2 spare at one foil below mosaic → `combine_stickers()` (local: store) + a short reveal with the existing reveal/foil machinery.
-- [ ] Delete `src/stickers/catalog.ts` (and anything else of the prototype glyph path) once nothing imports it.
-- [ ] Fandom submission in `AffiliationRow`: "Submit a fandom", text field (24-char cap), live preview with the real renderer, submit → `submit_fandom()`; pending shows "In review", unselectable.
-- [ ] Screenshots: inventory, detail, combine before/after, a pending submission.
+- [x] Stickers tab reads the real inventory (live or local): Deco / Fandom switch + five foil filter chips; tiles with foil + counts. — `app/(tabs)/stickers.tsx`, `src/stickers/use-sticker-inventory.ts`.
+- [x] Sticker detail: name, foil, owned / placed counts; **Combine** when ≥ 2 spare at one foil below mosaic → `combine_stickers()` (local: store) + a short reveal with the existing reveal/foil machinery. — commit `993c917`. There's no separate reveal component in the app (the binder only has a `revealed` flag), so the reveal is the foil engine's tilt driven by Reanimated, not a new animation system.
+- [x] Delete `src/stickers/catalog.ts` (and anything else of the prototype glyph path) once nothing imports it. — also `DEMO_STICKER_GLYPHS`; `StickerLayer.tsx` went in Phase 3.
+- [x] Fandom submission in `AffiliationRow`: "Submit a fandom", text field (24-char cap), live preview with the real renderer, submit → `submit_fandom()`; pending shows "In review", unselectable. — `src/card/editor/AffiliationRow.tsx`, `src/stickers/fandoms.ts`; commit `610ee6f`. Offline / signed out, a submission stays on the device "In review" (only the live project can approve).
+- [x] Screenshots: inventory, detail, combine before/after, a pending submission.
+
+## Tasks — Phase 6
+
+- [ ] Snapshots: read v4 (`card_snapshot.stickers[]` with kind / asset paths / label / style / is_affiliation) into `CardView`, keeping v2/v3 working; the affiliation drawn from its placement when present.
+- [ ] Sync: read `stickers` (the grants) from the `collect_card` response, add them to the local inventory view, and keep the legacy `bonus_*` fallback.
+- [ ] Collect feedback (§2.5): a quiet line / small thumbnails of the granted stickers in the scan result and on the binder card.
+- [ ] Binder cards draw stickers correctly at mini size (they already go through `CardOverlay`); check against the owner's card.
+- [ ] A faithful fixture of a v4 collect response, exercised through the real sync code path, with screenshots.
 
 ## Log
 
@@ -219,3 +249,4 @@ schema predates the migrations).
 - 2026-09-23 — Phase 2: five migrations + PGlite test on the reconstructed live schema, security review, types in both repos. Web `676abd0`, `26a82a4`; app `788f4d3`. Starting Phase 3.
 - 2026-09-23 — Phase 3: foil engine extended (FoilFill), deco + fandom renderers, shimmer clock, fixtures, web CanvasKit, /dev/stickers; every card screen on CardOverlay; StickerLayer deleted. Commits `7ba4ab9`, `71a6855`, `39a0ba0`. Starting Phase 4.
 - 2026-09-23 — Phase 4: sticker button, drawer, on-card editing + autosave (live and on-device), harness `--actions`. Commit `cf0f834`. Starting Phase 5.
+- 2026-09-23 — Phase 5: Stickers tab inventory + combine + reveal; fandom submission; prototype catalog deleted. Commits `993c917`, `610ee6f`. Starting Phase 6.
