@@ -2,7 +2,7 @@
   "name": "concard-app",
   "version": "0.1.0",
   "private": true,
-  "main": "expo-router/entry",
+  "main": "index",
   "scripts": {
     "start": "node scripts/start.js",
     "android": "expo run:android",

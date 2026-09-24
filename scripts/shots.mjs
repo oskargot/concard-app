@@ -131,6 +131,9 @@ if (!executablePath) {
 const outDir = path.join(ROOT, 'docs/stickers/shots', `phase-${currentPhase()}`);
 mkdirSync(outDir, { recursive: true });
 
+// the web entry loads Skia's CanvasKit from public/ (see index.web.js)
+spawnSync(process.execPath, [path.join(ROOT, 'scripts/setup-skia-web.mjs')], { stdio: 'inherit' });
+
 let server = null;
 if (!(await isUp())) server = await startWeb();
 

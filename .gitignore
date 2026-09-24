@@ -42,3 +42,6 @@ yarn-error.*
 /ios
 /android
 sticker-out/
+
+# Skia web runtime, copied from node_modules by scripts/setup-skia-web.mjs
+public/canvaskit.wasm
