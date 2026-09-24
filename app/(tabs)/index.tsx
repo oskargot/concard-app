@@ -8,7 +8,6 @@ import {
 	View,
 	useWindowDimensions
 } from 'react-native';
-import QRCode from 'react-native-qrcode-svg';
 import { useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { SharedValue } from 'react-native-reanimated';
@@ -16,7 +15,7 @@ import type { SharedValue } from 'react-native-reanimated';
 import { useAuth } from '@/auth/AuthProvider';
 import { CardBack } from '@/card/CardBack';
 import { CardFace } from '@/card/CardFace';
-import { CardShell, shellMetrics } from '@/card/CardShell';
+import { CardShell } from '@/card/CardShell';
 import { FlipCard, type FlipCardHandle } from '@/card/FlipCard';
 import { StickerLayer } from '@/card/StickerLayer';
 import { foilForTier } from '@/card/tiers';
@@ -59,10 +58,6 @@ export default function HomeScreen() {
 	// scanner agree on one contract (`usernameFromScan` on the web).
 	const qrUrl = useMemo(() => profileUrl(SITE_ORIGIN, card.handle), [card.handle]);
 	const readableUrl = qrUrl.replace(/^https?:\/\//, '');
-	const qrBoxSize = useMemo(() => {
-		const m = shellMetrics(cardWidth, card.style.shape);
-		return m.u(60) - 2 * m.u(3.33);
-	}, [cardWidth, card.style.shape]);
 
 	const renderFront = (rx: SharedValue<number>, ry: SharedValue<number>) => (
 		<CardShell
@@ -85,7 +80,7 @@ export default function HomeScreen() {
 			width={cardWidth}
 			variant="qr"
 			url={readableUrl}
-			qr={<QRCode value={qrUrl} size={qrBoxSize} backgroundColor="#fbf9f3" color="#17161b" />}
+			qrValue={qrUrl}
 			rx={rx}
 			ry={ry}
 		/>

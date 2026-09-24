@@ -27,7 +27,7 @@ import type { Database } from '../lib/database.types';
 import { supabase } from '../lib/supabase';
 import { affiliationFor } from './card-view';
 import { normalizeStyle, styleToJson, type CardStyle } from './card-style';
-import { linksToJson, normalizeLinks } from './links';
+import { LINKS_LIVE_MAX, linksToJson, normalizeLinks } from './links';
 import type { CardLink, CardView } from './types';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
@@ -115,6 +115,9 @@ export interface CardEditor {
 	error: string | null;
 	/** True once a save proves `cards.links` is missing — links won't persist yet. */
 	linksBlocked: boolean;
+	/** True once the live links constraint rejected more than `LINKS_LIVE_MAX`
+	 *  links, so only the first six are being saved. */
+	linksCapped: boolean;
 	set: (patch: Partial<CardDraft>) => void;
 	setStyle: (patch: Partial<CardStyle>) => void;
 	/** Write immediately rather than waiting out the debounce — used on the way out. */
@@ -135,6 +138,9 @@ export function useCardEditor(cardId: string | null, profile: Profile | null): C
 	 * second after appearing would be worse than none.
 	 */
 	const [linksBlocked, setLinksBlocked] = useState(false);
+	/** Same kind of standing fact: the live constraint still caps links at six. */
+	const [linksCapped, setLinksCapped] = useState(false);
+	const capLinks = useRef(false);
 
 	/** The newest draft, readable from a timer without re-arming it on every keystroke. */
 	const latest = useRef<CardDraft | null>(null);
@@ -189,6 +195,10 @@ export function useCardEditor(cardId: string | null, profile: Profile | null): C
 			} else if (card.data) {
 				dirty.current = false;
 				setDraft(toDraft(card.data as CardRow, owner));
+			} else {
+				// No row and no error: deleted, or not this user's. Say so rather than
+				// leave the screen spinning on a draft that will never arrive.
+				setError('That card could not be found.');
 			}
 			// A missing fandom table is not worth blocking the editor over — the
 			// affiliation row just has nothing to offer.
@@ -211,6 +221,7 @@ export function useCardEditor(cardId: string | null, profile: Profile | null): C
 
 		const row = toRow(current, owner);
 		const payload: CardUpdate = { ...row };
+		if (capLinks.current) payload.links = row.links.slice(0, LINKS_LIVE_MAX);
 		for (const col of missingCardColumns.current) {
 			delete payload[col as keyof CardUpdate];
 		}
@@ -221,12 +232,24 @@ export function useCardEditor(cardId: string | null, profile: Profile | null): C
 		// that column and retry rather than failing the whole save — the live
 		// project is behind the app types until the inherit/links migrations land.
 		while (err) {
+			// The live `cards_links_valid` allows six links until the card spec
+			// migration raises it to eight. Save the first six rather than lose
+			// every other field in the same write.
+			if (isLinksCapViolation(err) && !capLinks.current && row.links.length > LINKS_LIVE_MAX) {
+				capLinks.current = true;
+				setLinksCapped(true);
+				payload.links = row.links.slice(0, LINKS_LIVE_MAX);
+				err = (await supabase.from('cards').update(payload).eq('id', cardId)).error;
+				continue;
+			}
 			const missing = missingCardColumn(err);
 			if (!missing || missingCardColumns.current.has(missing)) break;
 			missingCardColumns.current.add(missing);
+			if (missing === 'links') setLinksBlocked(true);
 			delete payload[missing as keyof CardUpdate];
 			err = (await supabase.from('cards').update(payload).eq('id', cardId)).error;
 		}
+		if (capLinks.current && row.links.length <= LINKS_LIVE_MAX) setLinksCapped(false);
 
 		if (err) {
 			// Failed: the draft is still unsaved, so the next change must retry it.
@@ -342,11 +365,17 @@ export function useCardEditor(cardId: string | null, profile: Profile | null): C
 		saveState,
 		error,
 		linksBlocked,
+		linksCapped,
 		set,
 		setStyle,
 		flush,
 		dismissError: useCallback(() => setError(null), [])
 	};
+}
+
+/** A check violation (23514) on the links shape constraint. */
+function isLinksCapViolation(err: { code?: string; message?: string }): boolean {
+	return err.code === '23514' && /cards_links_valid/.test(err.message ?? '');
 }
 
 /** PostgREST 204 names the missing column; 42703 is the Postgres equivalent. */

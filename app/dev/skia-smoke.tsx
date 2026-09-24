@@ -65,7 +65,7 @@ export default function SkiaSmokeScreen() {
 	// The overlay has to land on the card's inner face rect exactly, or its
 	// rounded corners will not match the ones under it. `shellMetrics` is the
 	// same geometry CardShell itself lays the face out with.
-	const m = shellMetrics(cardWidth, DEMO_CARD.style.shape);
+	const m = shellMetrics(cardWidth);
 	const faceWidth = m.width - m.band * 2;
 	const faceHeight = m.height - m.band * 2;
 	// `rect`/`shaved` compute a negative face radius; clamp before it reaches an SDF.

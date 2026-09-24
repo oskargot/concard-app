@@ -116,8 +116,8 @@ const STARTER_CARD: EditableCard = {
 	style: { ...DEFAULT_STYLE, bg: 'blush', frame: 'holo', photo_shape: 'arch' },
 	affiliation: null,
 	links: [
-		{ label: 'Portfolio', url: 'https://example.com' },
-		{ label: 'Bluesky', url: 'https://bsky.app' }
+		{ url: 'https://novavale.carrd.co', handle: 'novavale' },
+		{ url: 'https://bsky.app/profile/novavale.bsky.social', handle: '@novavale.bsky.social' }
 	],
 	stickers: [
 		{

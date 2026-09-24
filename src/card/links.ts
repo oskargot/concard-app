@@ -1,22 +1,31 @@
 /**
- * Reading and writing the card's link chips.
+ * Reading and writing the card's links.
  *
  * The same shape on both sides of the wire as `card-style.ts` handles for
  * style: `normalizeLinks` takes untrusted JSON out of the `cards.links` column
- * and `linksToJson` puts a valid array back, so a row written by the web app,
- * an older app build, or a hand-edited jsonb can never crash the renderer.
+ * (or a snapshot, or an older persisted binder) and `linksToJson` puts a valid
+ * array back, so a row written by the web app, an older app build, or a
+ * hand-edited jsonb can never crash the renderer.
  *
- * The caps here mirror the `cards_links_valid` check constraint
- * (`supabase/migrations/20260915000000_card_links_and_art.sql`) — if one moves,
- * the other has to move with it, or the editor will happily compose a value the
- * database then rejects.
+ * Card spec §8 stores a link as `url`, `handle` (user-editable, pre-filled from
+ * the url) and `position`. The icon is derived from the domain when drawn and
+ * never stored. Links written before the spec have a `label` instead of a
+ * `handle`; it is read as the handle.
  */
 
+import { LINKS } from './layout/spec';
+import { linkInfo } from './link-platforms';
 import type { CardLink } from './types';
 
-/** Also the constraint's limit. `CardFace` draws three and rolls the rest into "+N more". */
-export const MAX_LINKS = 6;
-export const LINK_LABEL_MAX = 40;
+/** Two columns of four (card spec §3.5). */
+export const MAX_LINKS = LINKS.max;
+/**
+ * What the live `cards_links_valid` constraint allows until
+ * `20260923000000_card_spec_v2.sql` raises it to 8. The editor still lets
+ * someone add eight; `useCardEditor` saves the first six and says so.
+ */
+export const LINKS_LIVE_MAX = 6;
+export const LINK_HANDLE_MAX = 40;
 export const LINK_URL_MAX = 300;
 
 const isNonEmpty = (v: unknown): v is string => typeof v === 'string' && v.trim().length > 0;
@@ -24,43 +33,51 @@ const isNonEmpty = (v: unknown): v is string => typeof v === 'string' && v.trim(
 /** Read a link list out of untrusted JSON, dropping anything malformed. */
 export function normalizeLinks(input: unknown): CardLink[] {
 	if (!Array.isArray(input)) return [];
-	const out: CardLink[] = [];
-	for (const raw of input) {
-		if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
+	const out: (CardLink & { order: number })[] = [];
+	input.forEach((raw, i) => {
+		if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return;
 		const e = raw as Record<string, unknown>;
-		// A link with no url is not a link. A missing label is fine — the face
-		// falls back to the bare domain, same as the web card.
-		if (!isNonEmpty(e.url)) continue;
+		// A link with no url is not a link.
+		if (!isNonEmpty(e.url)) return;
+		const handle =
+			typeof e.handle === 'string' ? e.handle : typeof e.label === 'string' ? e.label : '';
 		out.push({
-			label: typeof e.label === 'string' ? e.label.slice(0, LINK_LABEL_MAX) : '',
 			url: e.url.trim().slice(0, LINK_URL_MAX),
-			icon: isNonEmpty(e.icon) ? e.icon : null
+			handle: handle.slice(0, LINK_HANDLE_MAX),
+			order: typeof e.position === 'number' && Number.isFinite(e.position) ? e.position : i
 		});
-		if (out.length === MAX_LINKS) break;
-	}
-	return out;
+	});
+	return out
+		.sort((a, b) => a.order - b.order)
+		.slice(0, MAX_LINKS)
+		.map(({ url, handle }) => ({ url, handle }));
 }
 
 /**
  * The list as plain records, for writing to the `links` jsonb column.
  *
  * Same reason `styleToJson` exists: `CardLink` is a closed interface, which
- * Supabase's `Json` type rejects for having no index signature. Naming every
- * key explicitly also means a field added to `CardLink` can't be silently
- * dropped on the way to the database — it won't compile until it's handled.
+ * Supabase's `Json` type rejects for having no index signature.
+ *
+ * `label` is written as a copy of the handle because the live constraint still
+ * requires it, and the not-yet-ported web card still reads it.
  *
  * Rows with a blank url are dropped rather than sent: the editor keeps empty
  * rows around as a place to type, and those are drafts, not links.
  */
-export function linksToJson(links: CardLink[]): Record<string, string | null>[] {
+export function linksToJson(links: CardLink[]): Record<string, string | number>[] {
 	return links
 		.filter((l) => l.url.trim().length > 0)
 		.slice(0, MAX_LINKS)
-		.map((l) => ({
-			label: l.label.trim().slice(0, LINK_LABEL_MAX),
-			url: normalizeUrl(l.url).slice(0, LINK_URL_MAX),
-			icon: l.icon ?? null
-		}));
+		.map((l, position) => {
+			const handle = displayHandle(l).slice(0, LINK_HANDLE_MAX);
+			return {
+				url: normalizeUrl(l.url).slice(0, LINK_URL_MAX),
+				handle,
+				label: handle,
+				position
+			};
+		});
 }
 
 /**
@@ -78,7 +95,7 @@ export function normalizeUrl(url: string): string {
 	return `https://${trimmed.replace(/^\/+/, '')}`;
 }
 
-/** The short form shown on a chip when a link has no label of its own. */
+/** The short form of a url, for accessibility labels. */
 export function displayUrl(url: string): string {
 	return url
 		.trim()
@@ -87,5 +104,15 @@ export function displayUrl(url: string): string {
 		.replace(/\/+$/, '');
 }
 
+/**
+ * The text a pill shows: the handle as the user left it, or — when they
+ * cleared it — what the url itself suggests, so a pill is never blank.
+ */
+export function displayHandle(link: CardLink): string {
+	const handle = link.handle.trim();
+	if (handle) return handle;
+	return linkInfo(link.url)?.handle ?? displayUrl(link.url);
+}
+
 /** An empty row for the editor to render — a place to type, not yet a link. */
-export const blankLink = (): CardLink => ({ label: '', url: '', icon: null });
+export const blankLink = (): CardLink => ({ url: '', handle: '' });

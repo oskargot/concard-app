@@ -7,9 +7,9 @@
  * how it was drawn on the day it was collected.
  *
  * Fields added for the design bible's §6 card: `pronouns` and `label`. The
- * bible's `bio_alignment` and `link_layout` live in `CardStyle` instead — they
- * are style, and putting them there keeps one check constraint in the database
- * rather than two more columns.
+ * card spec's `alignment` and `photo_height` live in `CardStyle` instead — they
+ * are style, and the style jsonb is frozen into snapshots whole. The spec's
+ * photo focal point and zoom are `art_x` / `art_y` / `art_scale`.
  */
 
 import type { FandomStyleCategory } from '../stickers/types';
@@ -26,11 +26,14 @@ import type { StickerFoil } from './tiers';
  */
 export const BIO_MAX = 140;
 
+/**
+ * A link pill (card spec §3.5, §8). Its position is its index in
+ * `CardView.links`; its icon is derived from the url's domain when drawn.
+ */
 export interface CardLink {
-	label: string;
 	url: string;
-	/** Icon key or url. Optional — links fall back to a generic mark. */
-	icon?: string | null;
+	/** Shown on the pill. Pre-filled from the url, then the user's to edit. */
+	handle: string;
 }
 
 /**
@@ -63,6 +66,9 @@ export interface PlacedSticker {
 	scale: number;
 	z_index: number;
 	foil: StickerFoil;
+	/** Width as a fraction of the card's width. Absent on placements that
+	 *  predate it; those draw at the old base size times `scale`. */
+	size?: number;
 }
 
 /** Everything needed to draw a card front. */
