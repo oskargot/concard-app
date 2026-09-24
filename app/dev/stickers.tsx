@@ -1,306 +1,367 @@
 /**
- * Stage 1 playground: generate fandom text stickers from a name + category.
+ * Sticker lab: every sticker at every foil, loose and on a card, with no
+ * Supabase (HANDOFF Phase 3). Deco art comes from the bundled fixtures, the
+ * same bakes the ingest uploads.
  *
- * This is the visual test bench for the on-device type renderer. Stage 2 wires
- * the same renderer onto real cards via `CardOverlay` / `AffiliationRow`; this
- * playground stays the place to tune typography across categories.
+ * Query params, so the screenshot harness can pin a state:
+ *   ?tilt=x,y   card tilt as the shader sees it, -1..1 each (0,0 = at rest)
+ *   ?perf=1     only the performance card: 20 foiled stickers
+ *
+ * The web target draws the real SkSL foil (CanvasKit), but not fandom foil
+ * (react-native-masked-view has no web mask) and not tilt from a finger.
  */
 
-import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import {
+	Platform,
+	Pressable,
+	ScrollView,
+	StyleSheet,
+	Text,
+	useWindowDimensions,
+	View
+} from 'react-native';
+import { useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSharedValue } from 'react-native-reanimated';
 
-import { BGS } from '@/card/card-style';
+import { Card } from '@/card/Card';
+import { DEMO_CARD } from '@/card/demo-card';
+import { TILT_RANGE } from '@/card/FlipCard';
+import { STICKER_FOIL_LABELS, STICKER_FOILS, type StickerFoil } from '@/card/tiers';
+import type { CardView, PlacedSticker } from '@/card/types';
+import { STICKER_BASE_WIDTH } from '@/stickers/constants';
+import { decoDefinition, fandomDefinition, fandomStickerId } from '@/stickers/definitions';
 import { FANDOM_STYLE_LABELS, makeFandomDefinition } from '@/stickers/fandom-styles';
+import { FIXTURE_STICKERS } from '@/stickers/fixtures.generated';
 import { StickerRenderer } from '@/stickers/StickerRenderer';
-import { FANDOM_STYLE_CATEGORIES, type DecoStickerDefinition } from '@/stickers/types';
+import { FANDOM_STYLE_CATEGORIES } from '@/stickers/types';
 import { Field } from '@/ui';
 import { palette } from '@/theme/palette';
 import { radius, space, type } from '@/theme/tokens';
 
-const PRESET_LABELS = [
-	'STAR TREK',
-	'HOMESTUCK',
-	'Pokémon',
-	'Dungeon Meshi',
-	'The Legend of Zelda',
-	"Baldur's Gate 3",
-	'Doctor Who',
-	'Splatoon',
-	'Final Fantasy XIV'
+// Each foiled sticker is its own Skia canvas, and on the web target each
+// canvas is its own WebGL context, which Chrome caps at ~16 per page. So the
+// web page shows two ladder rows (and ?perf=1 shows only the perf card);
+// native shows all five.
+const LADDER_DECO =
+	Platform.OS === 'web' ? ['star', 'sparkles'] : ['star', 'sparkles', 'cat', 'rocket', 'rainbow'];
+const LADDER_FANDOM = [
+	{ id: 'scifi', label: 'Sci-fi', style: 'retro-sci-fi' },
+	{ id: 'demo-poke', label: 'Pokémon', style: 'cute' }
+] as const;
+
+const TILTS: { label: string; value: [number, number] }[] = [
+	{ label: 'Rest', value: [0, 0] },
+	{ label: 'Left', value: [-0.8, 0] },
+	{ label: 'Up-right', value: [0.6, -0.6] },
+	{ label: 'Down', value: [0, 0.9] }
 ];
 
-const EDGE_LABELS = ['X', 'OK', 'JoJo', 'Neon Genesis Evangelion'];
+function parseTilt(raw: string | string[] | undefined): [number, number] {
+	const [x, y] = String(raw ?? '')
+		.split(',')
+		.map(Number);
+	return [Number.isFinite(x) ? x : 0, Number.isFinite(y) ? y : 0];
+}
 
-const SIZES: { value: number; label: string }[] = [
-	{ value: 72, label: 'Small' },
-	{ value: 120, label: 'Card' },
-	{ value: 168, label: 'Hero' },
-	{ value: 240, label: 'Large' }
-];
+/** A plain sticker placement, for fixture cards. */
+function place(
+	sticker_id: string,
+	x: number,
+	y: number,
+	foil: StickerFoil,
+	extra: Partial<PlacedSticker> = {}
+): PlacedSticker {
+	return {
+		id: `${sticker_id}-${x}-${y}`,
+		sticker_id,
+		x,
+		y,
+		rotation: 0,
+		scale: 1,
+		z_index: 1,
+		foil,
+		size: STICKER_BASE_WIDTH,
+		...extra
+	};
+}
 
-const BACKGROUNDS: { value: keyof typeof BGS | 'void'; label: string; color: string }[] = [
-	{ value: 'void', label: 'Night', color: palette.base },
-	{ value: 'paper', label: 'Paper', color: BGS.paper },
-	{ value: 'blush', label: 'Blush', color: BGS.blush },
-	{ value: 'slate', label: 'Slate', color: BGS.slate }
-];
+/** A glitter card with a glitter sticker on the photo, beside the card's own flecks. */
+const GLITTER_CHECK: CardView = {
+	...DEMO_CARD,
+	affiliation: null,
+	stickers: [
+		place('sparkles', 0.3, 0.42, 'glitter', { scale: 1.3 }),
+		place('heart', 0.72, 0.4, 'none', { scale: 1.1 })
+	]
+};
 
-const DECO_PLACEHOLDER: DecoStickerDefinition = {
-	id: 'deco-placeholder',
-	name: 'Star Drop',
-	kind: 'deco',
-	imageUrl: ''
+/** One sticker at each rung, spread over the card. */
+const RUNGS_ON_CARD: CardView = {
+	...DEMO_CARD,
+	affiliation: null,
+	stickers: [
+		place('star', 0.2, 0.2, 'none', { rotation: -8 }),
+		place('star', 0.78, 0.2, 'glitter', { rotation: 6 }),
+		place('star', 0.5, 0.45, 'holo', { scale: 1.2 }),
+		place('star', 0.22, 0.72, 'cosmic', { rotation: 12 }),
+		place('star', 0.78, 0.72, 'mosaic', { rotation: -10 }),
+		place(fandomStickerId('scifi'), 0.5, 0.92, 'holo', {
+			kind: 'fandom',
+			label: 'Sci-fi',
+			style_category: 'retro-sci-fi',
+			is_affiliation: false,
+			size: 0.3
+		})
+	]
+};
+
+/** Twenty foiled stickers, the per-card cap, for the performance check. */
+const TWENTY_FOILED: CardView = {
+	...DEMO_CARD,
+	affiliation: null,
+	stickers: Array.from({ length: 20 }, (_, i) =>
+		place(
+			FIXTURE_STICKERS[i % FIXTURE_STICKERS.length].id,
+			0.12 + (i % 4) * 0.25,
+			0.1 + Math.floor(i / 4) * 0.2,
+			STICKER_FOILS[1 + (i % 4)],
+			{ id: `perf-${i}`, z_index: i, rotation: ((i * 37) % 30) - 15, scale: 0.8 }
+		)
+	)
 };
 
 export default function StickerLabScreen() {
+	const params = useLocalSearchParams<{ tilt?: string; perf?: string }>();
 	const { width } = useWindowDimensions();
 	const insets = useSafeAreaInsets();
-	const [query, setQuery] = useState('STAR TREK');
-	const [size, setSize] = useState(168);
-	const [bg, setBg] = useState<(typeof BACKGROUNDS)[number]['value']>('void');
-	const stageColor = BACKGROUNDS.find((item) => item.value === bg)?.color ?? palette.base;
+	const [tilt, setTilt] = useState<[number, number]>(() => parseTilt(params.tilt));
+	const rx = useSharedValue(0);
+	const ry = useSharedValue(0);
+	useEffect(() => {
+		// u_tilt = [ry, -rx] / TILT_RANGE (SkiaFoil), so invert that here
+		rx.value = -tilt[1] * TILT_RANGE;
+		ry.value = tilt[0] * TILT_RANGE;
+	}, [tilt, rx, ry]);
 
-	const previewLabel = query.trim() || 'Fandom';
-	const previewDefs = useMemo(
-		() => FANDOM_STYLE_CATEGORIES.map((category) => makeFandomDefinition(previewLabel, category)),
-		[previewLabel]
-	);
-
-	const gridGap = space.sm;
-	const columns = size >= 200 ? 1 : size >= 140 ? 2 : 3;
-	const cellWidth = (width - space.xl * 2 - space.lg * 2 - gridGap * (columns - 1)) / columns;
-	const stickerWidth = Math.min(size, cellWidth - space.sm * 2);
+	const contentWidth = Math.min(width, 520) - space.lg * 2;
+	// inside a section: its padding and hairline border come off too
+	const cell = Math.floor((contentWidth - space.md * 2 - 2 - space.xs * 4) / 5);
+	const cardWidth = Math.min(contentWidth, 320);
+	const light = useMemo(() => ({ rx, ry }), [rx, ry]);
 
 	return (
 		<ScrollView
-			keyboardShouldPersistTaps="handled"
 			contentContainerStyle={[
 				styles.page,
 				{ paddingTop: space.lg, paddingBottom: insets.bottom + space.xxl }
 			]}
 		>
 			<View style={styles.intro}>
-				<Text style={styles.eyebrow}>STAGE 1 · TYPE RENDERER</Text>
-				<Text style={styles.title}>Fandom stickers</Text>
+				<Text style={styles.eyebrow}>DEV · STICKERS</Text>
+				<Text style={styles.title}>Sticker lab</Text>
 				<Text style={styles.body}>
-					Live SVG from a name and a Concard category. White rims are vector strokes. Foil is wired
-					on the API and not drawn yet.
+					Every rung of the foil ladder, loose and on a card. Foil is the card&apos;s own engine,
+					lit by the card&apos;s light and clipped to each sticker&apos;s die cut.
 				</Text>
 			</View>
 
-			<View style={styles.section}>
-				<Field
-					label="Fandom name"
-					value={query}
-					onChangeText={setQuery}
-					placeholder="Type any fandom"
-					autoCapitalize="words"
-					autoCorrect={false}
-					hint="Previewed in every style below. Production picker is unchanged."
-				/>
-				<ChipRow
-					label="Size"
-					options={SIZES.map((item) => ({ value: String(item.value), label: item.label }))}
-					value={String(size)}
-					onChange={(next) => setSize(Number(next))}
-				/>
-				<ChipRow
-					label="Stage"
-					options={BACKGROUNDS.map((item) => ({ value: item.value, label: item.label }))}
-					value={bg}
-					onChange={(next) => {
-						const match = BACKGROUNDS.find((item) => item.value === next);
-						if (match) setBg(match.value);
-					}}
-				/>
-			</View>
-
-			<View style={[styles.section, styles.stage, { backgroundColor: stageColor }]}>
-				<Text style={[styles.sectionTitle, stageOnDark(stageColor) && styles.sectionTitleOnDark]}>
-					{previewLabel} · every category
-				</Text>
-				<View style={[styles.grid, { gap: gridGap }]}>
-					{previewDefs.map((definition) => (
-						<View key={definition.id} style={[styles.cell, { width: cellWidth }]}>
-							<StickerRenderer definition={definition} width={stickerWidth} seed={definition.id} />
-							<Text style={[styles.cellLabel, stageOnDark(stageColor) && styles.cellLabelOnDark]}>
-								{FANDOM_STYLE_LABELS[definition.styleCategory]}
-							</Text>
-						</View>
-					))}
-				</View>
-			</View>
-
-			<View style={styles.section}>
-				<Text style={styles.sectionTitle}>Presets</Text>
-				<Text style={styles.note}>Tap a name to load it into the editor above.</Text>
-				<View style={styles.presetWrap}>
-					{PRESET_LABELS.map((label) => (
-						<Pressable
-							key={label}
-							onPress={() => setQuery(label)}
-							style={[styles.preset, query.trim() === label && styles.presetOn]}
-						>
-							<Text style={[styles.presetText, query.trim() === label && styles.presetTextOn]}>
-								{label}
-							</Text>
-						</Pressable>
-					))}
-				</View>
-			</View>
-
-			<View style={styles.section}>
-				<Text style={styles.sectionTitle}>Preset grid · picker size</Text>
-				<Text style={styles.note}>
-					Each row is one fandom across all seven categories, at 96px — a sticker-picker tile.
-				</Text>
-				{PRESET_LABELS.map((label) => (
-					<PresetRow key={label} label={label} onPress={() => setQuery(label)} />
-				))}
-			</View>
-
-			<View style={styles.section}>
-				<Text style={styles.sectionTitle}>Edge cases · card size</Text>
-				<Text style={styles.note}>Short marks and a long title at ~card-sticker scale (52px).</Text>
-				{EDGE_LABELS.map((label) => (
-					<PresetRow key={label} label={label} compact onPress={() => setQuery(label)} />
-				))}
-			</View>
-
-			<View style={styles.section}>
-				<Text style={styles.sectionTitle}>Deco placeholder</Text>
-				<Text style={styles.note}>
-					Stage 1 only needs the fandom path. Deco is a dashed PNG slot so `StickerRenderer` already
-					has a second kind.
-				</Text>
-				<View style={styles.decoRow}>
-					<StickerRenderer definition={DECO_PLACEHOLDER} width={96} />
-					<StickerRenderer definition={DECO_PLACEHOLDER} width={52} />
-				</View>
-			</View>
-		</ScrollView>
-	);
-}
-
-function PresetRow({
-	label,
-	compact,
-	onPress
-}: {
-	label: string;
-	compact?: boolean;
-	onPress: () => void;
-}) {
-	const stickerWidth = compact ? 52 : 96;
-	return (
-		<Pressable onPress={onPress} style={styles.presetRow}>
-			<Text style={styles.presetRowTitle}>{label}</Text>
-			<ScrollView horizontal showsHorizontalScrollIndicator={false}>
-				<View style={styles.presetRowStickers}>
-					{FANDOM_STYLE_CATEGORIES.map((category) => (
-						<View key={category} style={styles.presetItem}>
-							<StickerRenderer
-								definition={makeFandomDefinition(label, category)}
-								width={stickerWidth}
-							/>
-							<Text style={styles.presetItemLabel}>{FANDOM_STYLE_LABELS[category]}</Text>
-						</View>
-					))}
-				</View>
-			</ScrollView>
-		</Pressable>
-	);
-}
-
-function ChipRow({
-	label,
-	options,
-	value,
-	onChange
-}: {
-	label: string;
-	options: { value: string; label: string }[];
-	value: string;
-	onChange: (value: string) => void;
-}) {
-	return (
-		<View style={styles.chipBlock}>
-			<Text style={styles.chipLabel}>{label}</Text>
-			<View style={styles.chipWrap}>
-				{options.map((option) => {
-					const on = option.value === value;
+			<View style={styles.chips}>
+				{TILTS.map((t) => {
+					const on = t.value[0] === tilt[0] && t.value[1] === tilt[1];
 					return (
 						<Pressable
-							key={option.value}
-							onPress={() => onChange(option.value)}
+							key={t.label}
+							onPress={() => setTilt(t.value)}
 							style={[styles.chip, on && styles.chipOn]}
 						>
-							<Text style={[styles.chipText, on && styles.chipTextOn]}>{option.label}</Text>
+							<Text style={[styles.chipText, on && styles.chipTextOn]}>{t.label}</Text>
 						</Pressable>
 					);
 				})}
 			</View>
+
+			{params.perf ? (
+				<Section title="20 foiled stickers on one card">
+					<View style={styles.center}>
+						<Card view={TWENTY_FOILED} width={cardWidth} seed="perf" rx={rx} ry={ry} />
+					</View>
+				</Section>
+			) : (
+				<>
+					<Section title="Glitter sticker on a glitter card">
+						<View style={styles.center}>
+							<Card
+								view={GLITTER_CHECK}
+								width={cardWidth}
+								foil="glitter"
+								seed="glitter-check"
+								rx={rx}
+								ry={ry}
+							/>
+						</View>
+						<Text style={styles.note}>
+							The sparkles sticker is glitter; the heart is plain. Its flecks should match the
+							card&apos;s in size and catch the same glare.
+						</Text>
+					</Section>
+
+					<Section title="The ladder, loose">
+						<View style={styles.ladderHead}>
+							{STICKER_FOILS.map((foil) => (
+								<Text key={foil} style={[styles.colLabel, { width: cell }]}>
+									{STICKER_FOIL_LABELS[foil]}
+								</Text>
+							))}
+						</View>
+						{LADDER_DECO.map((id) => {
+							const definition = decoDefinition({ id });
+							return (
+								<View key={id} style={styles.row}>
+									{STICKER_FOILS.map((foil) => (
+										<View key={foil} style={[styles.cell, { width: cell, height: cell }]}>
+											<StickerRenderer
+												definition={definition}
+												foil={foil}
+												width={cell - space.sm}
+												light={light}
+											/>
+										</View>
+									))}
+								</View>
+							);
+						})}
+						{LADDER_FANDOM.map((f) => {
+							const definition = fandomDefinition({
+								id: fandomStickerId(f.id),
+								label: f.label,
+								style_category: f.style
+							});
+							return (
+								<View key={f.id} style={styles.row}>
+									{STICKER_FOILS.map((foil) => (
+										<View key={foil} style={[styles.cell, { width: cell, height: cell }]}>
+											<StickerRenderer
+												definition={definition}
+												foil={foil}
+												width={cell - space.xs}
+												light={light}
+											/>
+										</View>
+									))}
+								</View>
+							);
+						})}
+					</Section>
+
+					<Section title="Every rung on a card">
+						<View style={styles.center}>
+							<Card view={RUNGS_ON_CARD} width={cardWidth} seed="rungs" rx={rx} ry={ry} />
+						</View>
+					</Section>
+
+					<Section title="Every fixture sticker">
+						<View style={styles.wrap}>
+							{FIXTURE_STICKERS.map((f) => (
+								<View key={f.id} style={[styles.cell, { width: cell, height: cell }]}>
+									<StickerRenderer
+										definition={decoDefinition(f)}
+										width={cell - space.sm}
+										art="thumb"
+									/>
+								</View>
+							))}
+						</View>
+					</Section>
+
+					<FandomPlayground contentWidth={contentWidth} />
+				</>
+			)}
+		</ScrollView>
+	);
+}
+
+/** Type any fandom name and see it in every style category. */
+function FandomPlayground({ contentWidth }: { contentWidth: number }) {
+	const [query, setQuery] = useState('STAR TREK');
+	const label = query.trim() || 'Fandom';
+	const definitions = useMemo(
+		() => FANDOM_STYLE_CATEGORIES.map((category) => makeFandomDefinition(label, category)),
+		[label]
+	);
+	const cellWidth = (contentWidth - space.sm) / 2;
+
+	return (
+		<Section title="Fandom playground">
+			<Field
+				label="Fandom name"
+				value={query}
+				onChangeText={setQuery}
+				placeholder="Type any fandom"
+				autoCapitalize="words"
+				autoCorrect={false}
+				hint="Drawn by the generative renderer in every style category."
+			/>
+			<View style={styles.wrap}>
+				{definitions.map((definition) => (
+					<View key={definition.id} style={[styles.fandomCell, { width: cellWidth }]}>
+						<StickerRenderer definition={definition} width={cellWidth - space.lg} />
+						<Text style={styles.cellLabel}>{FANDOM_STYLE_LABELS[definition.styleCategory]}</Text>
+					</View>
+				))}
+			</View>
+		</Section>
+	);
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+	return (
+		<View style={styles.section}>
+			<Text style={styles.sectionTitle}>{title}</Text>
+			{children}
 		</View>
 	);
 }
 
-function stageOnDark(color: string): boolean {
-	return color === palette.base || color === BGS.slate;
-}
-
 const styles = StyleSheet.create({
-	page: { paddingHorizontal: space.xl, gap: space.lg },
+	page: { paddingHorizontal: space.lg, gap: space.lg, backgroundColor: palette.ground },
 	intro: { gap: space.xs },
-	eyebrow: { ...type.meta, color: palette.teal },
-	title: { ...type.hero, color: palette.cream },
-	body: { ...type.body, color: palette.creamMute },
-	section: {
-		gap: space.md,
-		padding: space.lg,
-		borderRadius: radius.lg,
-		backgroundColor: palette.raised,
-		borderWidth: StyleSheet.hairlineWidth,
-		borderColor: palette.line
-	},
-	stage: { borderColor: palette.lineStrong },
-	sectionTitle: { ...type.meta, color: palette.teal },
-	sectionTitleOnDark: { color: palette.teal },
-	note: { ...type.small, color: palette.creamFaint },
-	grid: { flexDirection: 'row', flexWrap: 'wrap' },
-	cell: { alignItems: 'center', gap: space.xs, paddingVertical: space.sm },
-	cellLabel: { ...type.meta, color: palette.void, fontSize: 9, textAlign: 'center' },
-	cellLabelOnDark: { color: palette.creamFaint },
-	presetWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs },
-	preset: {
-		paddingVertical: space.xs + 2,
-		paddingHorizontal: space.md,
-		borderRadius: radius.pill,
-		backgroundColor: palette.raisedHigh,
-		borderWidth: StyleSheet.hairlineWidth,
-		borderColor: palette.line
-	},
-	presetOn: { backgroundColor: palette.teal, borderColor: palette.teal },
-	presetText: { ...type.small, color: palette.creamMute },
-	presetTextOn: { color: palette.void, fontFamily: 'SpaceGrotesk-Bold' },
-	presetRow: { gap: space.sm, paddingVertical: space.sm },
-	presetRowTitle: { ...type.bodyStrong, color: palette.cream },
-	presetRowStickers: { flexDirection: 'row', gap: space.md, paddingRight: space.lg },
-	presetItem: { alignItems: 'center', gap: 4, minWidth: 72 },
-	presetItemLabel: { ...type.meta, color: palette.creamFaint, fontSize: 8 },
-	decoRow: { flexDirection: 'row', gap: space.lg, alignItems: 'center' },
-	chipBlock: { gap: space.xs },
-	chipLabel: { ...type.meta, color: palette.creamMute },
-	chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs },
+	eyebrow: { ...type.meta, color: palette.holo },
+	title: { ...type.title, color: palette.textPrimary },
+	body: { ...type.body, color: palette.textDim },
+	chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs },
 	chip: {
-		paddingVertical: space.xs + 2,
 		paddingHorizontal: space.md,
+		paddingVertical: space.xs,
 		borderRadius: radius.pill,
-		backgroundColor: palette.raisedHigh,
 		borderWidth: StyleSheet.hairlineWidth,
 		borderColor: palette.line
 	},
-	chipOn: { backgroundColor: palette.teal, borderColor: palette.teal },
-	chipText: { ...type.small, color: palette.creamMute },
-	chipTextOn: { color: palette.void, fontFamily: 'SpaceGrotesk-Bold' }
+	chipOn: { backgroundColor: palette.holo, borderColor: palette.holo },
+	chipText: { ...type.small, color: palette.textDim },
+	chipTextOn: { color: palette.ground },
+	section: {
+		gap: space.sm,
+		padding: space.md,
+		borderRadius: radius.lg,
+		backgroundColor: palette.surface,
+		borderWidth: StyleSheet.hairlineWidth,
+		borderColor: palette.line
+	},
+	sectionTitle: { ...type.meta, color: palette.textDim },
+	note: { ...type.small, color: palette.textFaint },
+	center: { alignItems: 'center' },
+	ladderHead: { flexDirection: 'row', gap: space.xs },
+	colLabel: { ...type.small, color: palette.textFaint, textAlign: 'center' },
+	row: { flexDirection: 'row', gap: space.xs },
+	wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs },
+	cell: {
+		alignItems: 'center',
+		justifyContent: 'center',
+		borderRadius: radius.md,
+		backgroundColor: palette.raised
+	},
+	fandomCell: { alignItems: 'center', gap: space.xs, paddingVertical: space.sm },
+	cellLabel: { ...type.small, color: palette.textFaint }
 });

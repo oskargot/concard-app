@@ -47,10 +47,13 @@ const routes = args
 const fullPage = args.includes('--full');
 const keep = args.includes('--keep');
 const waitMs = Number(flag('wait') ?? 2500);
+// RN-web ScrollViews scroll inside the page, so --full can't see past the fold;
+// --height=N makes the viewport itself that tall instead.
+const viewportHeight = Number(flag('height') ?? VIEWPORT.height);
 
 if (!routes.length) {
 	console.log(
-		'usage: npm run shots -- [--phase=N] [--name=suffix] [--full] [--keep] <route> [...]'
+		'usage: npm run shots -- [--phase=N] [--name=suffix] [--height=px] [--full] [--keep] <route> [...]'
 	);
 	process.exit(1);
 }
@@ -140,7 +143,10 @@ if (!(await isUp())) server = await startWeb();
 const browser = await chromium.launch({ executablePath, headless: true });
 let failed = false;
 try {
-	const page = await browser.newPage({ viewport: VIEWPORT, deviceScaleFactor: 2 });
+	const page = await browser.newPage({
+		viewport: { width: VIEWPORT.width, height: viewportHeight },
+		deviceScaleFactor: 2
+	});
 	const errors = [];
 	page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
 	page.on('console', (m) => {

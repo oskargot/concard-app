@@ -378,22 +378,35 @@ export const GLOSS_RADII: [number, number] = [GLARE_HALO_RADIUS, GLARE_HALO_RADI
  * Samples bunch toward the centre, where the core's falloff is steepest.
  */
 export function glossGradient(): string {
+	const { colors, positions } = glossStops();
+	const stops = colors.map((c, i) => `${c} ${(positions[i] * 100).toFixed(2)}%`);
+	return `radial-gradient(ellipse closest-side at 50% 50%, ${stops.join(', ')})`;
+}
+
+/**
+ * The same gloss as colour stops (0..1 of the halo radius), for drawing it in
+ * Skia: a foiled sticker lays this wash over itself, clipped to its mask, so
+ * it is lit exactly like the patch of card beside it.
+ */
+export function glossStops(): { colors: string[]; positions: number[] } {
 	const [r, g, b] = parseColor(GLARE_TINT).map((c) => Math.round(c * 255));
 	const smooth = (x: number) => {
 		const k = Math.min(Math.max(x, 0), 1);
 		return k * k * (3 - 2 * k);
 	};
 	const N = 16;
-	const stops: string[] = [];
+	const colors: string[] = [];
+	const positions: number[] = [];
 	for (let i = 0; i <= N; i++) {
 		const frac = Math.pow(i / N, 1.6);
 		const dist = frac * GLARE_HALO_RADIUS;
 		const halo = (1 - smooth(dist / GLARE_HALO_RADIUS)) ** 2;
 		const core = (1 - smooth(dist / GLARE_CORE_RADIUS)) ** 2;
 		const a = Math.min(1, halo * GLARE_WASH + core * core * GLARE_CORE);
-		stops.push(`rgba(${r},${g},${b},${a.toFixed(4)}) ${(frac * 100).toFixed(2)}%`);
+		colors.push(`rgba(${r},${g},${b},${a.toFixed(4)})`);
+		positions.push(frac);
 	}
-	return `radial-gradient(ellipse closest-side at 50% 50%, ${stops.join(', ')})`;
+	return { colors, positions };
 }
 
 /** Saturation control shared by every ramp. */
@@ -499,6 +512,9 @@ uniform float2 u_resolution;  // canvas size in dp
 uniform float  u_radius;      // corner radius in dp
 uniform float  u_time;        // seconds since mount
 uniform float2 u_tilt;        // finger in SCREEN space, -1..1, y down-positive
+uniform float  u_edge;        // 1 on a card: clip to its rounded face, light its rim.
+                              // 0 on a sticker: its own mask clips it, and it may
+                              // hang past the card's edge (see StickerFoil).
 
 const float  TAU                = 6.2831853;
 const float  HUE_SPAN           = ${f(r.hueSpan)};
@@ -591,7 +607,7 @@ half4 main(float2 fragCoord) {
     p.x *= aspect;
 
     float sd = sdRoundRect(p, float2(0.5 * aspect, 0.5), u_radius / u_resolution.y);
-    float mask = 1.0 - softStep(0.0, EDGE_FEATHER_DP / u_resolution.y, sd);
+    float mask = mix(1.0, 1.0 - softStep(0.0, EDGE_FEATHER_DP / u_resolution.y, sd), u_edge);
     if (mask <= 0.0) { return half4(0.0); }
 
     // The finger, and the finger as the light sees it (opposite by default).
@@ -644,7 +660,7 @@ half4 main(float2 fragCoord) {
     // photo and text.
     float3 sheen = float3(bands * SHEEN_STRENGTH * view);
 
-    float rim = (1.0 - softStep(RIM_WIDTH * 0.5, RIM_WIDTH, -sd)) * RIM_STRENGTH;
+    float rim = (1.0 - softStep(RIM_WIDTH * 0.5, RIM_WIDTH, -sd)) * RIM_STRENGTH * u_edge;
 
     float3 light = (foil + seams + sheen) * FOIL_INTENSITY + float3(rim);
     light = clamp(light, 0.0, 1.0);

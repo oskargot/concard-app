@@ -6,20 +6,45 @@
  *
  *   - **Card tiers** (design bible §7) — per card, per collector. Meeting
  *     someone repeatedly upgrades their card in your binder.
- *   - **Sticker foils** (web app, `sticker_foil` enum) — two copies of a
- *     sticker at one tier combine into one at the next.
+ *   - **Sticker foils** (`sticker_foil` enum) — two copies of a sticker at
+ *     one foil combine into one at the next (`combine_stickers()`).
  *
- * `glitter` is a rung on both ladders and must look identical in both places, or
- * the shared vocabulary stops meaning anything.
+ * Every foil that exists on both a card and a sticker must look identical in
+ * both places, or the shared vocabulary stops meaning anything. They are drawn
+ * by the same engine (`foil/SkiaFoil.tsx`'s `FoilFill`) for exactly that.
  */
 
 /** Every foil treatment in the app. One renderer covers all of them. */
 export const FOIL_KINDS = ['none', 'glitter', 'holo', 'cosmic', 'mosaic'] as const;
 export type FoilKind = (typeof FOIL_KINDS)[number];
 
-/** The three a sticker can be, matching the database enum exactly. */
-export const STICKER_FOILS = ['none', 'glitter', 'holo'] as const;
+/**
+ * The sticker ladder, matching the database enum's order exactly:
+ * none → glitter → holo → cosmic → mosaic. Holo sits between glitter and
+ * cosmic here although it isn't a card tier (cards get holo from the frame).
+ */
+export const STICKER_FOILS = ['none', 'glitter', 'holo', 'cosmic', 'mosaic'] as const;
 export type StickerFoil = (typeof STICKER_FOILS)[number];
+
+/** The foil two copies combine into, or null at the ceiling. Mirrors
+ *  `sticker_foil_next()` in the schema. */
+export function nextStickerFoil(foil: StickerFoil): StickerFoil | null {
+	const i = STICKER_FOILS.indexOf(foil);
+	return i >= 0 && i < STICKER_FOILS.length - 1 ? STICKER_FOILS[i + 1] : null;
+}
+
+/** A foil read off a row or a snapshot; anything unknown draws plain. */
+export function normalizeStickerFoil(value: unknown): StickerFoil {
+	return STICKER_FOILS.includes(value as StickerFoil) ? (value as StickerFoil) : 'none';
+}
+
+export const STICKER_FOIL_LABELS: Record<StickerFoil, string> = {
+	none: 'Plain',
+	glitter: 'Glitter',
+	holo: 'Holo',
+	cosmic: 'Cosmic',
+	mosaic: 'Mosaic'
+};
 
 /**
  * Card tier → foil, and the meeting count that earns it.

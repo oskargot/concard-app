@@ -21,7 +21,7 @@ import {
 	useClock,
 	useImage
 } from '@shopify/react-native-skia';
-import type { SkRuntimeEffect } from '@shopify/react-native-skia';
+import type { SkMatrix, SkRuntimeEffect } from '@shopify/react-native-skia';
 import { Platform, ScrollView, StyleSheet, Text } from 'react-native';
 import { useDerivedValue, useSharedValue, type SharedValue } from 'react-native-reanimated';
 
@@ -130,6 +130,76 @@ function FoilCanvas({
 	clock
 }: CanvasProps & { clock: SharedValue<number> }) {
 	const { effect, error, source } = foilEffect(recipe);
+	if (!effect) return <ShaderError message={error} source={source} width={width} height={height} />;
+
+	return (
+		<Canvas style={{ width, height }}>
+			<FoilFill
+				recipe={recipe}
+				width={width}
+				height={height}
+				radius={radius}
+				rx={rx}
+				ry={ry}
+				clock={clock}
+			/>
+		</Canvas>
+	);
+}
+
+export interface FoilFillProps {
+	recipe: SkiaRecipeName;
+	/** The light field in px: the card this foil belongs to. */
+	width: number;
+	height: number;
+	/** Corner radius of that card's face. */
+	radius?: number;
+	/** The card's tilt, so every foil on one card shares one light. */
+	rx: SharedValue<number>;
+	ry: SharedValue<number>;
+	/** Milliseconds; drives the idle drift. Hold it still to hold the light. */
+	clock: SharedValue<number>;
+	/**
+	 * 1 (a card): clip to the card's rounded face and light its rim. 0 (a
+	 * sticker): no card clip or rim — the sticker's own mask shapes it, and it
+	 * may hang past the card's edge.
+	 */
+	edge?: 0 | 1;
+	/**
+	 * The shader's local matrix: where the light field (card coordinates) sits
+	 * in this canvas. Omit on a card, whose canvas *is* the field. A sticker
+	 * passes the inverse of its placement, so each of its pixels is lit as the
+	 * point of the card it covers.
+	 */
+	matrix?: SkMatrix | SharedValue<SkMatrix>;
+	/**
+	 * Where the material (flecks, stars, facets) is anchored, in card
+	 * coordinates. Omit on a card (pinned to the face, as it always was). A
+	 * sticker passes its own centre and rotation, so its flecks travel with it
+	 * at the card's fleck size rather than shrinking to the sticker's.
+	 */
+	textureMatrix?: SkMatrix | SharedValue<SkMatrix>;
+}
+
+/**
+ * The foil as a Skia element, for drawing inside any canvas: the card's own
+ * canvas (SkiaFoil) and a sticker's (src/stickers/StickerFoil.tsx) run this
+ * one component, with this one shader, so a foil on a sticker is the same
+ * foil as on a card, lit by the same light.
+ */
+export function FoilFill({
+	recipe,
+	width,
+	height,
+	radius = width * 0.06,
+	rx,
+	ry,
+	clock,
+	edge = 1,
+	matrix,
+	textureMatrix
+}: FoilFillProps) {
+	const { effect } = foilEffect(recipe);
 	const textureName = SKIA_RECIPES[recipe].texture;
 
 	// `useImage` decodes asynchronously and is null for a frame or two on a
@@ -143,26 +213,30 @@ function FoilCanvas({
 		u_time: clock.value / 1000,
 		// FlipCard's ry is +right and rx is +up; the shader wants the finger
 		// in screen space with y down, so rx flips.
-		u_tilt: [ry.value / TILT_RANGE, -rx.value / TILT_RANGE]
+		u_tilt: [ry.value / TILT_RANGE, -rx.value / TILT_RANGE],
+		u_edge: edge
 	}));
 
-	if (!effect) return <ShaderError message={error} source={source} width={width} height={height} />;
-	if (textureName && !texture) return <Canvas style={{ width, height }} />;
+	if (!effect || (textureName && !texture)) return null;
 
 	// The rect the ImageShader draws into is what maps the texture onto the
 	// card. Doing it here rather than in the shader keeps the sampling at
 	// plain `fragCoord`, which is what makes the pinning obvious on inspection.
+	// Anchored to a sticker, the rect is centred on the sticker instead of
+	// starting at the card's corner.
 	let child = null;
 	if (textureName && texture) {
 		const layout = SKIA_TEXTURE_LAYOUT[textureName];
+		const anchored = textureMatrix !== undefined;
 		if (layout.fit === 'face') {
 			child = (
 				<ImageShader
 					image={texture}
-					rect={{ x: 0, y: 0, width, height }}
+					rect={{ x: anchored ? -width / 2 : 0, y: anchored ? -height / 2 : 0, width, height }}
 					fit="fill"
 					tx="clamp"
 					ty="clamp"
+					matrix={textureMatrix}
 				/>
 			);
 		} else {
@@ -174,19 +248,18 @@ function FoilCanvas({
 					fit="fill"
 					tx="repeat"
 					ty="repeat"
+					matrix={textureMatrix}
 				/>
 			);
 		}
 	}
 
 	return (
-		<Canvas style={{ width, height }}>
-			<Fill>
-				<Shader source={effect} uniforms={uniforms}>
-					{child}
-				</Shader>
-			</Fill>
-		</Canvas>
+		<Fill>
+			<Shader source={effect} uniforms={uniforms} matrix={matrix}>
+				{child}
+			</Shader>
+		</Fill>
 	);
 }
 

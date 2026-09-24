@@ -10,7 +10,10 @@
  * stays in place until a later stage replaces it.
  */
 
+import type { ImageSourcePropType } from 'react-native';
+
 import type { StickerFoil } from '@/card/tiers';
+import type { StickerLight } from './StickerFoil';
 
 export const FANDOM_STYLE_CATEGORIES = [
 	'retro-sci-fi',
@@ -43,18 +46,38 @@ export interface FandomStickerDefinition extends BaseStickerDefinition {
 	styleCategory: FandomStyleCategory;
 }
 
+/** The three baked, immutable images a deco sticker is drawn from
+ *  (scripts/stickers/pipeline.ts): die-cut art, its silhouette for the foil
+ *  to clip to, and a drawer-sized copy. */
+export interface DecoStickerAssets {
+	full: ImageSourcePropType;
+	mask: ImageSourcePropType;
+	thumb: ImageSourcePropType;
+	/** Width / height of `full` and `mask`, which share one canvas. */
+	aspect: number;
+}
+
 export interface DecoStickerDefinition extends BaseStickerDefinition {
 	kind: 'deco';
-	imageUrl: string;
+	/** Null when neither a live URL nor a bundled fixture is available. */
+	assets: DecoStickerAssets | null;
+	/** Drawn when there are no assets: the prototype emoji stickers. */
+	glyph?: string | null;
 }
 
 export type StickerDefinition = FandomStickerDefinition | DecoStickerDefinition;
 
 export interface StickerRendererProps {
 	definition: StickerDefinition;
-	/** Accepted; visually ignored until Stage 5 foil rendering. */
+	/** Any rung of the ladder; `none` draws a fully static sticker. */
 	foil?: StickerFoil;
+	/** Base size in px: a deco sticker's long edge, a fandom sticker's width. */
 	width: number;
-	/** Stable id for later foil fields; unused by the Stage 1 type renderer. */
+	/** Kept for callers that key stickers by a stable id. */
 	seed?: string;
+	/** The light the foil shares with its card. Omit for a loose sticker
+	 *  that is never tilted. */
+	light?: StickerLight;
+	/** Drawer tiles draw the thumbnail. */
+	art?: 'full' | 'thumb';
 }

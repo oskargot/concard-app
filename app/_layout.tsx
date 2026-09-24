@@ -7,6 +7,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AuthProvider, useAuth, type AuthStatus } from '@/auth/AuthProvider';
+import { StickerShimmerProvider } from '@/stickers/shimmer';
 import { ConcardSync } from '@/store/ConcardSync';
 import { palette } from '@/theme/palette';
 import { font } from '@/theme/tokens';
@@ -43,26 +44,28 @@ export default function RootLayout() {
 		<GestureHandlerRootView style={{ flex: 1, backgroundColor: palette.ground }}>
 			<SafeAreaProvider>
 				<StatusBar style="light" />
-				<AuthProvider>
-					<ConcardSync />
-					<AuthGate>
-						<Stack
-							screenOptions={{
-								headerStyle: { backgroundColor: palette.ground },
-								headerTintColor: palette.textPrimary,
-								headerTitleStyle: { fontFamily: font.uiBold },
-								contentStyle: { backgroundColor: palette.ground }
-							}}
-						>
-							<Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-							<Stack.Screen name="(auth)" options={{ headerShown: false }} />
-							<Stack.Screen name="card/edit" options={{ title: 'Edit card' }} />
-							<Stack.Screen name="dev/foil-lab" options={{ title: 'Foil lab' }} />
-							<Stack.Screen name="dev/cards" options={{ title: 'Card gallery' }} />
-							<Stack.Screen name="dev/stickers" options={{ title: 'Fandom stickers' }} />
-						</Stack>
-					</AuthGate>
-				</AuthProvider>
+				<StickerShimmerProvider>
+					<AuthProvider>
+						<ConcardSync />
+						<AuthGate>
+							<Stack
+								screenOptions={{
+									headerStyle: { backgroundColor: palette.ground },
+									headerTintColor: palette.textPrimary,
+									headerTitleStyle: { fontFamily: font.uiBold },
+									contentStyle: { backgroundColor: palette.ground }
+								}}
+							>
+								<Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+								<Stack.Screen name="(auth)" options={{ headerShown: false }} />
+								<Stack.Screen name="card/edit" options={{ title: 'Edit card' }} />
+								<Stack.Screen name="dev/foil-lab" options={{ title: 'Foil lab' }} />
+								<Stack.Screen name="dev/cards" options={{ title: 'Card gallery' }} />
+								<Stack.Screen name="dev/stickers" options={{ title: 'Sticker lab' }} />
+							</Stack>
+						</AuthGate>
+					</AuthProvider>
+				</StickerShimmerProvider>
 			</SafeAreaProvider>
 		</GestureHandlerRootView>
 	);

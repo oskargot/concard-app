@@ -21,8 +21,6 @@ export interface CardProps extends Pick<
 	'width' | 'foil' | 'seed' | 'rx' | 'ry' | 'intensity' | 'detail' | 'light'
 > {
 	view: CardView;
-	/** sticker_id → glyph when baked sticker art is not loaded. */
-	glyphs?: Record<string, string>;
 	/** Editor only: turns the face's text into fields in place. See `CardFace`. */
 	edit?: CardFaceEdit;
 }
@@ -37,7 +35,6 @@ export function Card({
 	intensity,
 	detail,
 	light,
-	glyphs,
 	edit
 }: CardProps) {
 	const { style, layout } = useFrontLayout(view);
@@ -55,7 +52,7 @@ export function Card({
 			light={light}
 			overlay={
 				<>
-					<CardOverlay view={view} width={width} glyphs={glyphs} />
+					<CardOverlay view={view} width={width} rx={rx} ry={ry} />
 					{edit?.onChangePhotoHeight ? (
 						<DividerHandle
 							layout={layout}
