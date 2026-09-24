@@ -75,6 +75,6 @@ export interface StickerRendererProps {
 	/** The light the foil shares with its card. Omit for a loose sticker
 	 *  that is never tilted. */
 	light?: StickerLight;
-	/** Drawer tiles draw the thumbnail. */
+	/** Force the thumbnail or the full art; by default it's chosen by size. */
 	art?: 'full' | 'thumb';
 }

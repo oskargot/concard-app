@@ -65,7 +65,7 @@ export function Card({
 							handlers={stickerEdit.handlers}
 						/>
 					) : (
-						<CardOverlay view={view} width={width} rx={rx} ry={ry} />
+						<CardOverlay view={view} width={width} rx={rx} ry={ry} detail={detail} />
 					)}
 					{edit?.onChangePhotoHeight ? (
 						<DividerHandle

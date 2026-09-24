@@ -141,7 +141,15 @@ export default function BinderScreen() {
 										rx={rx}
 										ry={ry}
 										detail="thumb"
-										overlay={<CardOverlay view={card.view} width={cardWidth} rx={rx} ry={ry} />}
+										overlay={
+											<CardOverlay
+												view={card.view}
+												width={cardWidth}
+												rx={rx}
+												ry={ry}
+												detail="thumb"
+											/>
+										}
 									>
 										<CardFace view={card.view} width={cardWidth} />
 									</CardShell>

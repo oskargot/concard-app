@@ -168,7 +168,15 @@ export default function ScanScreen() {
 											rx={rx}
 											ry={ry}
 											detail="thumb"
-											overlay={<CardOverlay view={card.view} width={thumbWidth} rx={rx} ry={ry} />}
+											overlay={
+												<CardOverlay
+													view={card.view}
+													width={thumbWidth}
+													rx={rx}
+													ry={ry}
+													detail="thumb"
+												/>
+											}
 										>
 											<CardFace view={card.view} width={thumbWidth} />
 										</CardShell>

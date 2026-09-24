@@ -12,7 +12,7 @@
  */
 
 import { Image } from 'expo-image';
-import { Text, View } from 'react-native';
+import { PixelRatio, Text, View } from 'react-native';
 
 import type { StickerFoil } from '@/card/tiers';
 import { DecoFoilCanvas, STICKER_FOIL_AVAILABLE, type StickerLight } from './StickerFoil';
@@ -25,20 +25,26 @@ export function decoBox(aspect: number, size: number): { width: number; height: 
 		: { width: size * aspect, height: size };
 }
 
+/** Long edge of the baked thumbnail, px (scripts/stickers/pipeline.ts THUMB_EDGE). */
+const THUMB_EDGE_PX = 192;
+
 export function DecoSticker({
 	definition,
 	foil = 'none',
 	size,
 	light,
-	art = 'full'
+	art
 }: {
 	definition: DecoStickerDefinition;
 	foil?: StickerFoil;
 	size: number;
 	light: StickerLight;
+	/** Omit to choose by size: anything the thumbnail covers draws the
+	 *  thumbnail, so small stickers never decode the full 592 px art. */
 	art?: 'full' | 'thumb';
 }) {
 	const assets = definition.assets;
+	const pick = art ?? (size * PixelRatio.get() <= THUMB_EDGE_PX ? 'thumb' : 'full');
 	if (!assets) return <GlyphSticker glyph={definition.glyph} name={definition.name} size={size} />;
 
 	const { width, height } = decoBox(assets.aspect, size);
@@ -56,7 +62,7 @@ export function DecoSticker({
 					width={width}
 					height={height}
 					light={light}
-					art={art}
+					art={pick}
 				/>
 			</View>
 		);
@@ -67,7 +73,7 @@ export function DecoSticker({
 	return (
 		<View pointerEvents="none" style={{ width, height }}>
 			<Image
-				source={art === 'thumb' ? assets.thumb : assets.full}
+				source={pick === 'thumb' ? assets.thumb : assets.full}
 				style={{ width, height }}
 				contentFit="fill"
 				cachePolicy="memory-disk"

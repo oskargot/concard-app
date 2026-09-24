@@ -25,7 +25,7 @@ export function StickerRenderer({
 	foil = 'none',
 	width,
 	light = STILL_LIGHT,
-	art = 'full'
+	art
 }: StickerRendererProps) {
 	if (width <= 1) return null;
 

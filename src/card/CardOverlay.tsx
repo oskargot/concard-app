@@ -35,13 +35,20 @@ export function CardOverlay({
 	view,
 	width,
 	rx,
-	ry
+	ry,
+	detail = 'full'
 }: {
 	view: CardView;
 	width: number;
 	/** The card's tilt: stickers' foil shares its light. */
 	rx: SharedValue<number>;
 	ry: SharedValue<number>;
+	/**
+	 * `thumb` (binder and scan minis): stickers draw without their foil. At
+	 * ~25 px it can't be seen, and a grid of minis would otherwise run a GPU
+	 * canvas per foiled sticker.
+	 */
+	detail?: 'full' | 'thumb';
 }) {
 	const stickers = useMemo(() => {
 		const placed = [...view.stickers];
@@ -60,6 +67,7 @@ export function CardOverlay({
 					width={width}
 					rx={rx}
 					ry={ry}
+					plain={detail === 'thumb'}
 				/>
 			))}
 		</>
@@ -89,12 +97,14 @@ function StickerMark({
 	sticker,
 	width,
 	rx,
-	ry
+	ry,
+	plain
 }: {
 	sticker: PlacedSticker;
 	width: number;
 	rx: SharedValue<number>;
 	ry: SharedValue<number>;
+	plain: boolean;
 }) {
 	const m = shellMetrics(width);
 	const definition = useMemo(() => definitionForPlacement(sticker), [sticker]);
@@ -131,7 +141,12 @@ function StickerMark({
 				justifyContent: 'center'
 			}}
 		>
-			<StickerRenderer definition={definition} foil={sticker.foil} width={size} light={light} />
+			<StickerRenderer
+				definition={definition}
+				foil={plain ? 'none' : sticker.foil}
+				width={size}
+				light={light}
+			/>
 		</View>
 	);
 }
