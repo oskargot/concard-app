@@ -109,10 +109,9 @@ collected.
 ### The foil system (`src/card/foil/`)
 
 A foil is one SkSL runtime shader, screen-blended over the face. It emits light only and draws no
-card, so it brightens the face and never darkens it. Production is three files (the rest of `foil/` —
-`FoilPokemon`, `FoilSwatch`, `FoilTexture`, `FoilV2`, `SkiaSmoke`, `SkiaTextured`, `layers`, `recipes`,
-… — are earlier lab engines reached only from `/dev/foil-sampler` and `/dev/skia-smoke`; never build on
-them):
+card, so it brightens the face and never darkens it. `foil/` is these three files (the earlier lab
+engines and their `/dev/foil-sampler` and `/dev/skia-smoke` routes were deleted on 2026-09-24; they're
+in git history before then):
 
 - `foil-sksl.ts` — the shader source and every look value. One core (the TiltHologramCard stack as
   maths: a rainbow and two soft light bands read along one tilt-driven axis, plus a spotlight glare)
@@ -140,7 +139,7 @@ sticker, not a finish); and every light term slides _opposite_ the finger (`LIGH
 matching `CardShell`'s face light.
 
 This replaced the earlier blend-mode layer stack (RN 0.86 `mixBlendMode` + gradient views) and its
-experimental engines. Expo Go ships Skia on SDK 57, so no dev client is needed. `/dev/foil-lab`
+experimental engines, since deleted. Expo Go ships Skia on SDK 57, so no dev client is needed. `/dev/foil-lab`
 runs every kind through the production card path on real hardware. `@shopify/react-native-skia` must
 stay at the exact version in `node_modules/expo/bundledNativeModules.json` (2.6.2 on SDK 57) — Expo Go's
 native side is built against that one, and Oskar has no Apple developer licence for a dev client.
