@@ -4,8 +4,11 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 
 import { DEFAULT_STYLE } from '@/card/card-style';
 import { DEMO_CARD, DEMO_CARD_ALT } from '@/card/demo-card';
+import type { StickerFoil } from '@/card/tiers';
 import type { CardView, CollectedCard, PlacedSticker } from '@/card/types';
 import type { CollectErrorCode } from '@/lib/collect';
+import type { InventoryRow } from '@/stickers/inventory';
+import { LOCAL_STARTER_INVENTORY } from '@/stickers/local-catalog';
 
 export interface PendingScan {
 	id: string;
@@ -31,6 +34,9 @@ interface ConcardState {
 	 *  starter demo rows — those never sit beside real meets. */
 	demo_binder: boolean;
 	active_card: EditableCard;
+	/** The on-device sticker inventory, used when there's no live one (no
+	 *  Supabase, or nobody signed in). Seeded from the bundled fixtures. */
+	sticker_inventory: InventoryRow[];
 	last_sync_at: string | null;
 	sync_error: SyncError | null;
 	hydrated: boolean;
@@ -48,9 +54,12 @@ interface ConcardState {
 	 *  still pending sync. Demo seed rows are dropped either way. */
 	replaceBinderWithLive: (cards: CollectedCard[]) => void;
 	updateActiveCard: (patch: Partial<EditableCard>) => void;
-	addSticker: (stickerId: string) => string;
+	/** Puts a sticker on the on-device card. The caller checks inventory. */
+	placeSticker: (sticker: PlacedSticker) => void;
 	updateSticker: (id: string, patch: Partial<PlacedSticker>) => void;
 	removeSticker: (id: string) => void;
+	/** Adds (or, negative, removes) copies of one (sticker, foil) pile. */
+	adjustStickerInventory: (stickerId: string, foil: StickerFoil, delta: number) => void;
 	markSynced: () => void;
 	setSyncError: (error: SyncError | null) => void;
 	setHydrated: (ready: boolean) => void;
@@ -165,6 +174,7 @@ export const useConcardStore = create<ConcardState>()(
 			binder_cache: DEMO_BINDER,
 			demo_binder: true,
 			active_card: STARTER_CARD,
+			sticker_inventory: LOCAL_STARTER_INVENTORY,
 			last_sync_at: null,
 			sync_error: null,
 			hydrated: false,
@@ -235,28 +245,13 @@ export const useConcardStore = create<ConcardState>()(
 				})),
 			updateActiveCard: (patch) =>
 				set((state) => ({ active_card: { ...state.active_card, ...patch } })),
-			addSticker: (stickerId) => {
-				const id = `placed-${stickerId}-${Date.now()}`;
+			placeSticker: (sticker) =>
 				set((state) => ({
 					active_card: {
 						...state.active_card,
-						stickers: [
-							...state.active_card.stickers,
-							{
-								id,
-								sticker_id: stickerId,
-								x: 0.5,
-								y: 0.45,
-								rotation: -6 + Math.random() * 12,
-								scale: 1,
-								z_index: state.active_card.stickers.length + 1,
-								foil: 'none'
-							}
-						]
+						stickers: [...state.active_card.stickers, sticker]
 					}
-				}));
-				return id;
-			},
+				})),
 			updateSticker: (id, patch) =>
 				set((state) => ({
 					active_card: {
@@ -273,6 +268,23 @@ export const useConcardStore = create<ConcardState>()(
 						stickers: state.active_card.stickers.filter((sticker) => sticker.id !== id)
 					}
 				})),
+			adjustStickerInventory: (stickerId, foil, delta) =>
+				set((state) => {
+					const found = state.sticker_inventory.some(
+						(row) => row.sticker_id === stickerId && row.foil === foil
+					);
+					const rows = found
+						? state.sticker_inventory.map((row) =>
+								row.sticker_id === stickerId && row.foil === foil
+									? { ...row, quantity: Math.max(0, row.quantity + delta) }
+									: row
+							)
+						: [
+								...state.sticker_inventory,
+								{ sticker_id: stickerId, foil, quantity: Math.max(0, delta) }
+							];
+					return { sticker_inventory: rows.filter((row) => row.quantity > 0) };
+				}),
 			markSynced: () => set({ last_sync_at: new Date().toISOString() }),
 			setSyncError: (error) => set({ sync_error: error }),
 			setHydrated: (hydrated) => set({ hydrated })
@@ -280,11 +292,19 @@ export const useConcardStore = create<ConcardState>()(
 		{
 			name: 'concard-v1',
 			storage: createJSONStorage(() => AsyncStorage),
-			partialize: ({ scan_queue, binder_cache, demo_binder, active_card, last_sync_at }) => ({
+			partialize: ({
 				scan_queue,
 				binder_cache,
 				demo_binder,
 				active_card,
+				sticker_inventory,
+				last_sync_at
+			}) => ({
+				scan_queue,
+				binder_cache,
+				demo_binder,
+				active_card,
+				sticker_inventory,
 				last_sync_at
 			}),
 			onRehydrateStorage: () => (state) => state?.setHydrated(true)

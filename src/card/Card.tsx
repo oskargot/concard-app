@@ -13,8 +13,9 @@ import { CardOverlay } from './CardOverlay';
 import { CardShell, type CardShellProps } from './CardShell';
 import { inkFor } from './card-style';
 import { DividerHandle } from './editor/DividerHandle';
+import { StickerEditLayer, type StickerEditHandlers } from './editor/StickerEditLayer';
 import { normalizeLinks } from './links';
-import type { CardView } from './types';
+import type { CardView, PlacedSticker } from './types';
 
 export interface CardProps extends Pick<
 	CardShellProps,
@@ -23,6 +24,8 @@ export interface CardProps extends Pick<
 	view: CardView;
 	/** Editor only: turns the face's text into fields in place. See `CardFace`. */
 	edit?: CardFaceEdit;
+	/** Editor only: these stickers (affiliation included) become movable. */
+	stickerEdit?: { stickers: PlacedSticker[]; handlers: StickerEditHandlers };
 }
 
 export function Card({
@@ -35,7 +38,8 @@ export function Card({
 	intensity,
 	detail,
 	light,
-	edit
+	edit,
+	stickerEdit
 }: CardProps) {
 	const { style, layout } = useFrontLayout(view);
 
@@ -52,7 +56,17 @@ export function Card({
 			light={light}
 			overlay={
 				<>
-					<CardOverlay view={view} width={width} rx={rx} ry={ry} />
+					{stickerEdit ? (
+						<StickerEditLayer
+							stickers={stickerEdit.stickers}
+							width={width}
+							rx={rx}
+							ry={ry}
+							handlers={stickerEdit.handlers}
+						/>
+					) : (
+						<CardOverlay view={view} width={width} rx={rx} ry={ry} />
+					)}
 					{edit?.onChangePhotoHeight ? (
 						<DividerHandle
 							layout={layout}

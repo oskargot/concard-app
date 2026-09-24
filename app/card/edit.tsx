@@ -1,9 +1,8 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
 	ActivityIndicator,
 	KeyboardAvoidingView,
 	Platform,
-	Pressable,
 	StyleSheet,
 	Text,
 	View,
@@ -11,6 +10,7 @@ import {
 } from 'react-native';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { ScrollView } from 'react-native-gesture-handler';
+import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/auth/AuthProvider';
@@ -28,21 +28,39 @@ import {
 } from '@/card/card-style';
 import { AffiliationRow } from '@/card/editor/AffiliationRow';
 import { EditorStage, stageLayout, type StyleAxis } from '@/card/editor/EditorStage';
+import {
+	STICKER_BUTTON_MARGIN,
+	STICKER_BUTTON_SIZE,
+	StickerButton
+} from '@/card/editor/StickerButton';
+import { drawerLayout, StickerDrawer, type StickerKindTab } from '@/card/editor/StickerDrawer';
+import type { StickerEditHandlers } from '@/card/editor/StickerEditLayer';
+import { affiliationPlacement } from '@/card/CardOverlay';
 import { FitNotes } from '@/card/editor/FitNotes';
 import { LinkRows } from '@/card/editor/LinkRows';
 import { LINKS_LIVE_MAX } from '@/card/links';
 import { foilForTier } from '@/card/tiers';
-import { BIO_MAX } from '@/card/types';
+import { BIO_MAX, type PlacedSticker } from '@/card/types';
 import { useCardEditor } from '@/card/use-card-editor';
 import { useLocalCardEditor } from '@/card/use-local-card-editor';
 import { PhotoPermissionError, pickCardPhoto, uploadCardPhoto } from '@/lib/card-photo';
 import { supabase } from '@/lib/supabase';
+import { useConcardStore } from '@/store/useConcardStore';
+import { STICKER_BASE_WIDTH } from '@/stickers/constants';
+import { definitionForPlacement } from '@/stickers/definitions';
+import { placementFields, type InventoryEntry } from '@/stickers/inventory';
+import { StickerRenderer } from '@/stickers/StickerRenderer';
+import { useCardStickers, type PlacementPatch } from '@/stickers/use-card-stickers';
 import { FormError } from '@/ui';
 import { palette } from '@/theme/palette';
-import { radius, space, type } from '@/theme/tokens';
+import { space, type } from '@/theme/tokens';
 
 const PAGE_PADDING = space.md;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** The affiliation's id in the sticker layer; it's edited as card columns. */
+const AFFILIATION_ID = 'affiliation';
+/** Where a tapped sticker lands: the middle of the card, a touch high. */
+const TAP_PLACE = { x: 0.5, y: 0.45 };
 
 /**
  * Edit card.
@@ -71,7 +89,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export default function EditCardScreen() {
 	const { session, profile, loading: authLoading } = useAuth();
 	const insets = useSafeAreaInsets();
-	const { width } = useWindowDimensions();
+	const { width, height: windowHeight } = useWindowDimensions();
 	const { id } = useLocalSearchParams<{ id?: string }>();
 
 	const remoteId = id ?? profile?.active_card_id ?? null;
@@ -94,6 +112,115 @@ export default function EditCardScreen() {
 	const [dragging, setDragging] = useState(false);
 
 	const { cardWidth, stageWidth } = useMemo(() => stageLayout(width, PAGE_PADDING), [width]);
+
+	// ── stickers ──────────────────────────────────────────────────────────────
+	const stickers = useCardStickers({
+		live: remote && session && cardId ? { cardId, userId: session.user.id } : null,
+		enabled: !!draft,
+		hasAffiliation: !!view?.affiliation
+	});
+	const updateActiveCard = useConcardStore((s) => s.updateActiveCard);
+	const [drawerOpen, setDrawerOpen] = useState(false);
+	const [kind, setKind] = useState<StickerKindTab>('deco');
+	const drawer = useMemo(() => drawerLayout(width, insets.bottom), [width, insets.bottom]);
+	const drawerTop = useSharedValue(Number.POSITIVE_INFINITY);
+	const overDrawer = useSharedValue(false);
+	useEffect(() => {
+		drawerTop.set(drawerOpen ? windowHeight - drawer.height : Number.POSITIVE_INFINITY);
+	}, [drawerOpen, windowHeight, drawer.height, drawerTop]);
+
+	/** The sticker being dragged out of the drawer, drawn under the finger. */
+	const [ghost, setGhost] = useState<InventoryEntry | null>(null);
+	const ghostX = useSharedValue(0);
+	const ghostY = useSharedValue(0);
+	const rootRef = useRef<View>(null);
+	const rootOffset = useSharedValue({ x: 0, y: 0 });
+	const cardRef = useRef<View>(null);
+	const scrollRef = useRef<ScrollView>(null);
+	const stageY = useRef(0);
+
+	const ghostSize = cardWidth * STICKER_BASE_WIDTH;
+	const ghostStyle = useAnimatedStyle(() => ({
+		transform: [
+			{ translateX: ghostX.value - rootOffset.value.x - ghostSize / 2 },
+			{ translateY: ghostY.value - rootOffset.value.y - ghostSize / 2 }
+		]
+	}));
+
+	const measureRoot = useCallback(() => {
+		rootRef.current?.measureInWindow((x, y) => rootOffset.set({ x, y }));
+	}, [rootOffset]);
+
+	const toggleDrawer = useCallback(() => {
+		setDrawerOpen((open) => {
+			// bring the card up so it stays in view above the sheet
+			if (!open) scrollRef.current?.scrollTo({ y: stageY.current, animated: true });
+			return !open;
+		});
+	}, []);
+
+	const dropFromDrawer = useCallback(
+		(entry: InventoryEntry, ax: number, ay: number) => {
+			setGhost(null);
+			cardRef.current?.measureInWindow((x, y, w, h) => {
+				if (ax >= x && ax <= x + w && ay >= y && ay <= y + h) {
+					stickers.place(entry, { x: (ax - x) / w, y: (ay - y) / h });
+				}
+			});
+		},
+		[stickers]
+	);
+
+	/** The card's stickers as the layer edits them: placements, then the affiliation. */
+	const editStickers = useMemo<PlacedSticker[]>(() => {
+		if (!view) return [];
+		const list = [...stickers.placements];
+		if (view.affiliation) {
+			const base = affiliationPlacement(view.affiliation);
+			const row = stickers.affiliationRow;
+			list.push({
+				...base,
+				id: AFFILIATION_ID,
+				rotation: row?.rotation ?? base.rotation,
+				scale: row?.scale ?? base.scale
+			});
+		}
+		return list;
+	}, [view, stickers.placements, stickers.affiliationRow]);
+
+	const changeAffiliation = (patch: PlacementPatch) => {
+		if (!draft) return;
+		if (patch.x !== undefined || patch.y !== undefined) {
+			set({
+				affiliation_x: patch.x ?? draft.affiliation_x,
+				affiliation_y: patch.y ?? draft.affiliation_y
+			});
+		}
+		const turn = {
+			...(patch.rotation !== undefined ? { rotation: patch.rotation } : {}),
+			...(patch.scale !== undefined ? { scale: patch.scale } : {})
+		};
+		if (!Object.keys(turn).length) return;
+		if (remote) {
+			stickers.updateAffiliationRow(turn);
+		} else {
+			const current = useConcardStore.getState().active_card.affiliation;
+			if (current) updateActiveCard({ affiliation: { ...current, ...turn } });
+		}
+	};
+
+	const stickerHandlers: StickerEditHandlers = {
+		onChange: (id, patch) =>
+			id === AFFILIATION_ID ? changeAffiliation(patch) : stickers.update(id, patch),
+		onRaise: (id) => {
+			if (id !== AFFILIATION_ID) stickers.raise(id);
+		},
+		// The affiliation was never a copy, so putting it away just clears it.
+		onRemove: (id) => (id === AFFILIATION_ID ? set({ affiliation: null }) : stickers.remove(id)),
+		onInteraction: setDragging,
+		drawerTop,
+		overDrawer
+	};
 
 	const pickPhoto = useCallback(async () => {
 		if (!draft || photoBusy) return;
@@ -196,8 +323,12 @@ export default function EditCardScreen() {
 		Math.abs(view.affiliation.x - BADGE_HOME.x) < 0.02 &&
 		Math.abs(view.affiliation.y - BADGE_HOME.y) < 0.02;
 
+	const bottomRoom = drawerOpen
+		? drawer.height + space.lg
+		: insets.bottom + STICKER_BUTTON_SIZE + STICKER_BUTTON_MARGIN * 2;
+
 	return (
-		<>
+		<View ref={rootRef} style={styles.flex} onLayout={measureRoot} collapsable={false}>
 			<Stack.Screen
 				options={{
 					title: 'Edit card',
@@ -209,10 +340,12 @@ export default function EditCardScreen() {
 				behavior={Platform.OS === 'ios' ? 'padding' : undefined}
 			>
 				<ScrollView
+					ref={scrollRef}
 					scrollEnabled={!dragging}
-					contentContainerStyle={[styles.page, { paddingBottom: insets.bottom + space.xxl }]}
+					contentContainerStyle={[styles.page, { paddingBottom: bottomRoom }]}
 					keyboardShouldPersistTaps="handled"
 				>
+					<View onLayout={(e) => (stageY.current = e.nativeEvent.layout.y)} />
 					<EditorStage
 						view={view}
 						cardWidth={cardWidth}
@@ -220,24 +353,27 @@ export default function EditCardScreen() {
 						axes={axes}
 						onPickBackground={(bg) => setStyle({ bg })}
 						renderCard={(rx, ry) => (
-							<Card
-								view={view}
-								width={cardWidth}
-								foil={foilForTier(0)}
-								seed={cardId ?? 'card'}
-								rx={rx}
-								ry={ry}
-								edit={{
-									onChangeTitle: (display_name) => set({ display_name }),
-									onChangePronouns: (pronouns) => set({ pronouns }),
-									onChangeBio: (bio) => set({ bio: bio.slice(0, BIO_MAX) }),
-									bioMax: BIO_MAX,
-									onPressPhoto: pickPhoto,
-									onChangeFocal: (f) => set({ art_x: f.x, art_y: f.y, art_scale: f.zoom }),
-									onChangePhotoHeight: (photo_height) => setStyle({ photo_height }),
-									onInteraction: setDragging
-								}}
-							/>
+							<View ref={cardRef} collapsable={false}>
+								<Card
+									view={view}
+									width={cardWidth}
+									foil={foilForTier(0)}
+									seed={cardId ?? 'card'}
+									rx={rx}
+									ry={ry}
+									edit={{
+										onChangeTitle: (display_name) => set({ display_name }),
+										onChangePronouns: (pronouns) => set({ pronouns }),
+										onChangeBio: (bio) => set({ bio: bio.slice(0, BIO_MAX) }),
+										bioMax: BIO_MAX,
+										onPressPhoto: pickPhoto,
+										onChangeFocal: (f) => set({ art_x: f.x, art_y: f.y, art_scale: f.zoom }),
+										onChangePhotoHeight: (photo_height) => setStyle({ photo_height }),
+										onInteraction: setDragging
+									}}
+									stickerEdit={{ stickers: editStickers, handlers: stickerHandlers }}
+								/>
+							</View>
 						)}
 					/>
 
@@ -250,16 +386,7 @@ export default function EditCardScreen() {
 						for bio
 					</Text>
 
-					<Pressable
-						onPress={() => {}}
-						accessibilityRole="button"
-						accessibilityLabel="Stickers — coming soon"
-						style={({ pressed }) => [styles.stickerBtn, pressed && styles.stickerBtnPressed]}
-					>
-						<Text style={styles.stickerGlyph}>✦</Text>
-					</Pressable>
-
-					<FormError message={photoError ?? editor.error} />
+					<FormError message={photoError ?? editor.error ?? stickers.error} />
 
 					<LinkRows
 						links={draft.links}
@@ -289,7 +416,36 @@ export default function EditCardScreen() {
 					/>
 				</ScrollView>
 			</KeyboardAvoidingView>
-		</>
+
+			<StickerDrawer
+				open={drawerOpen}
+				layout={drawer}
+				inventory={stickers.inventory}
+				kind={kind}
+				onKind={setKind}
+				canPlace={stickers.canPlace}
+				onTap={(entry) => stickers.place(entry, TAP_PLACE)}
+				drag={{ x: ghostX, y: ghostY, onStart: setGhost, onEnd: dropFromDrawer }}
+				overDrawer={overDrawer}
+			/>
+			<StickerButton
+				open={drawerOpen}
+				bottom={drawerOpen ? drawer.height + space.md : insets.bottom + STICKER_BUTTON_MARGIN}
+				onPress={toggleDrawer}
+			/>
+			{ghost ? (
+				<Animated.View pointerEvents="none" style={[styles.ghost, ghostStyle]}>
+					<StickerRenderer
+						definition={definitionForPlacement({
+							...placementFields(ghost.sticker),
+							sticker_id: ghost.sticker.id
+						} as PlacedSticker)}
+						foil={ghost.foil}
+						width={ghostSize}
+					/>
+				</Animated.View>
+			) : null}
+		</View>
 	);
 }
 
@@ -317,19 +473,7 @@ const styles = StyleSheet.create({
 		paddingTop: space.md,
 		gap: space.lg
 	},
-	stickerBtn: {
-		alignSelf: 'center',
-		width: 52,
-		height: 52,
-		borderRadius: radius.md,
-		alignItems: 'center',
-		justifyContent: 'center',
-		backgroundColor: palette.raisedHigh,
-		borderWidth: StyleSheet.hairlineWidth,
-		borderColor: palette.line
-	},
-	stickerBtnPressed: { opacity: 0.75 },
-	stickerGlyph: { fontSize: 22, color: palette.cream },
+	ghost: { position: 'absolute', left: 0, top: 0, zIndex: 50, opacity: 0.9 },
 	hint: { ...type.small, color: palette.creamFaint, textAlign: 'center' },
 	local: { ...type.small, color: palette.textDim, textAlign: 'center' },
 	blocked: { ...type.small, color: palette.butter },

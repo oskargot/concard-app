@@ -53,8 +53,12 @@ function viewFrom(draft: CardDraft, card: EditableCard): EditableCard {
 		art_scale: draft.art_scale,
 		style: draft.style,
 		links: draft.links,
-		// There is no fandom list offline, so the affiliation can only be kept or removed.
-		affiliation: draft.affiliation ? card.affiliation : null
+		// There is no fandom list offline, so the affiliation can only be kept,
+		// moved or removed.
+		affiliation:
+			draft.affiliation && card.affiliation
+				? { ...card.affiliation, x: draft.affiliation_x, y: draft.affiliation_y }
+				: null
 	};
 }
 

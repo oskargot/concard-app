@@ -3,6 +3,16 @@
 //
 //   npm run shots -- /dev/stickers /dev/cards
 //   npm run shots -- --phase=3 --name=rungs /dev/stickers
+//   npm run shots -- --actions=docs/stickers/shots/phase-4/drawer.json /card/edit
+//
+// --actions runs a JSON list of steps on the (single) route instead of one
+// shot: { "click": "<accessibility label>" }, { "text": "<visible text>" },
+// { "tap": [x, y] },
+// { "drag": [x1, y1, x2, y2], "hold": ms }, { "wait": ms },
+// { "storage": { "<localStorage key>": <json> } } (applied, then reloads),
+// { "eval": "<js run in the page>", "reload": true },
+// { "shot": "<name>" }. Coordinates are CSS px in the 390-wide viewport;
+// "after" (ms) on any step waits once it's done (default 400).
 //
 // Starts Expo's web target on WEB_PORT if nothing is listening there, visits
 // each route in headless Chrome at 390 x 844 (an iPhone 14/15's points), and
@@ -47,6 +57,7 @@ const routes = args
 const fullPage = args.includes('--full');
 const keep = args.includes('--keep');
 const waitMs = Number(flag('wait') ?? 2500);
+const actionsFile = flag('actions');
 // RN-web ScrollViews scroll inside the page, so --full can't see past the fold;
 // --height=N makes the viewport itself that tall instead.
 const viewportHeight = Number(flag('height') ?? VIEWPORT.height);
@@ -125,6 +136,48 @@ function slug(route) {
 	return s || 'root';
 }
 
+async function runStep(page, step, shoot) {
+	if (step.storage) {
+		await page.evaluate((entries) => {
+			for (const [k, v] of Object.entries(entries)) localStorage.setItem(k, JSON.stringify(v));
+		}, step.storage);
+		await page.reload({ waitUntil: 'networkidle' });
+		await page.waitForFunction(() => (document.getElementById('root')?.innerText ?? '').length > 0);
+		await page.waitForTimeout(waitMs);
+	} else if (step.click) {
+		await page.getByLabel(step.click, { exact: true }).first().click();
+	} else if (step.eval) {
+		await page.evaluate(step.eval);
+		if (step.reload) {
+			await page.reload({ waitUntil: 'networkidle' });
+			await page.waitForFunction(
+				() => (document.getElementById('root')?.innerText ?? '').length > 0
+			);
+			await page.waitForTimeout(waitMs);
+		}
+	} else if (step.text) {
+		await page.getByText(step.text, { exact: true }).first().click();
+	} else if (step.tap) {
+		await page.mouse.click(step.tap[0], step.tap[1]);
+	} else if (step.drag) {
+		const [x1, y1, x2, y2] = step.drag;
+		await page.mouse.move(x1, y1);
+		await page.mouse.down();
+		await page.waitForTimeout(step.hold ?? 50);
+		const n = 12;
+		for (let i = 1; i <= n; i++) {
+			await page.mouse.move(x1 + ((x2 - x1) * i) / n, y1 + ((y2 - y1) * i) / n);
+			await page.waitForTimeout(16);
+		}
+		await page.mouse.up();
+	} else if (step.wait) {
+		await page.waitForTimeout(step.wait);
+	} else if (step.shot) {
+		await shoot(step.shot);
+	}
+	await page.waitForTimeout(step.after ?? 400);
+}
+
 const executablePath = CHROME_CANDIDATES.find((p) => existsSync(p));
 if (!executablePath) {
 	console.log('no Chrome found; set CHROME_PATH');
@@ -167,10 +220,18 @@ try {
 			}
 		);
 		await page.waitForTimeout(waitMs);
-		const name = [slug(route), flag('name')].filter(Boolean).join('--');
-		const file = path.join(outDir, `${name}.png`);
-		await page.screenshot({ path: file, fullPage });
-		console.log(`${route} -> ${path.relative(ROOT, file).replaceAll('\\', '/')}`);
+		const shoot = async (suffix) => {
+			const name = [slug(route), flag('name'), suffix].filter(Boolean).join('--');
+			const file = path.join(outDir, `${name}.png`);
+			await page.screenshot({ path: file, fullPage });
+			console.log(`${route} -> ${path.relative(ROOT, file).replaceAll('\\', '/')}`);
+		};
+		if (actionsFile) {
+			const steps = JSON.parse(readFileSync(path.resolve(ROOT, actionsFile), 'utf8'));
+			for (const step of steps) await runStep(page, step, shoot);
+		} else {
+			await shoot();
+		}
 		for (const e of errors) console.log(`  ${e.slice(0, 300).replace(/[^\x20-\x7e]/g, '?')}`);
 	}
 } catch (e) {

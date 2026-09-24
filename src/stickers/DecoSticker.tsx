@@ -62,16 +62,20 @@ export function DecoSticker({
 		);
 	}
 
+	// The wrapper keeps the image from ever being the touch target: on web an
+	// <img> would start the browser's own image drag and cancel the gesture.
 	return (
-		<Image
-			source={art === 'thumb' ? assets.thumb : assets.full}
-			style={{ width, height }}
-			contentFit="fill"
-			cachePolicy="memory-disk"
-			accessible
-			accessibilityLabel={`${definition.name} sticker`}
-			transition={0}
-		/>
+		<View pointerEvents="none" style={{ width, height }}>
+			<Image
+				source={art === 'thumb' ? assets.thumb : assets.full}
+				style={{ width, height }}
+				contentFit="fill"
+				cachePolicy="memory-disk"
+				accessible
+				accessibilityLabel={`${definition.name} sticker`}
+				transition={0}
+			/>
+		</View>
 	);
 }
 
