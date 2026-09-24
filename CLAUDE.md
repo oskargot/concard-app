@@ -302,6 +302,9 @@ records how it was built, every default taken, and what still waits on Oskar. In
   in `src/card/tiers.ts`); two spare copies combine into one at the next (`combine_stickers()`).
 - **Getting them**: `collect_card()` grants up to one deco and one fandom sticker, picked server-side
   from the snapshot, keeping their foil 10% of the time; the free affiliation is a placement.
+- **20 stickers per card** (`MAX_STICKERS_PER_CARD`, `max_stickers_per_card()`), **plus** at most one
+  affiliation, which doesn't count toward them — picking a fandom is part of a card save, and a full
+  card mustn't make that save fail.
 
 Where things live:
 

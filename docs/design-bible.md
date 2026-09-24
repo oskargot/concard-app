@@ -42,7 +42,7 @@ disagree about stickers, the handoff wins.
   foil combine into one at the next rung. A foil looks identical on a sticker and on a card.
 - **Placing.** Anywhere on the card, even hanging off the edge, as long as its centre stays on the
   card. Drag, pinch (0.5×–2×), rotate; the last one touched comes to the top; drag it back to the
-  drawer to take it off. Up to 20 per card. No save button.
+  drawer to take it off. Up to 20 per card, plus your fandom's (it doesn't count). No save button.
 - **Snapshots** keep stickers exactly as placed when the card was collected, forever.
 - **Motion.** The only animation is foil shimmer; plain stickers are completely still.
 

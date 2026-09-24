@@ -119,7 +119,6 @@ export default function EditCardScreen() {
 	const stickers = useCardStickers({
 		live: remote && session && cardId ? { cardId, userId: session.user.id } : null,
 		enabled: !!draft,
-		hasAffiliation: !!view?.affiliation,
 		affiliation: { current: draft?.affiliation ?? null, saved: remoteEditor.savedAffiliation }
 	});
 	const updateActiveCard = useConcardStore((s) => s.updateActiveCard);

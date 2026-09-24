@@ -25,6 +25,7 @@ import Animated, {
 	type SharedValue
 } from 'react-native-reanimated';
 
+import { MAX_STICKERS_PER_CARD } from '../../stickers/constants';
 import { definitionForPlacement } from '../../stickers/definitions';
 import { entryKey, placementFields, type InventoryEntry } from '../../stickers/inventory';
 import { useShimmerPause } from '../../stickers/shimmer';
@@ -110,7 +111,7 @@ export function StickerDrawer({
 			<View style={styles.header}>
 				<StickerKindSwitch value={kind} onChange={onKind} />
 				<Text style={styles.headerNote}>
-					{canPlace ? 'Tap or drag onto your card' : 'This card is full (20)'}
+					{canPlace ? 'Tap or drag onto your card' : `This card is full (${MAX_STICKERS_PER_CARD})`}
 				</Text>
 			</View>
 

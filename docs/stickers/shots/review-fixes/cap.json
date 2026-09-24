@@ -1,0 +1,10 @@
+[
+	{
+		"eval": "const k='concard-v1'; const v=JSON.parse(localStorage.getItem(k)); const ids=['star','heart','sparkles','rocket','crown','fire']; v.state.active_card.stickers=Array.from({length:19},(_,i)=>({id:'cap-'+i,sticker_id:ids[i%ids.length],x:0.12+(i%5)*0.19,y:0.12+Math.floor(i/5)*0.2,rotation:0,scale:0.6,z_index:i+1,foil:'none',size:0.24})); v.state.active_card.affiliation={id:'scifi',name:'Sci-fi',style_category:'retro-sci-fi',x:0.8,y:0.86,rotation:0,scale:1,foil:'none'}; localStorage.setItem(k, JSON.stringify(v));",
+		"reload": true
+	},
+	{ "click": "Stickers", "after": 900 },
+	{ "shot": "cap-19-plus-affiliation" },
+	{ "tap": [195, 655], "after": 900 },
+	{ "shot": "cap-20-plus-affiliation" }
+]

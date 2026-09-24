@@ -328,7 +328,7 @@ These are the working defaults. Use them, and flag any that turn out wrong in pr
 | Chance a copied sticker keeps its foil | 10% | Server-side constant | As default: `sticker_copy_foil_chance()` = 0.10, rolled in `collect_card()` |
 | Base sticker size | 24% of card width | Tune by eye | As default, measured on a deco sticker's **long edge** (its whole baked canvas) and a fandom sticker's width; older placements keep 15.33%, the affiliation 64/250 |
 | Scale clamp | 0.5×–2× | From Oskar | As default, in the UI and a DB check |
-| Max stickers per card | 20 | Soft cap, DB-enforced | As default; the affiliation counts |
+| Max stickers per card | 20 | Soft cap, DB-enforced | As default, but the free affiliation doesn't count (20 + at most one affiliation) — reversed on review, 2026-09-24 |
 | Sticker foil ladder | none → glitter → holo → cosmic → mosaic | Holo sits between glitter and cosmic; confirm it reads as an upgrade | As default; "reads as an upgrade" is on the Phase 3 device checklist |
 | Pending fandom usable by submitter? | No | Shown as "In review" only | As default; a rejected name may be resubmitted |
 | Pending submissions per user | 3 | | As default (trigger + RPC lock) |

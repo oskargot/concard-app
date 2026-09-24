@@ -18,7 +18,8 @@ export const AFFILIATION_STICKER_WIDTH = 64 / 250;
 export const STICKER_SCALE_MIN = 0.5;
 export const STICKER_SCALE_MAX = 2;
 
-/** Soft cap on stickers per card, the free affiliation included. */
+/** Soft cap on stickers per card. The free affiliation doesn't count: a card
+ *  holds 20 stickers plus, at most, its one affiliation. */
 export const MAX_STICKERS_PER_CARD = 20;
 
 export function clampStickerScale(scale: number): number {

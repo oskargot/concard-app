@@ -205,7 +205,7 @@ Needs Oskar: open the draft PRs; the product bible (both under "Needs Oskar").
 
 - Q: The free affiliation's size. → took: its placement stores `size = 0.256` (the card spec's 64-unit badge spot / 250), not the 0.24 deco base, so existing affiliations look unchanged. (§1.4)
 - Q: Snapshot asset "URLs" (§1.5). → took: store object **paths** in the immutable `stickers` bucket; clients prepend their own `<SUPABASE_URL>/storage/v1/object/public/stickers/`. Same permanence, no project host baked into rows. (§1.5, §4)
-- Q: Does the affiliation count toward the 20 cap, and can it be granted on collect? → took: yes to both — it's a fandom sticker visible on the card. (§1.1, §1.4)
+- Q: Does the affiliation count toward the 20 cap, and can it be granted on collect? → took: yes to both — it's a fandom sticker visible on the card. **Cap reversed on review (2026-09-24):** the affiliation no longer counts — a card holds 20 non-affiliation stickers plus at most one affiliation, so picking a fandom (a card save) can never fail on a full card. It can still be granted on collect. (§1.1, §1.4)
 - Q: Rejected fandoms. → took: the submitter can still read their own rejected rows (so the picker can say "not approved" rather than silently dropping it), and a rejected name may be submitted again. (§1.2)
 - Q: Old placements (size null). → took: they keep drawing at the old 15.33% base × scale; only the scale range tightened (0.5–2). New placements write size 0.24. (§1.4)
 

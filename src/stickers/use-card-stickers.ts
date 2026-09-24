@@ -50,7 +50,7 @@ export interface CardStickers {
 	/** The card's stickers, affiliation excluded. */
 	placements: PlacedSticker[];
 	inventory: InventoryEntry[];
-	/** Under the 20-per-card cap (the affiliation counts toward it). */
+	/** Under the 20-per-card cap (the free affiliation doesn't count toward it). */
 	canPlace: boolean;
 	place: (entry: InventoryEntry, at: { x: number; y: number }) => void;
 	update: (id: string, patch: PlacementPatch) => void;
@@ -92,14 +92,11 @@ export function clampPlacement<T extends PlacementPatch>(patch: T): T {
 export function useCardStickers({
 	live,
 	enabled,
-	hasAffiliation,
 	affiliation
 }: {
 	/** The card row and its owner when editing live; null edits the on-device card. */
 	live: LiveTarget | null;
 	enabled: boolean;
-	/** Whether the card carries an affiliation, which counts toward the cap. */
-	hasAffiliation: boolean;
 	affiliation: AffiliationState;
 }): CardStickers {
 	const local = useLocalStickers(enabled && !live);
@@ -117,8 +114,7 @@ export function useCardStickers({
 				}
 			}
 		: local;
-	const count = source.placements.length + (hasAffiliation ? 1 : 0);
-	return { ...source, canPlace: count < MAX_STICKERS_PER_CARD };
+	return { ...source, canPlace: source.placements.length < MAX_STICKERS_PER_CARD };
 }
 
 type Source = Omit<CardStickers, 'canPlace'>;
@@ -207,6 +203,7 @@ function useLocalStickers(enabled: boolean): Source {
 			// place two stickers from one spare copy.
 			const state = useConcardStore.getState();
 			const onCard = state.active_card.stickers.filter((p) => !p.is_affiliation);
+			if (onCard.length >= MAX_STICKERS_PER_CARD) return;
 			if (spareOf(buildInventory(state.sticker_inventory, onCard, LOCAL_CATALOG), entry) < 1) {
 				setError(NO_SPARE);
 				return;
