@@ -2,9 +2,24 @@
 
 ## Current phase
 
-Phase 2 — Schema (web repo). Status: in progress
+Phase 3 — Renderer. Status: in progress
 
 ## Phase summaries
+
+### Phase 2 — Schema (done 2026-09-23; applying it is Oskar's)
+
+Shipped (web repo, `feat/stickers`): five migrations `20260924000000`–`04` — sticker kinds + baked
+asset columns, the five-rung foil ladder in `combine_stickers()` (which now spends only unplaced
+copies), the `stickers` bucket, fandom submissions (status on `fandoms`, 24-char names, 3 pending
+per person, approval → fandom sticker, RLS), placement rules (20 per card, scale 0.5–2, centre on
+the card), the affiliation as a free placement kept in sync with the old columns, and
+`collect_card()` granting one deco + one fandom sticker with the 10% foil roll server-side
+(snapshot v4, `collection_sticker_grants`). All of it runs against a reconstruction of the
+**live** schema in PGlite (`pnpm db:test:stickers`, ~60 checks as real RLS roles, including a
+400-collect foil-roll test). Types updated in both repos.
+[Security review](security-review-phase2.md): no critical/high; two fixed, two low ones logged.
+Check on device: nothing new on the phone.
+Needs Oskar: apply the migrations, then run the ingest upload (both under "Needs Oskar").
 
 ### Phase 1 — Ingest pipeline (done 2026-09-23)
 
@@ -31,10 +46,20 @@ Needs Oskar: open the draft PRs; the product bible (both under "Needs Oskar").
 
 ## Needs Oskar
 
+- [ ] **Apply the sticker migrations** — `concard` repo, `supabase/migrations/20260924000000_sticker_enums.sql` through `20260924000004_collect_sticker_grants.sql`, **in order, each on its own** (the first adds enum values, which Postgres won't let later statements in the same transaction use). Paste each into the SQL editor (the CLI history is out of step — see the drift item). They were written against the live schema as it is today and tested on a reconstruction of it (`pnpm db:test:stickers`). Blocking: live sticker placement / collect / submission; the app works on fixtures until then.
+- [ ] **Then upload the sticker art**: put `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in `concard-app/.env.local` (git-ignored) and run `node scripts/stickers/ingest.ts`. Needs the migrations first (bucket + columns). Blocking: real deco art on live cards.
+- [ ] **FYI, migration history has drifted.** Live has four migrations applied by hand from the app repo (`20260914`–`20260923`, incl. card_spec_v2) that the web repo's folder doesn't have — and the web folder's `20260914000000_card_identity_fields.sql` has the _same_ version number as the app's `20260914000000_card_inherit_text.sql`. Live also lacks columns the web history creates (`stickers.glyph`/`rarity` — re-added by my migration — and `profiles.is_admin`) and still has `cards.title`. I didn't reconcile it (renumbering applied migrations is your call); `supabase/dev/live_schema_20260923.sql` records what live actually is. Blocking: nothing, but `supabase db push` won't do the right thing until it's sorted.
+
 - [ ] **Open the two draft PRs.** `gh` isn't installed on this machine, so I can't open them. Branches are pushed: `concard-app` `feat/stickers` and `concard` (web) `feat/stickers`. Blocking: nothing; it only lets you watch progress on GitHub.
 - [ ] **The product Design Bible isn't on this machine.** CLAUDE.md cites its §6 (card fields), §7 (tiers), §10 (signup) and §12 (chrome physicality), but the only "bible" on disk is the web repo's `DESIGN.md` ("Design & Brand Bible v0.1 — Creative Direction"), whose §12 is Color and which never mentions a web stack. I copied that one into `docs/design-bible.md` with a correction and stickers section; drop the product bible in there (or tell me where it is) and I'll fold it in. Blocking: nothing; I'm following CLAUDE.md, the style guide as implemented in `src/theme`/`src/ui`, and this spec.
 
 ## Questions (defaults taken)
+
+- Q: The free affiliation's size. → took: its placement stores `size = 0.256` (the card spec's 64-unit badge spot / 250), not the 0.24 deco base, so existing affiliations look unchanged. (§1.4)
+- Q: Snapshot asset "URLs" (§1.5). → took: store object **paths** in the immutable `stickers` bucket; clients prepend their own `<SUPABASE_URL>/storage/v1/object/public/stickers/`. Same permanence, no project host baked into rows. (§1.5, §4)
+- Q: Does the affiliation count toward the 20 cap, and can it be granted on collect? → took: yes to both — it's a fandom sticker visible on the card. (§1.1, §1.4)
+- Q: Rejected fandoms. → took: the submitter can still read their own rejected rows (so the picker can say "not approved" rather than silently dropping it), and a rejected name may be submitted again. (§1.2)
+- Q: Old placements (size null). → took: they keep drawing at the old 15.33% base × scale; only the scale range tightened (0.5–2). New placements write size 0.24. (§1.4)
 
 - Q: HANDOFF §1.1 says collect has a "per-person 24h cooldown". Live `collect_cooldown()` returns **72 hours**, and the web repo's `docs/DESIGN.md` also says 72h. → took default: leave the server's 72h alone (the sticker grant just rides whatever the cooldown is); noted as a divergence in CLAUDE.md. (§1.1)
 - Q: HANDOFF §0 Phase 0 says to confirm the web repo is "cloned next to concard-app". It's at `../concard-web/concard`, one level deeper. → took default: use it there; no move.
@@ -80,15 +105,26 @@ bake ≈ 0.7 s per sticker.
 
 ## Tasks — Phase 2
 
-- [ ] Install the web repo's deps; run its checks as a baseline.
-- [ ] Commit the four hand-applied app migrations (`20260914`…`20260923`) into the web repo so its history matches what's live.
-- [ ] Migration A — sticker definitions: `kind`, asset path columns, `art_aspect`, `rarity` (live lacks it), `fandom_id`; foil enum `cosmic`, `mosaic`; `combine_stickers()` ladder; `stickers` storage bucket (public read, service-role writes).
-- [ ] Migration B — fandom submissions: status / `submitted_by` / `style_category` on `fandoms`, 3-pending cap, name-length cap (derive from `fandom-layout.ts`), approval trigger → `stickers` row, RLS.
-- [ ] Migration C — placements: `MAX_STICKERS_PER_CARD` (20), scale 0.5–2, centre-in-card bounds; the free affiliation placement (`is_affiliation`), migrating `cards.affiliation*` into it.
-- [ ] Migration D — `collect_card()`: two-sticker grant (one per kind, uniform pick from the snapshot's placements, `STICKER_COPY_FOIL_CHANCE` = 0.10 roll server-side), `collection_sticker_grants`, snapshot v4 carrying kind + asset URLs / label + style category, grants in the response.
-- [ ] Test the migrations against a scratch Postgres if one's available (the web repo has `pnpm db:test`); otherwise dry-run the new CHECKs as SELECTs over live rows.
-- [ ] Security review (`vibe-security` skill) of every new function and policy.
-- [ ] Hand-update `src/lib/database.types.ts` (app) and the web types.
+- [x] Install the web repo's deps; run its checks as a baseline. — `pnpm check` had 5 pre-existing errors (`routes/admin/stickers/+page.server.ts`, `routes/dev/cards/+page.svelte`); still exactly those 5. `pnpm lint` failed on CRLF like the app → same `endOfLine: 'auto'` fix, `DESIGN.md` prettier-ignored; green now.
+- [x] ~~Commit the four hand-applied app migrations into the web repo~~ → not done: one collides with a web migration's version number, so it needs your call (Needs Oskar). Instead `supabase/dev/live_schema_20260923.sql` reconstructs the live public schema from its catalogs, and the new migrations are tested on that.
+- [x] Migration A — sticker definitions: `kind`, asset path columns, `art_aspect`, `rarity` (live lacks it), `fandom_id`; foil enum `cosmic`, `mosaic`; `combine_stickers()` ladder; `stickers` storage bucket (public read, service-role writes).
+- [x] Migration B — fandom submissions: status / `submitted_by` / `style_category` on `fandoms`, 3-pending cap, name-length cap (derive from `fandom-layout.ts`), approval trigger → `stickers` row, RLS.
+- [x] Migration C — placements: `MAX_STICKERS_PER_CARD` (20), scale 0.5–2, centre-in-card bounds; the free affiliation placement (`is_affiliation`), migrating `cards.affiliation*` into it.
+- [x] Migration D — `collect_card()`: two-sticker grant (one per kind, uniform pick from the snapshot's placements, `STICKER_COPY_FOIL_CHANCE` = 0.10 roll server-side), `collection_sticker_grants`, snapshot v4 carrying kind + asset URLs / label + style category, grants in the response.
+- [x] Test the migrations against a scratch Postgres if one's available (the web repo has `pnpm db:test`); otherwise dry-run the new CHECKs as SELECTs over live rows. — no local Postgres, so PGlite (Postgres in WASM, a web devDependency): `pnpm db:test:stickers` = auth + storage shims → live schema → migrations → `supabase/dev/test_stickers.sql`. Also dry-ran every new CHECK over live rows read-only: only the one scale of 2.09, which the migration clamps. Web `676abd0`.
+- [x] Security review (`vibe-security` skill) of every new function and policy. — [security-review-phase2.md](security-review-phase2.md).
+- [x] Hand-update `src/lib/database.types.ts` (app) and the web types. — app `788f4d3`, web `26a82a4` (web foil maps now climb to mosaic too).
+
+## Tasks — Phase 3
+
+- [ ] Extend `STICKER_FOILS` to all five rungs; `PlacedSticker` carries `kind` + deco asset paths / fandom label + style (snapshot v4 shape) and `is_affiliation`; one placement → definition resolver.
+- [ ] Local fixtures from the dry run: a subset of baked stickers bundled under `assets/stickers/fixtures/` + a generated index, for `/dev/stickers` with no Supabase.
+- [ ] One shared shimmer clock (a single shared value) that foiled stickers read; paused when nothing foiled is on screen.
+- [ ] Deco renderer: `full` image + the card's own foil engine clipped to `mask` (no second foil implementation).
+- [ ] Fandom stickers: accept every foil rung, masked to the renderer's own shape.
+- [ ] Make Skia render on the web target (CanvasKit) so screenshots can show foil at all — or record why not.
+- [ ] Rewrite `/dev/stickers`: every sticker at every foil, loose and on a card; a glitter sticker beside a glitter card.
+- [ ] Performance check: 20 foiled stickers on one card.
 
 ## Log
 
@@ -96,3 +132,4 @@ bake ≈ 0.7 s per sticker.
 - 2026-09-23 — Harness up; first screenshots of `/dev/cards` and `/dev/stickers` look right (card gallery + fandom sticker lab render on the web target; Skia foil absent there, as expected).
 - 2026-09-23 — CLAUDE.md + design-bible.md done, branches pushed. Phase 0 done; starting Phase 1. `sticker-src/` doesn't exist (no placeholder PNGs from Oskar yet) → proceeding with the emoji set alone (§3.4).
 - 2026-09-23 — Phase 1: pipeline, ingest, Noto set (45), contact sheet, button icon; idempotency verified. Committed `86422ee` + icon/credits. Starting Phase 2.
+- 2026-09-23 — Phase 2: five migrations + PGlite test on the reconstructed live schema, security review, types in both repos. Web `676abd0`, `26a82a4`; app `788f4d3`. Starting Phase 3.
