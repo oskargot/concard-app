@@ -2,9 +2,32 @@
 
 ## Current phase
 
-Phase 8 — Hardening. Status: in progress
+All phases built. Status: **waiting on Oskar** — apply the migrations, upload the art, run the device checks, and make the two web decisions (all under Needs Oskar).
 
 ## Phase summaries
+
+### Phase 8 — Hardening (done 2026-09-23)
+
+Shipped: small deco stickers draw their 192 px thumbnail instead of decoding the 592 px art (most
+on-card stickers, all minis); mini binder/scan cards draw stickers without foil canvases; the
+client-side security review ([appended here](security-review-phase2.md)) found nothing; CLAUDE.md
+now maps the sticker code; HANDOFF §9 has a "Decided" column. Dead code: the prototype catalog,
+glyph map and `StickerLayer` were removed in Phases 3 and 5; the old foil lab engines are
+**proposed** for deletion, not deleted (Needs Oskar).
+
+**Where "done" stands** (HANDOFF §5): editor, drawer, place / move / scale / rotate / remove,
+combining, fandom submission, collect grants and the binder all work end to end on-device and in
+web screenshots, and are wired to the live schema. What isn't proven yet needs you: the migrations
+applied, the art uploaded, a real two-account collect, the feel of foil and gestures in Expo Go on
+your iPhone, and the web foil / web card decisions.
+
+Check on device (the ones that matter most, across all phases):
+
+1. `/dev/stickers`: tilt the glitter card — does the glitter sticker match it? Does each rung read as a step up?
+2. Edit card: pinch to both clamps, twist, drag from the drawer, drop back on it.
+3. `/dev/stickers?perf=1` and a full drawer of foiled stickers: still smooth?
+4. Stickers tab: combine something; is the reveal right?
+5. After the migrations: collect a real card between two accounts; both stickers arrive.
 
 ### Phase 7 — Web parity (sticker layer done 2026-09-23; full pixel parity waits on two decisions)
 
@@ -152,6 +175,9 @@ Needs Oskar: open the draft PRs; the product bible (both under "Needs Oskar").
 
 ## Needs Oskar
 
+- [ ] **Delete the old foil lab engines?** Nothing ships them: `src/card/foil/{FoilPokemon,FoilSwatch,FoilTexture,FoilV2,SkiaSmoke,SkiaTextured,layers,recipes,pokemon-recipes,speckle,gradients,sampler-gradients}` and their routes `app/dev/foil-sampler.tsx`, `app/dev/skia-smoke.tsx` (≈ 4,000 lines). I left them because they're your lab and CLAUDE.md already says not to build on them. Say the word and they go.
+- [ ] **After the art upload**, the web's own older bakes (`static/stickers/*`, `scripts/bake-stickers.mjs`, `sticker-art.ts`) only serve stickers that have no ingest art; once every live sticker has `full_path`, they can go too.
+
 - [ ] **Decide the web's foil engine.** Sticker foil can only match across platforms if both run the same engine. Options: (a) load CanvasKit on the web card and run the app's SkSL as-is — exact parity, ~8 MB wasm (the app's web target already does this, `index.web.js`); (b) port `foil-sksl.ts` to a WebGL shader — small, but a second implementation to keep in step (holo-lab's GLSL is close to it); (c) keep the web's CSS `FoilFx` — cheapest, visibly different (see the holo heart in the side-by-side). I'd suggest (a) for the card component only, lazily loaded. Blocking: foil parity on the web.
 - [ ] **Schedule the web card's port to the card spec.** Sticker geometry already matches, but pixel parity of a whole card needs the web card itself on `src/card/layout/` (listed in CLAUDE.md as pending). Blocking: HANDOFF §5 Phase 7's "pixel-for-pixel".
 
@@ -294,11 +320,11 @@ schema predates the migrations).
 
 ## Tasks — Phase 8
 
-- [ ] Performance: count what a card with 20 foiled stickers and a full drawer costs (canvases, images, frame callbacks); cut what's cheap to cut; list what needs a device to judge.
-- [ ] Security review of the client-side sticker code (RPC use, what's trusted, secrets).
-- [ ] Dead code: anything the sticker work orphaned; propose (not delete) the old foil lab engines.
-- [ ] Docs: CLAUDE.md (stickers architecture + status), design bible stickers section, HANDOFF §9 marked with what was decided.
-- [ ] Final summary + device checklist.
+- [x] Performance: count what a card with 20 foiled stickers and a full drawer costs (canvases, images, frame callbacks); cut what's cheap to cut; list what needs a device to judge. — a foiled sticker = 1 Skia canvas + 2 decoded images (full or thumb, plus mask); plain = 1 image, no canvas, no clock; one shared frame callback for all sticker shimmer. Cut: thumbnails for small stickers; no foil canvases on minis. Needs a device: 20 foiled on one card, a drawer of foiled tiles. If either stutters, the next step is one shared canvas per card. Commit `e26198c`.
+- [x] Security review of the client-side sticker code (RPC use, what's trusted, secrets). — no findings; appended to security-review-phase2.md.
+- [x] Dead code: anything the sticker work orphaned; propose (not delete) the old foil lab engines. — proposal under Needs Oskar.
+- [x] Docs: CLAUDE.md (stickers architecture + status), design bible stickers section, HANDOFF §9 marked with what was decided. — commit `a58a8fd`.
+- [x] Final summary + device checklist. — the Phase 8 summary above.
 
 ## Log
 
@@ -312,3 +338,4 @@ schema predates the migrations).
 - 2026-09-23 — Phase 5: Stickers tab inventory + combine + reveal; fandom submission; prototype catalog deleted. Commits `993c917`, `610ee6f`. Starting Phase 6.
 - 2026-09-23 — Phase 6: v4 snapshots, collect grants → binder + inventory, GrantLine, faithful collect fixture from PGlite, demo-scan username fix. App `b5328c6`, web `e0ca01d`. Starting Phase 7.
 - 2026-09-23 — Phase 7: web sticker layer at the app's geometry, verbatim fandom renderer, v4 snapshots on web, side-by-side. Web `4e53e67`, `3edc380`. Foil engine + card-spec port logged for Oskar. Starting Phase 8.
+- 2026-09-23 — Phase 8: thumbnails for small stickers, no foil on minis, client security review, CLAUDE.md + HANDOFF §9. All phases built; waiting on Oskar.
