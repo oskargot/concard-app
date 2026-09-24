@@ -1,8 +1,8 @@
 /**
  * The editor's centrepiece: the card, with its controls in the margins.
  *
- * Face colours sit in a grid above the card so the gutters stay for the style
- * arrows only. Each arrow pair still parks beside the band it changes. A change
+ * Face colours sit in one row across the full width above the card, so the
+ * gutters stay for the style arrows only. Each arrow pair still parks beside the band it changes. A change
  * prints its axis and value in a caption under the card for a moment — without
  * it, cycling `shaved → rect` reads as the card twitching.
  */
@@ -13,9 +13,10 @@ import type { SharedValue } from 'react-native-reanimated';
 
 import { palette } from '../../theme/palette';
 import { radius, space, type, CARD_ASPECT } from '../../theme/tokens';
-import { BGS, BG_LABEL, type BgKey, type CardStyle } from '../card-style';
-import { faceBands } from '../CardFace';
+import { BGS, BG_LABEL, type BgKey } from '../card-style';
+import { faceBands, useFrontLayout } from '../CardFace';
 import { StaticCard } from '../FlipCard';
+import type { CardView } from '../types';
 
 /** Which band of the card a control sits beside. */
 export type BandKey = 'header' | 'photo' | 'bio' | 'footer';
@@ -36,14 +37,16 @@ export interface StyleAxis<T extends string = string> {
 
 const ARROW = 30;
 const COLUMN_GAP = 4;
-const GRID_COLS = 9;
-const SWATCH = 16;
+/** Space between face swatches; the swatches grow to fill the rest of the row. */
+const SWATCH_GAP = 2;
 
 /** How long a change stays named under the card. */
 const CAPTION_MS = 1600;
 
 export interface StageLayout {
 	cardWidth: number;
+	/** The whole width the stage may use: the screen less the page padding. */
+	stageWidth: number;
 }
 
 /**
@@ -55,24 +58,28 @@ export interface StageLayout {
 export function stageLayout(screenWidth: number, pagePadding: number, max = 320): StageLayout {
 	const arrows = 2 * (ARROW + COLUMN_GAP);
 	const available = screenWidth - pagePadding * 2;
-	return { cardWidth: Math.min(available - arrows, max) };
+	return { cardWidth: Math.min(available - arrows, max), stageWidth: available };
 }
 
 export function EditorStage({
-	style,
+	view,
 	cardWidth,
+	stageWidth,
 	axes,
 	onPickBackground,
 	renderCard
 }: {
-	style: CardStyle;
+	view: CardView;
 	cardWidth: number;
+	/** From `stageLayout`; the face swatches span it. */
+	stageWidth: number;
 	axes: StyleAxis[];
 	onPickBackground: (bg: BgKey) => void;
 	renderCard: (rx: SharedValue<number>, ry: SharedValue<number>) => React.ReactNode;
 }) {
 	const cardHeight = cardWidth / CARD_ASPECT;
-	const bands = faceBands(cardWidth, style);
+	const { style, layout } = useFrontLayout(view);
+	const bands = faceBands(cardWidth, layout);
 	const [caption, setCaption] = useState<string | null>(null);
 	const captionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -106,8 +113,9 @@ export function EditorStage({
 
 	return (
 		<View style={styles.stage}>
-			<SwatchGrid
+			<SwatchRow
 				keys={bgKeys}
+				width={stageWidth}
 				value={style.bg}
 				onPick={(bg) => {
 					onPickBackground(bg);
@@ -172,18 +180,25 @@ function ArrowColumn({
 	);
 }
 
-/** Eighteen face colours in an even grid so no rail is longer than another. */
-function SwatchGrid({
+/**
+ * The eighteen face colours in one row spanning the stage. Each swatch is
+ * sized to fill the width, and the selected one gets a ring drawn just
+ * outside it, so choosing a colour never resizes anything.
+ */
+function SwatchRow({
 	keys,
+	width,
 	value,
 	onPick
 }: {
 	keys: BgKey[];
+	width: number;
 	value: BgKey;
 	onPick: (bg: BgKey) => void;
 }) {
+	const size = (width - SWATCH_GAP * (keys.length - 1)) / keys.length;
 	return (
-		<View style={styles.grid} accessibilityRole="radiogroup">
+		<View style={[styles.swatches, { width }]} accessibilityRole="radiogroup">
 			{keys.map((key) => {
 				const on = key === value;
 				return (
@@ -193,14 +208,16 @@ function SwatchGrid({
 						accessibilityRole="radio"
 						accessibilityState={{ selected: on }}
 						accessibilityLabel={BG_LABEL[key]}
-						hitSlop={8}
+						hitSlop={{ top: 8, bottom: 8 }}
 						style={({ pressed }) => [
 							styles.swatch,
+							{ width: size, height: size, backgroundColor: BGS[key] },
+							// lifted so its ring draws over the neighbours it overlaps
 							on && styles.swatchOn,
 							pressed && { opacity: 0.7 }
 						]}
 					>
-						<View style={[styles.swatchFill, { backgroundColor: BGS[key] }]} />
+						{on ? <View pointerEvents="none" style={styles.swatchRing} /> : null}
 					</Pressable>
 				);
 			})}
@@ -211,13 +228,12 @@ function SwatchGrid({
 const styles = StyleSheet.create({
 	stage: { alignItems: 'center', gap: space.sm, alignSelf: 'stretch' },
 	row: { flexDirection: 'row', alignItems: 'center', gap: COLUMN_GAP },
-	grid: {
+	swatches: {
 		flexDirection: 'row',
-		flexWrap: 'wrap',
-		justifyContent: 'center',
-		width: GRID_COLS * SWATCH + (GRID_COLS - 1) * 2,
+		justifyContent: 'space-between',
 		alignSelf: 'center',
-		gap: 2
+		// room for the selection ring, which sits outside the swatch
+		paddingVertical: 3
 	},
 	arrow: {
 		position: 'absolute',
@@ -238,15 +254,21 @@ const styles = StyleSheet.create({
 		color: palette.cream
 	},
 	swatch: {
-		width: SWATCH,
-		height: SWATCH,
-		padding: 1,
-		borderRadius: 4,
-		borderWidth: 2,
-		borderColor: 'transparent'
+		borderRadius: 5,
+		borderWidth: StyleSheet.hairlineWidth,
+		borderColor: palette.line
 	},
-	swatchOn: { borderColor: palette.teal },
-	swatchFill: { flex: 1, borderRadius: radius.sm - 3 },
+	swatchOn: { zIndex: 1 },
+	swatchRing: {
+		position: 'absolute',
+		top: -3,
+		left: -3,
+		right: -3,
+		bottom: -3,
+		borderRadius: 8,
+		borderWidth: 2,
+		borderColor: palette.teal
+	},
 	caption: {
 		...type.meta,
 		color: palette.teal,

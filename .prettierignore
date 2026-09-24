@@ -6,3 +6,16 @@ pnpm-lock.yaml
 .expo/
 dist/
 assets/fonts/
+
+# Generated card-face data (scripts/make-outfit-metrics.py, scripts/make-link-icons.mjs)
+src/card/layout/outfit-metrics.ts
+src/card/link-icons.ts
+
+# Rewritten by npm / expo with their own two-space style
+package.json
+app.json
+
+# Vendored skills, and Oskar's documents kept verbatim
+docs/design-bible.md
+.claude/
+docs/stickers/HANDOFF.md

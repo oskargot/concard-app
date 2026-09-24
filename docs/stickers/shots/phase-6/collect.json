@@ -1,0 +1,9 @@
+[
+	{ "text": "Preview with a demo scan", "after": 3500 },
+	{ "text": "Stickers", "after": 1200 },
+	{ "shot": "inventory-after-collect" },
+	{ "text": "Binder", "after": 1500 },
+	{ "shot": "binder" },
+	{ "tap": [107, 230], "after": 1500 },
+	{ "shot": "binder-detail-grants" }
+]

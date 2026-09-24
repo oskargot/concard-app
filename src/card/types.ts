@@ -7,9 +7,9 @@
  * how it was drawn on the day it was collected.
  *
  * Fields added for the design bible's §6 card: `pronouns` and `label`. The
- * bible's `bio_alignment` and `link_layout` live in `CardStyle` instead — they
- * are style, and putting them there keeps one check constraint in the database
- * rather than two more columns.
+ * card spec's `alignment` and `photo_height` live in `CardStyle` instead — they
+ * are style, and the style jsonb is frozen into snapshots whole. The spec's
+ * photo focal point and zoom are `art_x` / `art_y` / `art_scale`.
  */
 
 import type { FandomStyleCategory } from '../stickers/types';
@@ -26,11 +26,14 @@ import type { StickerFoil } from './tiers';
  */
 export const BIO_MAX = 140;
 
+/**
+ * A link pill (card spec §3.5, §8). Its position is its index in
+ * `CardView.links`; its icon is derived from the url's domain when drawn.
+ */
 export interface CardLink {
-	label: string;
 	url: string;
-	/** Icon key or url. Optional — links fall back to a generic mark. */
-	icon?: string | null;
+	/** Shown on the pill. Pre-filled from the url, then the user's to edit. */
+	handle: string;
 }
 
 /**
@@ -53,7 +56,17 @@ export interface Affiliation {
 	foil: StickerFoil;
 }
 
-/** A sticker as positioned on a card face. Positions are 0..1 of the card size. */
+/**
+ * A sticker as positioned on a card face. `x` / `y` are its centre as 0..1 of
+ * the card; `scale` is 0.5–2 of its base size.
+ *
+ * Besides the placement it carries, optionally, what the sticker *is* — the
+ * fields a v4 collection snapshot freezes (and a live placements query joins
+ * in) so it can be drawn forever with no lookup: `kind`, and for deco the
+ * immutable asset paths in the `stickers` bucket, for fandom the label and
+ * style category. `src/stickers/definitions.ts` turns these into something
+ * drawable, falling back to bundled fixtures and then to a glyph.
+ */
 export interface PlacedSticker {
 	id?: string;
 	sticker_id: string;
@@ -63,6 +76,25 @@ export interface PlacedSticker {
 	scale: number;
 	z_index: number;
 	foil: StickerFoil;
+	/** Base width as a fraction of the card's width (the long edge, for
+	 *  deco art). Absent on placements that predate it; those draw at the old
+	 *  15.33% base times `scale`. New placements write STICKER_BASE_WIDTH. */
+	size?: number | null;
+	/** The card's free fandom affiliation, as a placement. */
+	is_affiliation?: boolean;
+
+	kind?: 'deco' | 'fandom';
+	name?: string;
+	full_path?: string | null;
+	mask_path?: string | null;
+	thumb_path?: string | null;
+	/** Width / height of the baked deco art (full and mask share a canvas). */
+	art_aspect?: number | null;
+	/** Legacy emoji glyph, for prototype stickers with no baked art. */
+	glyph?: string | null;
+	fandom_id?: string | null;
+	label?: string;
+	style_category?: FandomStyleCategory;
 }
 
 /** Everything needed to draw a card front. */
@@ -112,4 +144,7 @@ export interface CollectedCard {
 	/** True for an optimistic entry queued offline that hasn't reached
 	 *  Supabase yet — the binder shows it but flags it as unconfirmed. */
 	pending?: boolean;
+	/** What the latest collect of this card gave you: up to one deco and one
+	 *  fandom sticker, each carrying enough to draw it. */
+	granted?: PlacedSticker[];
 }

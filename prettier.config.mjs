@@ -9,7 +9,11 @@ const config = {
 	useTabs: true,
 	singleQuote: true,
 	trailingComma: 'none',
-	printWidth: 100
+	printWidth: 100,
+	// core.autocrlf checks files out as CRLF on Windows and commits them as LF;
+	// 'auto' keeps whichever a file has, so `prettier --check` judges style
+	// rather than failing every file on this machine over line endings.
+	endOfLine: 'auto'
 };
 
 export default config;

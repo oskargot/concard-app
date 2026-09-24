@@ -1,0 +1,7 @@
+[
+	{
+		"eval": "const k='concard-v1'; const v=JSON.parse(localStorage.getItem(k)); v.state.active_card.stickers=[{id:'c-min',sticker_id:'star',x:0.22,y:0.34,rotation:0,scale:0.5,z_index:1,foil:'none',size:0.24},{id:'c-max',sticker_id:'crown',x:0.58,y:0.47,rotation:0,scale:2,z_index:2,foil:'glitter',size:0.24},{id:'c-rot',sticker_id:'rocket',x:0.3,y:0.8,rotation:45,scale:1.2,z_index:3,foil:'none',size:0.24},{id:'c-edge',sticker_id:'heart',x:1,y:0.66,rotation:-15,scale:1,z_index:4,foil:'holo',size:0.24}]; localStorage.setItem(k, JSON.stringify(v));",
+		"reload": true
+	},
+	{ "shot": "clamps-rotated" }
+]

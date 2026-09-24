@@ -5,7 +5,7 @@
 Concard is an Expo/React Native mobile app using TypeScript and Expo Router.
 
 - `app/` contains file-based routes: `(auth)/` for onboarding, `(tabs)/` for main screens, and `dev/` for card and foil previews.
-- `src/card/` contains card components, style definitions, and `foil/` rendering layers.
+- `src/card/` contains card components, style definitions, and `foil/`, the Skia shader foil.
 - `src/auth/` manages session and profile state; `src/lib/` contains Supabase configuration, database types, and username utilities.
 - `src/ui/` holds shared controls; `src/theme/` holds palette and layout tokens.
 - `assets/` contains app icons and bundled fonts.
@@ -33,7 +33,7 @@ Use PascalCase for component files (`CardShell.tsx`), camelCase for functions an
 
 ## Testing Guidelines
 
-No test framework or coverage threshold is configured. Run typecheck and lint before submitting changes. Verify affected flows in Expo Go; check card rendering, tilt, and flip on both iOS and Android using `/dev/cards`, `/dev/foil-lab`, and `/dev/foil-sampler`. Record platforms tested and any unavailable checks. Preserve Expo Go compatibility when changing rendering dependencies.
+No test framework or coverage threshold is configured. Run typecheck and lint before submitting changes. Verify affected flows in Expo Go; check card rendering, tilt, and flip on both iOS and Android using `/dev/cards` and `/dev/foil-lab`. Record platforms tested and any unavailable checks. Preserve Expo Go compatibility when changing rendering dependencies.
 
 ## Commit & Pull Request Guidelines
 

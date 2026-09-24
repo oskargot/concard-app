@@ -4,47 +4,137 @@
  * card that looks wrong next to fifteen that look right, which is far easier
  * to spot than reading a diff.
  *
- * Rendered at two sizes, because the face drops its bio and links below
- * 180px and binder thumbnails need checking as deliberately as hero cards do.
+ * Grouped by the card spec's axes: photo shapes, divider positions, link
+ * counts, alignments, the fit edge cases, the back, and binder size — which is
+ * the same layout scaled to ~106 px, where the name stays legible and small
+ * text becomes texture.
  */
 
 import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Card } from '@/card/Card';
+import { CardBack } from '@/card/CardBack';
 import { StaticCard } from '@/card/FlipCard';
 import { DEMO_CARD } from '@/card/demo-card';
-import { FRAME_KEYS, PHOTO_SHAPES, SHAPES, type BgKey, type CardStyle } from '@/card/card-style';
+import {
+	ALIGNMENTS,
+	FRAME_KEYS,
+	PHOTO_SHAPES,
+	type BgKey,
+	type CardStyle
+} from '@/card/card-style';
+import { photoHeightMax } from '@/card/layout/front';
 import { CARD_TIERS, foilForTier } from '@/card/tiers';
+import type { CardLink, CardView } from '@/card/types';
 import { palette } from '@/theme/palette';
 import { radius, space, type } from '@/theme/tokens';
 
-/** A representative slice of the 18 backgrounds: a pastel, a saturated hue, the dark one. */
+/** A representative slice of the 18 backgrounds: pastels, saturated hues, the dark one. */
 const BG_SAMPLE: BgKey[] = ['paper', 'blush', 'butter', 'cyan', 'violet', 'slate'];
+
+const EIGHT_LINKS: CardLink[] = [
+	{ url: 'https://instagram.com/pixelpastrycafe', handle: '@pixelpastrycafe' },
+	{ url: 'https://bsky.app/profile/rafa.bsky.social', handle: '@rafa.bsky.social' },
+	{ url: 'https://rafadraws.itch.io', handle: 'rafadraws' },
+	{ url: 'https://oskargot.space', handle: 'oskargot.space' },
+	{ url: 'https://twitch.tv/rafadraws', handle: 'rafadraws' },
+	{ url: 'https://ko-fi.com/rafadraws', handle: 'rafadraws' },
+	{ url: 'https://discord.gg/concard', handle: 'discord.gg/concard' },
+	{ url: 'https://tiktok.com/@rafadraws', handle: '@rafadraws' }
+];
+
+const LONG_BIO =
+	'Inks comics too slowly, sells stickers too cheaply. Table H14 all weekend — say hi and ask about the zine. Trades welcome, tea preferred!!';
 
 export default function CardGalleryScreen() {
 	const { width } = useWindowDimensions();
 	const insets = useSafeAreaInsets();
 	const hero = Math.min((width - space.xl * 2 - space.md) / 2, 180);
-	const thumb = (width - space.xl * 2 - space.sm * 2) / 3;
+	const binder = Math.min((width - space.xl * 2 - space.sm * 2) / 3, 106);
+
+	const v = (patch: Partial<CardView>, style: Partial<CardStyle> = {}): CardView => ({
+		...DEMO_CARD,
+		...patch,
+		style: { ...DEMO_CARD.style, ...style }
+	});
 
 	return (
 		<ScrollView contentContainerStyle={[styles.page, { paddingBottom: insets.bottom + space.xxl }]}>
-			<Group title="Tiers · the foil ladder">
+			<Group title="Photo shapes · no photo draws the outline only">
 				<Row>
-					{CARD_TIERS.map((spec) => (
-						<Labelled key={spec.tier} label={`T${spec.tier} · ${spec.label}`}>
-							<Sample style={DEMO_CARD.style} width={hero} tier={spec.tier} />
+					{PHOTO_SHAPES.map((photo_shape) => (
+						<Labelled key={photo_shape} label={photo_shape}>
+							<Sample view={v({}, { photo_shape })} width={hero} />
 						</Labelled>
 					))}
 				</Row>
 			</Group>
 
-			<Group title="Frames">
+			<Group title="Divider · one link row · H 112 / 140 / 196 / H_max 234 (bio hidden)">
+				<Row>
+					{[112, 140, 196, photoHeightMax(1)].map((photo_height) => (
+						<Labelled key={photo_height} label={`H ${photo_height}`}>
+							<Sample
+								view={v({ bio: LONG_BIO, links: EIGHT_LINKS.slice(0, 1) }, { photo_height })}
+								width={hero}
+							/>
+						</Labelled>
+					))}
+				</Row>
+			</Group>
+
+			<Group title="Links · 0 / 1 / 4 / 8 (5–8 under the default sticker)">
+				<Row>
+					{[0, 1, 4, 8].map((n) => (
+						<Labelled key={n} label={`${n} links`}>
+							<Sample
+								view={v({ links: EIGHT_LINKS.slice(0, n), bio: LONG_BIO }, { photo_height: 112 })}
+								width={hero}
+							/>
+						</Labelled>
+					))}
+				</Row>
+			</Group>
+
+			<Group title="Alignment · name, username row, bio">
+				<Row>
+					{ALIGNMENTS.map((alignment) => (
+						<Labelled key={alignment} label={alignment}>
+							<Sample
+								view={v({ pronouns: 'they/them', affiliation: null }, { alignment })}
+								width={hero}
+							/>
+						</Labelled>
+					))}
+				</Row>
+			</Group>
+
+			<Group title="Fit · long name, 20-char username, long pronouns">
+				<Row>
+					<Labelled label="name cut">
+						<Sample view={v({ title: 'Alexandria Montgomery-Vale' })} width={hero} />
+					</Labelled>
+					<Labelled label="centre collision">
+						<Sample
+							view={v(
+								{ handle: 'abcdefghijklmnopqrst', pronouns: 'she/they', affiliation: null },
+								{ alignment: 'center' }
+							)}
+							width={hero}
+						/>
+					</Labelled>
+					<Labelled label="pill truncates">
+						<Sample view={v({ pronouns: 'she/her/hers/they/them' })} width={hero} />
+					</Labelled>
+				</Row>
+			</Group>
+
+			<Group title="Edges">
 				<Row>
 					{FRAME_KEYS.map((frame) => (
 						<Labelled key={frame} label={frame}>
-							<Sample style={{ ...DEMO_CARD.style, frame }} width={hero} tier={0} />
+							<Sample view={v({}, { frame })} width={hero} />
 						</Labelled>
 					))}
 				</Row>
@@ -54,39 +144,60 @@ export default function CardGalleryScreen() {
 				<Row>
 					{BG_SAMPLE.map((bg) => (
 						<Labelled key={bg} label={bg}>
-							<Sample style={{ ...DEMO_CARD.style, bg }} width={hero} tier={0} />
+							<Sample view={v({}, { bg })} width={hero} />
 						</Labelled>
 					))}
 				</Row>
 			</Group>
 
-			<Group title="Silhouettes">
+			<Group title="Tiers · the foil covers the whole face">
 				<Row>
-					{SHAPES.map((shape) => (
-						<Labelled key={shape} label={shape}>
-							<Sample style={{ ...DEMO_CARD.style, shape }} width={hero} tier={0} />
-						</Labelled>
-					))}
-				</Row>
-			</Group>
-
-			<Group title="Photo shapes">
-				<Row>
-					{PHOTO_SHAPES.map((photo_shape) => (
-						<Labelled key={photo_shape} label={photo_shape}>
-							<Sample style={{ ...DEMO_CARD.style, photo_shape }} width={hero} tier={0} />
-						</Labelled>
-					))}
-				</Row>
-			</Group>
-
-			<Group title="Binder size · every tier">
-				<Row gap={space.sm}>
 					{CARD_TIERS.map((spec) => (
+						<Labelled key={spec.tier} label={`T${spec.tier} · ${spec.label}`}>
+							<Sample view={DEMO_CARD} width={hero} tier={spec.tier} />
+						</Labelled>
+					))}
+				</Row>
+			</Group>
+
+			<Group title="Back · qr / offline placeholder / record">
+				<Row>
+					{(['qr', 'placeholder', 'record'] as const).map((variant) => (
+						<Labelled key={variant} label={variant}>
+							<StaticCard
+								width={hero}
+								render={(rx, ry) => (
+									<CardBack
+										style={DEMO_CARD.style}
+										width={hero}
+										variant={variant}
+										qrValue="https://concard.me/oskar"
+										url="concard.me/oskar"
+										record={{
+											collected: 'Sep 23, 2026',
+											event: 'In person',
+											note: 'First meeting logged.'
+										}}
+										rx={rx}
+										ry={ry}
+									/>
+								)}
+							/>
+						</Labelled>
+					))}
+				</Row>
+			</Group>
+
+			<Group title="Binder size · identical layout at ~0.42×">
+				<Row gap={space.sm}>
+					{CARD_TIERS.slice(0, 3).map((spec, i) => (
 						<Sample
 							key={spec.tier}
-							style={DEMO_CARD.style}
-							width={thumb}
+							view={v(
+								{ links: EIGHT_LINKS.slice(0, [2, 4, 8][i]), bio: LONG_BIO },
+								{ photo_shape: PHOTO_SHAPES[i], bg: BG_SAMPLE[i + 2] }
+							)}
+							width={binder}
 							tier={spec.tier}
 							detail="thumb"
 						/>
@@ -98,17 +209,16 @@ export default function CardGalleryScreen() {
 }
 
 function Sample({
-	style,
+	view,
 	width,
-	tier,
+	tier = 0,
 	detail = 'full'
 }: {
-	style: CardStyle;
+	view: CardView;
 	width: number;
-	tier: number;
+	tier?: number;
 	detail?: 'full' | 'thumb';
 }) {
-	const view = { ...DEMO_CARD, style };
 	return (
 		<StaticCard
 			width={width}

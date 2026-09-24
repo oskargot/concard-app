@@ -14,8 +14,8 @@
  */
 
 import type { Database } from '../lib/database.types';
-import { styleCategoryForFandom } from '../stickers/fandom-styles';
-import { BADGE_HOME, normalizeStyle } from './card-style';
+import { styleCategoryOf } from '../stickers/fandoms';
+import { BADGE_HOME, BADGE_HOME_LEGACY, normalizeStyle } from './card-style';
 import { normalizeLinks } from './links';
 import type { Affiliation, CardView } from './types';
 
@@ -42,12 +42,18 @@ export function affiliationFor(
 	// An id with no matching fandom — deactivated, or not loaded yet — draws no
 	// sticker rather than an empty one.
 	if (!fandom) return null;
+	// Never moved from the pre-spec default: follow the default to its new spot
+	// (the spec's 64 × 64 corner) rather than pin the card to the old one.
+	const unmoved =
+		x == null ||
+		y == null ||
+		(Math.abs(x - BADGE_HOME_LEGACY.x) < 0.001 && Math.abs(y - BADGE_HOME_LEGACY.y) < 0.001);
 	return {
 		id: fandom.id,
 		name: fandom.name,
-		style_category: styleCategoryForFandom(fandom),
-		x: x ?? BADGE_HOME.x,
-		y: y ?? BADGE_HOME.y,
+		style_category: styleCategoryOf(fandom),
+		x: unmoved ? BADGE_HOME.x : x,
+		y: unmoved ? BADGE_HOME.y : y,
 		rotation: AFFILIATION_DEFAULTS.rotation,
 		scale: AFFILIATION_DEFAULTS.scale,
 		foil: AFFILIATION_DEFAULTS.foil

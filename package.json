@@ -2,14 +2,15 @@
   "name": "concard-app",
   "version": "0.1.0",
   "private": true,
-  "main": "expo-router/entry",
+  "main": "index",
   "scripts": {
     "start": "node scripts/start.js",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "lint": "eslint . && prettier --check .",
     "typecheck": "tsc --noEmit",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "shots": "node scripts/shots.mjs"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
@@ -20,14 +21,16 @@
     "expo": "~57.0.23",
     "expo-camera": "~57.0.5",
     "expo-constants": "~57.0.18",
-    "expo-dev-client": "~57.0.19",
     "expo-file-system": "~57.0.7",
     "expo-font": "~57.0.4",
+    "expo-haptics": "~57.0.3",
     "expo-image": "~57.0.5",
+    "expo-image-manipulator": "~57.0.19",
     "expo-image-picker": "~57.0.18",
     "expo-linking": "~57.0.10",
     "expo-router": "~57.0.21",
     "expo-status-bar": "~57.0.1",
+    "qrcode": "^1.5.4",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.3",
@@ -48,7 +51,10 @@
     "babel-preset-expo": "~57.0.11",
     "eslint": "^9.39.5",
     "eslint-config-expo": "~57.0.2",
+    "playwright-core": "^1.63.0",
     "prettier": "^3.9.6",
+    "sharp": "^0.35.4",
+    "simple-icons": "^16.32.0",
     "typescript": "~6.0.3"
   },
   "overrides": {

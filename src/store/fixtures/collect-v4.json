@@ -1,0 +1,128 @@
+{
+	"stickers": [
+		{
+			"foil": "none",
+			"kind": "deco",
+			"name": "Heart",
+			"full_path": "heart/da7b377662132abd-full.webp",
+			"mask_path": "heart/da7b377662132abd-mask.webp",
+			"art_aspect": 1.0764,
+			"sticker_id": "heart",
+			"thumb_path": "heart/da7b377662132abd-thumb.webp"
+		},
+		{
+			"foil": "none",
+			"kind": "fandom",
+			"name": "Sci-fi",
+			"label": "Sci-fi",
+			"sticker_id": "fandom-scifi",
+			"style_category": "retro-sci-fi"
+		}
+	],
+	"bonus_foil": "none",
+	"collected_at": "2026-09-23T20:59:02.874-06:00",
+	"card_snapshot": {
+		"bio": "Draws tiny robots. Ask me about my sketchbook.",
+		"art_x": 0.5,
+		"art_y": 0.5,
+		"links": [],
+		"owner": {
+			"id": "00000000-0000-0000-0000-00000000000a",
+			"username": "pixelpal",
+			"avatar_url": null,
+			"display_name": "Pixel Pal"
+		},
+		"style": {
+			"bg": "sky",
+			"frame": "holo",
+			"photo_shape": "arch"
+		},
+		"title": "Pixel Pal",
+		"art_url": null,
+		"card_id": "00000000-0000-0000-0000-0000000000ca",
+		"version": 4,
+		"pronouns": null,
+		"stickers": [
+			{
+				"x": 0.8,
+				"y": 0.86,
+				"foil": "none",
+				"kind": "fandom",
+				"name": "Sci-fi",
+				"size": 0.256,
+				"label": "Sci-fi",
+				"scale": 1,
+				"z_index": 0,
+				"rotation": 0,
+				"fandom_id": "scifi",
+				"sticker_id": "fandom-scifi",
+				"is_affiliation": true,
+				"style_category": "retro-sci-fi"
+			},
+			{
+				"x": 0.2,
+				"y": 0.2,
+				"foil": "glitter",
+				"kind": "deco",
+				"name": "Star",
+				"size": 0.24,
+				"scale": 1.1,
+				"z_index": 1,
+				"rotation": -8,
+				"full_path": "star/419318a559454a45-full.webp",
+				"mask_path": "star/419318a559454a45-mask.webp",
+				"art_aspect": 1.0404,
+				"sticker_id": "star",
+				"thumb_path": "star/419318a559454a45-thumb.webp",
+				"is_affiliation": false
+			},
+			{
+				"x": 0.74,
+				"y": 0.5,
+				"foil": "holo",
+				"kind": "deco",
+				"name": "Heart",
+				"size": 0.24,
+				"scale": 0.9,
+				"z_index": 2,
+				"rotation": 10,
+				"full_path": "heart/da7b377662132abd-full.webp",
+				"mask_path": "heart/da7b377662132abd-mask.webp",
+				"art_aspect": 1.0764,
+				"sticker_id": "heart",
+				"thumb_path": "heart/da7b377662132abd-thumb.webp",
+				"is_affiliation": false
+			},
+			{
+				"x": 0.3,
+				"y": 0.62,
+				"foil": "none",
+				"kind": "deco",
+				"name": "Sparkles",
+				"size": 0.24,
+				"scale": 1,
+				"z_index": 3,
+				"rotation": 0,
+				"full_path": "sparkles/d58d3f069fac5fa1-full.webp",
+				"mask_path": "sparkles/d58d3f069fac5fa1-mask.webp",
+				"art_aspect": 1.0332,
+				"sticker_id": "sparkles",
+				"thumb_path": "sparkles/d58d3f069fac5fa1-thumb.webp",
+				"is_affiliation": false
+			}
+		],
+		"art_scale": 1,
+		"affiliation": {
+			"x": 0.8,
+			"y": 0.86,
+			"id": "scifi",
+			"mark": "SF",
+			"name": "Sci-fi",
+			"color_a": "#4dd0e1",
+			"color_b": "#4dd0e1",
+			"style_category": "retro-sci-fi"
+		}
+	},
+	"collection_id": "c29c9833-ae16-4dd4-aa58-0d6a502caba1",
+	"bonus_sticker_id": "heart"
+}

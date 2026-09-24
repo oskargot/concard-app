@@ -1,12 +1,12 @@
 import * as FileSystem from 'expo-file-system/legacy';
 
-import { normalizeStyle } from '@/card/card-style';
-import { DEMO_CARD } from '@/card/demo-card';
+import { grantsFromCollect, snapshotToView } from '@/card/snapshot';
 import { tierForMeetings } from '@/card/tiers';
 import type { CardView, CollectedCard } from '@/card/types';
 import { parseCollectError } from '@/lib/collect';
 import { supabase } from '@/lib/supabase';
 import type { Json } from '@/lib/database.types';
+import COLLECT_FIXTURE from './fixtures/collect-v4.json';
 import { useConcardStore, type PendingScan } from './useConcardStore';
 
 let syncing = false;
@@ -15,37 +15,6 @@ function record(input: Json | undefined): Record<string, unknown> {
 	return input && typeof input === 'object' && !Array.isArray(input)
 		? (input as Record<string, unknown>)
 		: {};
-}
-
-/**
- * Reads a `collect_card()` snapshot (version 2, `concard/.../collect_card()`)
- * into a `CardView`. The snapshot's keys sit at the top level — `title`,
- * `bio`, `pronouns`, `art_*`, `style`, `links`, `stickers`, `owner` — there is
- * no separate `card`/`profile` split.
- */
-function snapshotToView(snapshot: Json): { view: CardView; ownerId: string } {
-	const s = record(snapshot);
-	const owner = record(s.owner as Json);
-	const view: CardView = {
-		title: String(s.title ?? owner.display_name ?? owner.username ?? 'Someone'),
-		handle: String(owner.username ?? ''),
-		pronouns: (s.pronouns ?? null) as string | null,
-		bio: String(s.bio ?? ''),
-		label: null,
-		art_url: (s.art_url ?? null) as string | null,
-		art_x: Number(s.art_x ?? 0.5),
-		art_y: Number(s.art_y ?? 0.5),
-		art_scale: Number(s.art_scale ?? 1),
-		style: normalizeStyle(s.style),
-		// The snapshot's affiliation carries a fandom id/mark/colors, not the
-		// app's generative `style_category` — drawing it needs a fandoms-table
-		// lookup this drain doesn't do, so a collected card's badge is left off
-		// rather than drawn wrong. Out of scope for the meet loop.
-		affiliation: null,
-		links: Array.isArray(s.links) ? (s.links as CardView['links']) : [],
-		stickers: Array.isArray(s.stickers) ? (s.stickers as CardView['stickers']) : []
-	};
-	return { view, ownerId: String(owner.id ?? '') };
 }
 
 function safeName(value: string) {
@@ -68,24 +37,36 @@ async function cachePhoto(view: CardView, cardId: string): Promise<CardView> {
 	}
 }
 
-/** Dev-only fallback when Supabase isn't configured — never used in a build
- *  that could ship, since `syncPendingScans` only takes this path when
- *  `supabase` is null. */
+/**
+ * Dev-only fallback when Supabase isn't configured — never used in a build
+ * that could ship, since `syncPendingScans` only takes this path when
+ * `supabase` is null.
+ *
+ * Replays a real `collect_card()` response (`fixtures/collect-v4.json`,
+ * printed by the concard repo's `scripts/collect-fixture.mjs` from the
+ * migrated function) through the same parsing as a live collect, renamed to
+ * the scanned username, and credits its sticker grants to the on-device
+ * inventory — so the whole collect → grant → binder path runs offline.
+ */
 function demoCardFor(scan: PendingScan): CollectedCard {
-	const view: CardView = {
-		...DEMO_CARD,
-		title: scan.username
-			.split(/[-_.]/)
-			.map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-			.join(' '),
-		handle: scan.username,
-		bio: 'Met offline at the convention. Details will refresh on the next sync.'
-	};
+	const response = COLLECT_FIXTURE as unknown as Record<string, unknown>;
+	const { view } = snapshotToView(response.card_snapshot);
+	const granted = grantsFromCollect(response);
+	const store = useConcardStore.getState();
+	for (const g of granted) store.adjustStickerInventory(g.sticker_id, g.foil, 1);
 	return {
 		id: `local-demo-${scan.id}`,
 		card_id: null,
 		owner_id: null,
-		view,
+		view: {
+			...view,
+			title: scan.username
+				.split(/[-_.]/)
+				.map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+				.join(' '),
+			handle: scan.username
+		},
+		granted,
 		tier: 0,
 		meeting_count: 1,
 		revealed: true,
@@ -163,8 +144,8 @@ export async function syncPendingScans() {
 				}
 
 				const result = record(data as Json);
-				const { view, ownerId } = snapshotToView(result.card_snapshot as Json);
-				const cardId = record(result.card_snapshot as Json).card_id;
+				const { view, ownerId, cardId } = snapshotToView(result.card_snapshot);
+				const granted = grantsFromCollect(result);
 				const cachedView = await cachePhoto(
 					view,
 					typeof cardId === 'string' ? cardId : scan.username
@@ -181,6 +162,7 @@ export async function syncPendingScans() {
 						card_id: typeof cardId === 'string' ? cardId : null,
 						owner_id: ownerId || null,
 						view: cachedView,
+						granted,
 						tier: tierForMeetings(meetingCount),
 						meeting_count: meetingCount,
 						revealed: true,
@@ -224,11 +206,21 @@ export async function fetchMyCollections() {
 	const collectorId = session?.user.id;
 	if (!collectorId) return;
 
-	const { data, error } = await supabase
+	// Grants live in their own table from the sticker migrations on; before
+	// that, only `bonus_sticker_id` says what a collect gave.
+	let result = await supabase
 		.from('collections')
-		.select('*')
+		.select('*, collection_sticker_grants(*)')
 		.eq('collector_id', collectorId)
 		.order('collected_at', { ascending: false });
+	if (result.error) {
+		result = (await supabase
+			.from('collections')
+			.select('*')
+			.eq('collector_id', collectorId)
+			.order('collected_at', { ascending: false })) as typeof result;
+	}
+	const { data, error } = result;
 	if (error || !data) return;
 
 	const byOwner = new Map<string, typeof data>();
@@ -244,6 +236,19 @@ export async function fetchMyCollections() {
 		const latest = rows[0];
 		const oldest = rows[rows.length - 1];
 		const { view } = snapshotToView(latest.card_snapshot);
+		const grants = (latest as unknown as { collection_sticker_grants?: unknown[] })
+			.collection_sticker_grants;
+		// A grant row names the sticker; its definition is in the snapshot it came from.
+		const granted = grantsFromCollect({
+			...latest,
+			stickers: Array.isArray(grants)
+				? grants.map((g) => {
+						const row = g as { sticker_id: string; foil: string; kind: string };
+						const onCard = view.stickers.find((p) => p.sticker_id === row.sticker_id);
+						return { ...onCard, ...row };
+					})
+				: undefined
+		});
 		const cachedView = await cachePhoto(view, latest.card_id ?? ownerId);
 		const meetingCount = rows.length;
 		cards.push({
@@ -251,6 +256,7 @@ export async function fetchMyCollections() {
 			card_id: latest.card_id,
 			owner_id: ownerId,
 			view: cachedView,
+			granted,
 			tier: tierForMeetings(meetingCount),
 			meeting_count: meetingCount,
 			revealed: true,

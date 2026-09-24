@@ -1,0 +1,16 @@
+[
+	{ "shot": "button-rest" },
+	{ "click": "Stickers", "after": 900 },
+	{ "shot": "drawer-deco" },
+	{ "text": "Fandom" },
+	{ "shot": "drawer-fandom" },
+	{ "text": "Deco" },
+	{ "tap": [195, 655], "after": 800 },
+	{ "shot": "placed-by-tap" },
+	{ "drag": [195, 297, 105, 250], "after": 800 },
+	{ "shot": "moved" },
+	{ "drag": [270, 655, 250, 420], "hold": 350, "after": 800 },
+	{ "shot": "dragged-out" },
+	{ "drag": [105, 250, 150, 700], "after": 900 },
+	{ "shot": "removed-into-drawer" }
+]

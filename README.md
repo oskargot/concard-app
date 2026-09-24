@@ -11,14 +11,13 @@ Supabase schema and migrations live — both surfaces share one project.
 
 ## Stack
 
-- **Expo SDK 57** / React Native 0.86 / React 19.2 — the blend-mode foils and
-  the whole app run in Expo Go, but the Skia foil path needs a development build
-  (see "Skia and the development build" below)
+- **Expo SDK 57** / React Native 0.86 / React 19.2 — the whole app runs in Expo
+  Go, Skia shader foil included
 - **expo-router** for file-based navigation
 - **react-native-reanimated** 4 + **gesture-handler** for tilt, flip and drag
-- **react-native-svg** for the foils' dot and facet fields
-- **@shopify/react-native-skia** for the shader-based foil (Stage C, dev client
-  only — pinned to the Expo SDK 57 version, `2.6.2`)
+- **@shopify/react-native-skia** for the foil shader (pinned to the Expo SDK 57
+  version, `2.6.2`)
+- **react-native-svg** for card silhouettes and the QR
 - **Supabase** for Postgres, Auth and Storage — shared with the web app
 
 ## Getting started
@@ -43,50 +42,50 @@ Scan the QR with Expo Go. Then open **My Card → the foil lab**.
 | `npm run lint`      | ESLint + Prettier check |
 | `npm run format`    | Prettier write          |
 
-## Skia and the development build
+## Skia and Expo Go
 
-Expo Go is enough for everything **except** the Skia foil path (Stage C). Skia is
-a native module that Expo Go does not ship, so anything under `/dev/skia-smoke`
-(and, later, the `skia` foil engine) needs a **development build** — a custom
-build of this app with the native module linked, that then loads JS over the
-network the same way Expo Go does. Opening `/dev/skia-smoke` in Expo Go shows a
-"Skia isn't linked" panel, not a crash.
+Expo Go ships Skia on SDK 57, so the shader foil runs there
+with no development build — confirmed on a physical device. This repo said
+otherwise for a while; it was wrong.
 
-You build the dev client **once** (any time the native deps change), install it
-on the phone, and after that iterate on JS with a normal `expo start`.
-
-### One-time setup
-
-```sh
-npm install -g eas-cli   # or: npx eas-cli@latest
-eas login                # your Expo account
-eas init                 # links this repo to an EAS project, writes the projectId into app.json
-```
-
-### Build and install the dev client (iOS, from Windows)
-
-There is no Mac here, so `expo run:ios` can't build locally — the dev client is
-built in **EAS cloud**. The `development` profile in `eas.json` is a dev client
-with internal (ad-hoc) distribution.
+Start the dev server with **`npm start`**, not a bare `npx expo start`.
+`scripts/start.js` does two things the plain command gets wrong on this setup:
+it advertises an address the phone can actually route to (a VPN or hypervisor
+adapter otherwise wins, and the failure is quiet -- the bundle still loads
+while Fast Refresh never connects), and it asks for Expo Go explicitly. It
+prints which address it chose, and how to override it:
 
 ```sh
-eas device:create        # register the iPhone once — follow the link/QR on the device to install the profile
-eas build --profile development --platform ios
+npm start              # Expo Go, on the best address it can find
+npm start -- -c        # same, clearing Metro's cache
+REACT_NATIVE_PACKAGER_HOSTNAME=<ip> npm start   # force an address
 ```
 
-When the build finishes, EAS shows a QR / install link; open it on the registered
-iPhone to install the app. (Android, if wanted later:
-`eas build --profile development --platform android`, then install the `.apk`.)
+Keep Skia pinned to the version the SDK expects -- `npx expo install --check`
+-- since Expo Go's native side is built against exactly that.
 
-### Day-to-day after it's installed
+A shader that fails to _compile_ reports itself on the canvas, with the
+offending source line, rather than going silently white.
+
+### There is no development build any more
+
+`expo-dev-client` used to be a dependency, from when Skia was believed to need
+a custom build. It doesn't, and its presence alone made the Expo CLI hand out
+`exp+concard://expo-development-client/?url=...` deep links that do nothing in
+Expo Go -- so it was removed.
+
+If a future native module does need one, add it back and rebuild:
 
 ```sh
-npx expo start --dev-client
+npx expo install expo-dev-client
+eas build --profile development --platform ios   # the profile is still in eas.json
+npm start -- --dev-client
 ```
 
-Open the app you installed (not Expo Go) and it connects to this dev server;
-Fast Refresh works exactly as in Expo Go. You only rebuild when a native
-dependency changes — editing JS/TS never needs a new build.
+There is no Mac here, so `expo run:ios` can't build locally; the `development`
+profile in `eas.json` is a dev client with internal (ad-hoc) distribution, and
+`eas device:create` registers the iPhone. The checked-in `android/` directory
+is from that era too.
 
 ## Layout
 
@@ -94,8 +93,7 @@ dependency changes — editing JS/TS never needs a new build.
 app/                    expo-router routes
   (auth)/               sign in · claim a username · first card (§10)
   (tabs)/               My Card · Scan · Binder (design bible §11)
-  dev/foil-lab          every foil layer, individually switchable
-  dev/skia-smoke        Skia canvas proof (dev client only, Stage C0)
+  dev/foil-lab          every foil kind on a real card, through the production path
   dev/cards             every card look on fixture data
 src/auth/               session and profile state; the route gate
 src/lib/                Supabase client, env, username rules, generated types
@@ -107,50 +105,48 @@ src/card/               the card renderer
   CardShell.tsx         frame band, inset face, silhouettes
   CardFace.tsx          photo, name, handle, pronouns, bio, links
   FlipCard.tsx          owns tilt and flip; hands tilt to both faces
-  foil/                 the foil renderer
+  foil/                 the foil: one SkSL shader, a recipe per kind
 ```
 
 ## The foils
 
 The foils are the product: a Concard is meant to look like an object you would
-screenshot. They are a port of the CSS trading-card foil technique, which became
-possible in **React Native 0.86** — it added `mixBlendMode` (the full CSS blend
-set), `experimental_backgroundImage` (gradient syntax), `filter`, and
-`isolation`.
+screenshot. Each one is a single SkSL runtime shader, screen-blended over the
+real card face, that emits only the light a holographic laminate would throw
+back — it draws no card of its own and never darkens anything.
 
-Two deliberate departures from the CSS original:
+The recipe is the one from
+[TiltHologramCard](https://github.com/DongGukMon/TiltHologramCard), as maths: a
+rainbow read along one tilt-driven axis, two soft light bands read along the
+same axis so colour and shine travel together, a spotlight glare, and a
+_material_ that says how much of each pixel is foil. Four materials, one per
+foil kind:
 
-- CSS `background-blend-mode` blends several backgrounds inside one element.
-  React Native has no equivalent, so each layer is its own View with its own
-  `mixBlendMode` and the stack does the same job.
-- The CSS version animates `background-position` from pointer coordinates. Here
-  each moving layer is oversized and **translated** by Reanimated instead,
-  because a transform is driven on the UI thread and a restyle is not.
+| Kind      | Recipe    | Material                                                         |
+| --------- | --------- | ---------------------------------------------------------------- |
+| `glitter` | `sprayed` | a photographed spray of paint flecks (`assets/foil/sprayed.png`) |
+| `cosmic`  | `stars`   | four-point stars over fine dust (`assets/foil/stars.png`)        |
+| `holo`    | `linear`  | fine diagonal stripes computed in the shader; no texture         |
+| `mosaic`  | `mosaic`  | a baked facet map, every triangle lit at its own tilt            |
 
-`repeating-linear-gradient` is not in React Native's parser, so
-`foil/gradients.ts` expands repeating patterns into explicit stops.
+The mosaic map is not a picture: its channels are per-triangle phase, seam and
+brightness, generated by `scripts/make-foil-textures.py`. Two rules hold across
+all four: the material is sampled at `fragCoord` and never at a tilt offset, so
+the pattern is pinned to the card and only the light moves; and every light
+term slides _opposite_ the finger, the way a fixed light reflects off a card
+you tilt toward it.
 
-### Skia (Stage C)
+Every value that controls the look is a named constant at the top of
+`src/card/foil/foil-sksl.ts`, baked into the shader source — edit, save, and the
+phone recompiles. That module has no React Native imports, so
+`node scripts/foil-sksl.js <recipe>` prints the exact SkSL for checking in the
+[Skia Labs](https://skialabs.dev) editor first.
 
-The blend-mode route above was built to avoid a native module, so the whole card
-renderer runs in Expo Go. It got the foils close but not to "physical holo", so
-Stage C tries **Skia** for real shader control — accepting the cost of a
-development build (see "Skia and the development build" above). This is a
-deliberate, staged bet, not a rewrite:
-
-- **C0 (this stage):** the dev client and Skia are wired up, with a smoke canvas
-  at `/dev/skia-smoke` proving Skia draws on a card-sized surface and answers the
-  same `rx`/`ry` tilt the foils read. Production foil is untouched.
-- **C1:** a Skia foil engine (pinned textures, moving light, per-tier recipes),
-  selectable in the foil lab and compared A/B against the blend-mode engines
-  before anything switches.
-
-The blend-mode engines stay until Skia clearly wins in the lab, and Skia is only
-pulled into the card path — never unrelated screens.
+Tier 0 draws no shader: just the sliding glare every card has, and the edge lip
+that gives a flat rectangle its thickness.
 
 **`/dev/foil-lab` exists to check foils on real hardware, on both platforms.**
-Every layer can be toggled, its blend mode cycled and its opacity nudged while
-you tilt the card.
+It runs every kind through the production card path while you tilt.
 
 ## Decisions that diverge from the bible or the web app
 
@@ -199,3 +195,14 @@ Phase 2 of 7, plus the card editor and the meet loop.
 Nothing has been run against a live Supabase project on a device yet — that
 needs a real `.env` and two accounts to test the scan → collect → binder loop
 end to end (see the handoff's manual test script).
+
+## Credits
+
+- **Noto Emoji** — the emoji deco stickers are baked from Google's
+  [Noto Emoji](https://github.com/googlefonts/noto-emoji) artwork (`v2.047`,
+  `png/512/`), Copyright 2013 Google LLC, Apache License 2.0. The PNGs and the
+  licence live in `sticker-src/noto/`; the baked stickers are derived works of
+  them.
+- **Outfit**, **Fredoka** and **Space Grotesk** fonts (`assets/fonts/`), SIL
+  Open Font License 1.1.
+- **Simple Icons** link-pill glyphs (`simple-icons`), CC0.

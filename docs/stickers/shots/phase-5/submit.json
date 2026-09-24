@@ -1,0 +1,7 @@
+[
+	{ "click": "Submit a fandom", "after": 700 },
+	{ "type": ["e.g. Dungeon Meshi", "Dungeon Meshi"], "after": 700 },
+	{ "shot": "submit-preview" },
+	{ "text": "Submit for review", "after": 900 },
+	{ "shot": "submit-pending" }
+]

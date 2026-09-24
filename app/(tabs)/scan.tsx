@@ -7,7 +7,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CardFace } from '@/card/CardFace';
 import { CardShell } from '@/card/CardShell';
 import { StaticCard } from '@/card/FlipCard';
-import { StickerLayer } from '@/card/StickerLayer';
+import { CardOverlay } from '@/card/CardOverlay';
+import { GrantLine } from '@/stickers/GrantLine';
 import { foilForTier } from '@/card/tiers';
 import { formatRetryIn } from '@/lib/collect';
 import { ALLOWED_QR_HOSTS, SITE_ORIGIN } from '@/lib/env';
@@ -167,7 +168,15 @@ export default function ScanScreen() {
 											rx={rx}
 											ry={ry}
 											detail="thumb"
-											overlay={<StickerLayer stickers={card.view.stickers} width={thumbWidth} />}
+											overlay={
+												<CardOverlay
+													view={card.view}
+													width={thumbWidth}
+													rx={rx}
+													ry={ry}
+													detail="thumb"
+												/>
+											}
 										>
 											<CardFace view={card.view} width={thumbWidth} />
 										</CardShell>
@@ -176,6 +185,7 @@ export default function ScanScreen() {
 								<Text numberOfLines={1} style={styles.recentName}>
 									@{card.view.handle}
 								</Text>
+								<GrantLine granted={card.granted} size={18} compact />
 							</View>
 						))}
 					</View>
@@ -185,8 +195,9 @@ export default function ScanScreen() {
 	);
 }
 
-/** Same shape a QR on My Card encodes — a profile URL, never a session token. */
-const demoPayload = profileUrl(SITE_ORIGIN, 'pixel-pal');
+/** Same shape a QR on My Card encodes — a profile URL, never a session token.
+ *  Usernames are [a-z0-9_]: a hyphen here made the parser reject the demo. */
+const demoPayload = profileUrl(SITE_ORIGIN, 'pixel_pal');
 
 function DemoScan({ onPress }: { onPress: () => void }) {
 	return (

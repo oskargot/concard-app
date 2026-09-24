@@ -1,16 +1,16 @@
 /**
  * Collectible sticker definitions.
  *
- * A definition is the object itself — "STAR TREK" in retro-sci-fi, or a deco
- * PNG. Finish (base / glitter / holo) is an owned-instance property on
- * `PlacedSticker.foil`, never duplicated here. See the Stage 1 generative
- * fandom renderer in `FandomSticker.tsx`.
- *
- * The prototype glyph catalog in `catalog.ts` is a separate, older shape and
- * stays in place until a later stage replaces it.
+ * A definition is the object itself — "STAR TREK" in retro-sci-fi, or a baked
+ * deco image. Its foil (none → glitter → holo → cosmic → mosaic) belongs to a
+ * copy — `PlacedSticker.foil`, an inventory pile — never to the definition.
+ * `definitions.ts` builds these from placements, snapshots and inventory rows.
  */
 
+import type { ImageSourcePropType } from 'react-native';
+
 import type { StickerFoil } from '@/card/tiers';
+import type { StickerLight } from './StickerFoil';
 
 export const FANDOM_STYLE_CATEGORIES = [
 	'retro-sci-fi',
@@ -43,18 +43,38 @@ export interface FandomStickerDefinition extends BaseStickerDefinition {
 	styleCategory: FandomStyleCategory;
 }
 
+/** The three baked, immutable images a deco sticker is drawn from
+ *  (scripts/stickers/pipeline.ts): die-cut art, its silhouette for the foil
+ *  to clip to, and a drawer-sized copy. */
+export interface DecoStickerAssets {
+	full: ImageSourcePropType;
+	mask: ImageSourcePropType;
+	thumb: ImageSourcePropType;
+	/** Width / height of `full` and `mask`, which share one canvas. */
+	aspect: number;
+}
+
 export interface DecoStickerDefinition extends BaseStickerDefinition {
 	kind: 'deco';
-	imageUrl: string;
+	/** Null when neither a live URL nor a bundled fixture is available. */
+	assets: DecoStickerAssets | null;
+	/** Drawn when there are no assets: the prototype emoji stickers. */
+	glyph?: string | null;
 }
 
 export type StickerDefinition = FandomStickerDefinition | DecoStickerDefinition;
 
 export interface StickerRendererProps {
 	definition: StickerDefinition;
-	/** Accepted; visually ignored until Stage 5 foil rendering. */
+	/** Any rung of the ladder; `none` draws a fully static sticker. */
 	foil?: StickerFoil;
+	/** Base size in px: a deco sticker's long edge, a fandom sticker's width. */
 	width: number;
-	/** Stable id for later foil fields; unused by the Stage 1 type renderer. */
+	/** Kept for callers that key stickers by a stable id. */
 	seed?: string;
+	/** The light the foil shares with its card. Omit for a loose sticker
+	 *  that is never tilted. */
+	light?: StickerLight;
+	/** Force the thumbnail or the full art; by default it's chosen by size. */
+	art?: 'full' | 'thumb';
 }

@@ -1,0 +1,10 @@
+[
+	{ "shot": "inventory" },
+	{ "click": "Star, Plain, 2 owned", "after": 900 },
+	{ "shot": "detail-before-combine" },
+	{ "text": "Combine 2 → 1 Glitter", "after": 2200 },
+	{ "shot": "combine-after" },
+	{ "text": "Done" },
+	{ "text": "Fandom" },
+	{ "shot": "inventory-fandom" }
+]

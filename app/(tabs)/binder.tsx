@@ -14,10 +14,13 @@ import { CardBack } from '@/card/CardBack';
 import { CardFace } from '@/card/CardFace';
 import { CardShell } from '@/card/CardShell';
 import { FlipCard, StaticCard } from '@/card/FlipCard';
-import { StickerLayer } from '@/card/StickerLayer';
+import { CardOverlay } from '@/card/CardOverlay';
+import { GrantLine } from '@/stickers/GrantLine';
 import { foilForTier, meetingsToNextTier, tierLabel } from '@/card/tiers';
 import type { CollectedCard } from '@/card/types';
 import { formatRetryIn } from '@/lib/collect';
+import { SITE_ORIGIN } from '@/lib/env';
+import { profileUrl } from '@/lib/username';
 import { useConcardStore } from '@/store/useConcardStore';
 import { palette } from '@/theme/palette';
 import { radius, shadow, space, type } from '@/theme/tokens';
@@ -138,10 +141,17 @@ export default function BinderScreen() {
 										rx={rx}
 										ry={ry}
 										detail="thumb"
-										overlay={<StickerLayer stickers={card.view.stickers} width={cardWidth} />}
+										overlay={
+											<CardOverlay
+												view={card.view}
+												width={cardWidth}
+												rx={rx}
+												ry={ry}
+												detail="thumb"
+											/>
+										}
 									>
 										<CardFace view={card.view} width={cardWidth} />
-										{!card.view.art_url ? <View style={styles.pendingPhoto} /> : null}
 									</CardShell>
 								)}
 							/>
@@ -203,19 +213,25 @@ export default function BinderScreen() {
 											rx={rx}
 											ry={ry}
 											overlay={
-												<StickerLayer stickers={selected.view.stickers} width={detailCardWidth} />
+												<CardOverlay view={selected.view} width={detailCardWidth} rx={rx} ry={ry} />
 											}
 										>
 											<CardFace view={selected.view} width={detailCardWidth} />
 										</CardShell>
 									)}
 									// A collected card carries no code — no remote re-scan — so
-									// the back is always the collector's record, never QR.
+									// its back is the collector's record, never QR. A scan still
+									// waiting to sync has no giver data yet, so it shows the
+									// placeholder back: neutral edge, stand-in code.
 									renderBack={(rx, ry) => (
 										<CardBack
 											style={selected.view.style}
 											width={detailCardWidth}
-											variant="record"
+											variant={selected.pending ? 'placeholder' : 'record'}
+											url={profileUrl(SITE_ORIGIN, selected.view.handle).replace(
+												/^https?:\/\//,
+												''
+											)}
 											record={{
 												collected: formatCollectedDate(selected.first_scanned_at),
 												event: selected.pending ? 'Pending sync' : 'In person',
@@ -231,6 +247,7 @@ export default function BinderScreen() {
 								/>
 							</View>
 							<Text style={styles.tiltHint}>DRAG TO MOVE THE LIGHT · TAP TO FLIP</Text>
+							<GrantLine granted={selected.granted} />
 							<View style={styles.progress}>
 								<View style={styles.progressHead}>
 									<Text style={styles.progressTier}>{tierLabel(selected.tier)} tier</Text>
@@ -293,17 +310,6 @@ const styles = StyleSheet.create({
 		padding: space.sm,
 		gap: space.sm,
 		boxShadow: shadow.grid
-	},
-	pendingPhoto: {
-		position: 'absolute',
-		top: '5%',
-		left: '7%',
-		right: '7%',
-		height: '34%',
-		borderRadius: radius.sm,
-		backgroundColor: 'rgba(255,255,255,0.06)',
-		borderWidth: StyleSheet.hairlineWidth,
-		borderColor: 'rgba(255,255,255,0.14)'
 	},
 	pendingBadge: {
 		position: 'absolute',

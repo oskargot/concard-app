@@ -8,7 +8,9 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 
 export type StickerRarity = 'common' | 'uncommon' | 'rare' | 'legendary';
 export type StickerSource = 'starter' | 'drop' | 'shop' | 'event';
-export type StickerFoil = 'none' | 'glitter' | 'holo';
+export type StickerFoil = 'none' | 'glitter' | 'holo' | 'cosmic' | 'mosaic';
+export type StickerKind = 'deco' | 'fandom';
+export type FandomStatus = 'pending' | 'approved' | 'rejected';
 
 export interface Database {
 	public: {
@@ -60,6 +62,13 @@ export interface Database {
 					color_b: string;
 					sort_order: number;
 					is_active: boolean;
+					/** Only `approved` rows are visible to others or usable. See 20260924000002. */
+					status: FandomStatus;
+					submitted_by: string | null;
+					/** The generative renderer's look (FandomStyleCategory). */
+					style_category: string;
+					created_at: string;
+					reviewed_at: string | null;
 				};
 				Insert: never;
 				Update: never;
@@ -133,6 +142,13 @@ export interface Database {
 					price_cents: number | null;
 					sort_order: number;
 					is_active: boolean;
+					kind: StickerKind;
+					/** Object paths in the public `stickers` bucket; deco only. See 20260924000001. */
+					full_path: string | null;
+					mask_path: string | null;
+					thumb_path: string | null;
+					art_aspect: number | null;
+					fandom_id: string | null;
 				};
 				Insert: {
 					id: string;
@@ -144,6 +160,12 @@ export interface Database {
 					price_cents?: number | null;
 					sort_order?: number;
 					is_active?: boolean;
+					kind?: StickerKind;
+					full_path?: string | null;
+					mask_path?: string | null;
+					thumb_path?: string | null;
+					art_aspect?: number | null;
+					fandom_id?: string | null;
 				};
 				Update: {
 					name?: string;
@@ -154,6 +176,12 @@ export interface Database {
 					price_cents?: number | null;
 					sort_order?: number;
 					is_active?: boolean;
+					kind?: StickerKind;
+					full_path?: string | null;
+					mask_path?: string | null;
+					thumb_path?: string | null;
+					art_aspect?: number | null;
+					fandom_id?: string | null;
 				};
 				Relationships: [];
 			};
@@ -181,6 +209,10 @@ export interface Database {
 					z_index: number;
 					foil: StickerFoil;
 					created_at: string;
+					/** Base width as a fraction of card width; null = the old 15.33% base. */
+					size: number | null;
+					/** The card's free fandom affiliation. See 20260924000003. */
+					is_affiliation: boolean;
 				};
 				Insert: {
 					id?: string;
@@ -192,6 +224,8 @@ export interface Database {
 					scale?: number;
 					z_index?: number;
 					foil?: StickerFoil;
+					size?: number | null;
+					is_affiliation?: boolean;
 				};
 				Update: {
 					x?: number;
@@ -199,7 +233,19 @@ export interface Database {
 					rotation?: number;
 					scale?: number;
 					z_index?: number;
+					size?: number | null;
 				};
+				Relationships: [];
+			};
+			collection_sticker_grants: {
+				Row: {
+					collection_id: string;
+					kind: StickerKind;
+					sticker_id: string;
+					foil: StickerFoil;
+				};
+				Insert: never;
+				Update: never;
 				Relationships: [];
 			};
 			collections: {
@@ -247,11 +293,29 @@ export interface Database {
 				Args: { p_sticker_id: string; p_foil?: StickerFoil };
 				Returns: Json;
 			};
+			submit_fandom: {
+				Args: { p_name: string; p_style_category?: string };
+				Returns: Json;
+			};
+			sticker_foil_next: {
+				Args: { p_foil: StickerFoil };
+				Returns: StickerFoil | null;
+			};
+			max_stickers_per_card: {
+				Args: Record<string, never>;
+				Returns: number;
+			};
+			sticker_copy_foil_chance: {
+				Args: Record<string, never>;
+				Returns: number;
+			};
 		};
 		Enums: {
 			sticker_rarity: StickerRarity;
 			sticker_source: StickerSource;
 			sticker_foil: StickerFoil;
+			sticker_kind: StickerKind;
+			fandom_status: FandomStatus;
 		};
 		CompositeTypes: Record<string, never>;
 	};
