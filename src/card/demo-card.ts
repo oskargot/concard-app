@@ -9,22 +9,6 @@
 import { ART_DEFAULT, BADGE_HOME, DEFAULT_STYLE, type CardStyle } from './card-style';
 import type { CardView } from './types';
 
-/** Glyph fallbacks for stickers until baked artwork ships in the app. */
-export const DEMO_STICKER_GLYPHS: Record<string, string> = {
-	star: '⭐',
-	cat: '🐱',
-	dragon: '🐉',
-	rainbow: '🌈',
-	heart: '❤️',
-	fire: '🔥',
-	rocket: '🚀',
-	dice: '🎲',
-	crown: '👑',
-	sushi: '🍣',
-	sparkles: '✨',
-	ufo: '🛸'
-};
-
 /**
  * The card on the home gallery. Gold on butter with stickers and a fandom
  * affiliation sticker — matches the web demo fixture for style comparison.

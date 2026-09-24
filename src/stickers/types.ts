@@ -1,13 +1,10 @@
 /**
  * Collectible sticker definitions.
  *
- * A definition is the object itself — "STAR TREK" in retro-sci-fi, or a deco
- * PNG. Finish (base / glitter / holo) is an owned-instance property on
- * `PlacedSticker.foil`, never duplicated here. See the Stage 1 generative
- * fandom renderer in `FandomSticker.tsx`.
- *
- * The prototype glyph catalog in `catalog.ts` is a separate, older shape and
- * stays in place until a later stage replaces it.
+ * A definition is the object itself — "STAR TREK" in retro-sci-fi, or a baked
+ * deco image. Its foil (none → glitter → holo → cosmic → mosaic) belongs to a
+ * copy — `PlacedSticker.foil`, an inventory pile — never to the definition.
+ * `definitions.ts` builds these from placements, snapshots and inventory rows.
  */
 
 import type { ImageSourcePropType } from 'react-native';

@@ -108,7 +108,7 @@ export function StickerDrawer({
 		>
 			<View style={styles.handle} />
 			<View style={styles.header}>
-				<Segmented value={kind} onChange={onKind} />
+				<StickerKindSwitch value={kind} onChange={onKind} />
 				<Text style={styles.headerNote}>
 					{canPlace ? 'Tap or drag onto your card' : 'This card is full (20)'}
 				</Text>
@@ -150,7 +150,8 @@ export function StickerDrawer({
 	);
 }
 
-function Segmented({
+/** The Deco / Fandom switch; the Stickers tab uses it too. */
+export function StickerKindSwitch({
 	value,
 	onChange
 }: {
