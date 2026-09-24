@@ -195,3 +195,14 @@ Phase 2 of 7, plus the card editor and the meet loop.
 Nothing has been run against a live Supabase project on a device yet — that
 needs a real `.env` and two accounts to test the scan → collect → binder loop
 end to end (see the handoff's manual test script).
+
+## Credits
+
+- **Noto Emoji** — the emoji deco stickers are baked from Google's
+  [Noto Emoji](https://github.com/googlefonts/noto-emoji) artwork (`v2.047`,
+  `png/512/`), Copyright 2013 Google LLC, Apache License 2.0. The PNGs and the
+  licence live in `sticker-src/noto/`; the baked stickers are derived works of
+  them.
+- **Outfit**, **Fredoka** and **Space Grotesk** fonts (`assets/fonts/`), SIL
+  Open Font License 1.1.
+- **Simple Icons** link-pill glyphs (`simple-icons`), CC0.

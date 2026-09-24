@@ -2,9 +2,22 @@
 
 ## Current phase
 
-Phase 1 — Ingest pipeline. Status: in progress
+Phase 2 — Schema (web repo). Status: in progress
 
 ## Phase summaries
+
+### Phase 1 — Ingest pipeline (done 2026-09-23)
+
+Shipped: `scripts/stickers/pipeline.ts` (pure `png → {full, mask, thumb}`, exact float maths, no
+filesystem), `ingest.ts` CLI (dry run, content-hashed immutable names, idempotent, guarded upload +
+row upsert), 45 vendored Noto emoji with manifest and licence, the
+[contact sheet](shots/ingest-contact-sheet.png), and the die-cut sticker-button icon
+(`assets/stickers/button-icon.webp`).
+Check on device: nothing to run on the phone yet. Worth a look: the contact sheet — is the rim
+weight right (3.5% of the long edge)? Is the soft baked shadow wanted?
+Needs Oskar: to upload, put `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` in `concard-app/.env.local`
+and run `node scripts/stickers/ingest.ts` — **after** the Phase 2 migrations (bucket + columns) are
+applied.
 
 ### Phase 0 — Orientation and ground truth (done 2026-09-23)
 
@@ -26,6 +39,14 @@ Needs Oskar: open the draft PRs; the product bible (both under "Needs Oskar").
 - Q: HANDOFF §1.1 says collect has a "per-person 24h cooldown". Live `collect_cooldown()` returns **72 hours**, and the web repo's `docs/DESIGN.md` also says 72h. → took default: leave the server's 72h alone (the sticker grant just rides whatever the cooldown is); noted as a divergence in CLAUDE.md. (§1.1)
 - Q: HANDOFF §0 Phase 0 says to confirm the web repo is "cloned next to concard-app". It's at `../concard-web/concard`, one level deeper. → took default: use it there; no move.
 
+- Q: Storage layout — HANDOFF says upload "under `stickers/<sticker_id>/<hash>-…`". → took: bucket `stickers`, object key `<sticker_id>/<hash>-{full,mask,thumb}.webp`, so the public URL reads `…/public/stickers/<id>/<hash>-full.webp`. (§3.1)
+- Q: One hash or three? → took: one hash per sticker version, of the input PNG bytes + the pipeline recipe, shared by its three files. Re-running with the same PNG and recipe always gives the same names. (§3.1)
+- Q: "One cheap shadow consistent with how cards sit" (§3.2). → took: bake a soft, nearly centred lift shadow into `full.webp` (ink `rgb(23,22,27)` at 28%, the web's die-cut shadow colour); the mask excludes it so foil never spills into it. Zero runtime cost. Easy to drop (a recipe constant) if you'd rather have none.
+- Q: Thumb size needs the drawer's column count, which is Phase 4's call. → took: 4 columns on a 390 pt screen ≈ 64 pt of art per tile → thumbs are 192 px on the long edge. (§2.2)
+- Q: "Add the licence notice … to wherever the app lists credits" — the app has no credits screen. → took: README "Credits" section + `sticker-src/noto/LICENSE`; a credits line goes on a settings/about screen when one exists. (§3.3)
+- Q: Noto's licence — its README says the images are Apache 2.0, but its root `LICENSE` file at `v2.047` is the OFL text. → took: vendored both (`LICENSE` = upstream's Apache notice from `svg/LICENSE`, `LICENSE-OFL`), documented in `sticker-src/noto/README.md`. (§3.3)
+- Q: The emoji set reuses the 12 live sticker ids (star, heart, …) so existing inventory and placements get real art rather than being orphaned; 33 new ids join as `drop`. (§3.3)
+
 ## Feedback from Oskar
 
 _(none yet)_
@@ -45,15 +66,33 @@ _(none yet)_
 
 ## Tasks — Phase 1
 
-- [ ] `scripts/stickers/`: pure core `buffer → {full, mask, thumb}` (trim, fit 512, pad, blur-threshold die-cut at r ≈ 3.5% of long edge, white fill under art, content hashes) with `sharp`.
-- [ ] Vendor the Noto Emoji set: ~40 con-culture emoji as 512px PNGs at a pinned ref, Apache 2.0 licence alongside; add the credit to the repo (and to the app's credits later, when there is a screen for it).
-- [ ] `scripts/stickers/ingest.ts` CLI: folder + optional manifest in; `--dry-run` writes to a local folder; idempotent; upload + row upsert when `SUPABASE_SERVICE_ROLE_KEY` is in `.env.local` (dry-only otherwise, and say so).
-- [ ] Contact sheet from the dry run → `docs/stickers/shots/ingest-contact-sheet.png`; eyeball outline consistency and tune r.
-- [ ] Verify idempotency by re-running (no changed hashes / files).
-- [ ] Render the die-cut sticker-button icon through the same pipeline (§2.1), for Phase 4.
+- [x] `scripts/stickers/`: pure core `buffer → {full, mask, thumb}` (trim, fit 512, pad, blur-threshold die-cut at r ≈ 3.5% of long edge, white fill under art, content hashes) with `sharp`.
+- [x] Vendor the Noto Emoji set: ~40 con-culture emoji as 512px PNGs at a pinned ref, Apache 2.0 licence alongside; add the credit to the repo (and to the app's credits later, when there is a screen for it).
+- [x] `scripts/stickers/ingest.ts` CLI: folder + optional manifest in; `--dry-run` writes to a local folder; idempotent; upload + row upsert when `SUPABASE_SERVICE_ROLE_KEY` is in `.env.local` (dry-only otherwise, and say so).
+- [x] Contact sheet from the dry run → `docs/stickers/shots/ingest-contact-sheet.png`; eyeball outline consistency and tune r.
+- [x] Verify idempotency by re-running (no changed hashes / files). — re-run: 0 files written, index unchanged, md5 of every output identical; a from-scratch bake into an empty folder is byte-identical too. — commit `86422ee`
+- [x] Render the die-cut sticker-button icon through the same pipeline (§2.1), for Phase 4. — `scripts/stickers/make-button-icon.ts`: a four-point sparkle in the palette's holo gradient (pink → holo → teal), die-cut by `makeSticker`.
+
+Phase 1 notes (what I checked): contact sheet has all 45 on a dark ground, a light card-face ground, and
+the mask; rims are one consistent weight, points round off, bays fill (whiskers, sparkle clusters,
+dango), masks register with the art exactly. Sizes: full ≈ 40 KB, thumb ≈ 16 KB, mask ≈ 7 KB each;
+bake ≈ 0.7 s per sticker.
+
+## Tasks — Phase 2
+
+- [ ] Install the web repo's deps; run its checks as a baseline.
+- [ ] Commit the four hand-applied app migrations (`20260914`…`20260923`) into the web repo so its history matches what's live.
+- [ ] Migration A — sticker definitions: `kind`, asset path columns, `art_aspect`, `rarity` (live lacks it), `fandom_id`; foil enum `cosmic`, `mosaic`; `combine_stickers()` ladder; `stickers` storage bucket (public read, service-role writes).
+- [ ] Migration B — fandom submissions: status / `submitted_by` / `style_category` on `fandoms`, 3-pending cap, name-length cap (derive from `fandom-layout.ts`), approval trigger → `stickers` row, RLS.
+- [ ] Migration C — placements: `MAX_STICKERS_PER_CARD` (20), scale 0.5–2, centre-in-card bounds; the free affiliation placement (`is_affiliation`), migrating `cards.affiliation*` into it.
+- [ ] Migration D — `collect_card()`: two-sticker grant (one per kind, uniform pick from the snapshot's placements, `STICKER_COPY_FOIL_CHANCE` = 0.10 roll server-side), `collection_sticker_grants`, snapshot v4 carrying kind + asset URLs / label + style category, grants in the response.
+- [ ] Test the migrations against a scratch Postgres if one's available (the web repo has `pnpm db:test`); otherwise dry-run the new CHECKs as SELECTs over live rows.
+- [ ] Security review (`vibe-security` skill) of every new function and policy.
+- [ ] Hand-update `src/lib/database.types.ts` (app) and the web types.
 
 ## Log
 
 - 2026-09-23 — Started Phase 0. No PROGRESS.md existed; created it.
 - 2026-09-23 — Harness up; first screenshots of `/dev/cards` and `/dev/stickers` look right (card gallery + fandom sticker lab render on the web target; Skia foil absent there, as expected).
 - 2026-09-23 — CLAUDE.md + design-bible.md done, branches pushed. Phase 0 done; starting Phase 1. `sticker-src/` doesn't exist (no placeholder PNGs from Oskar yet) → proceeding with the emoji set alone (§3.4).
+- 2026-09-23 — Phase 1: pipeline, ingest, Noto set (45), contact sheet, button icon; idempotency verified. Committed `86422ee` + icon/credits. Starting Phase 2.
